@@ -31,6 +31,8 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
         ("DAL", "Dallas", 32.8f, -96.8f),
     ];
 
+    private int flakyCalls;
+
     public Task<GetCurrentTimeOutput> GetCurrentTimeAsync(
         GetCurrentTimeInput input,
         CancellationToken cancellationToken = default
@@ -82,8 +84,6 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
         GetForecastInput input,
         CancellationToken cancellationToken = default
     ) => Task.FromResult(new GetForecastOutput(ChanceOfRain: 0.4f));
-
-    private int flakyCalls;
 
     public Task<GetFlakyForecastOutput> GetFlakyForecastAsync(
         GetFlakyForecastInput input,

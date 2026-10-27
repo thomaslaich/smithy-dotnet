@@ -25,6 +25,12 @@ public sealed record CapturedRequest(
     [property: JsonPropertyName("body")] string? Body
 )
 {
+    public static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     private const int InlineBodyLimit = 8 * 1024;
 
     private static readonly HashSet<string> IgnoredHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -40,12 +46,6 @@ public sealed record CapturedRequest(
         // and is not part of the contract under test.
         "traceparent",
         "tracestate",
-    };
-
-    public static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     public static CapturedRequest From(HttpRequestMessage request, byte[] body)

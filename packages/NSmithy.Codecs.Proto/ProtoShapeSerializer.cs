@@ -11,25 +11,8 @@ namespace NSmithy.Codecs.Proto;
 /// </summary>
 internal struct ProtoShapeSerializer : IShapeSerializer
 {
-    private enum Context
-    {
-        /// <summary>The top-level message, written without a tag or length.</summary>
-        Root,
-
-        /// <summary>A message's fields, each tagged with its own field number.</summary>
-        Message,
-
-        /// <summary>A packed repeated field's elements: bodies only, inside one length.</summary>
-        Packed,
-
-        /// <summary>A repeated field's elements, each tagged with the field's number.</summary>
-        Repeated,
-
-        /// <summary>A map field's entries, each a key/value message tagged with the field's number.</summary>
-        Map,
-    }
-
     private readonly ProtoWriter writer;
+
     private readonly ProtoShapePlan? container;
     private readonly ProtoMemberPlan? root;
     private readonly Context context;
@@ -59,48 +42,22 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         this.fieldNumber = fieldNumber;
     }
 
-    // A list's elements are its member 0, so they index like any other member.
-    private readonly ProtoMemberPlan Entry(int member) =>
-        member == MemberIndex.Root ? root! : container!.Members[member];
-
-    /// <summary>Writes the tag that precedes a value of <paramref name="member"/>, if it has one.</summary>
-    private readonly void Tag(int member, WireType wireType)
+    private enum Context
     {
-        switch (context)
-        {
-            case Context.Message:
-                writer.WriteTag(container!.Members[member].FieldNumber, wireType);
-                break;
-            case Context.Repeated:
-                writer.WriteTag(fieldNumber, wireType);
-                break;
-            case Context.Map:
-                writer.WriteTag(2, wireType);
-                break;
-        }
-    }
+        /// <summary>The top-level message, written without a tag or length.</summary>
+        Root,
 
-    private void CloseEntry()
-    {
-        if (entryPrefix >= 0)
-        {
-            writer.EndLengthDelimited(entryPrefix);
-            entryPrefix = -1;
-        }
-    }
+        /// <summary>A message's fields, each tagged with its own field number.</summary>
+        Message,
 
-    // A sparse map's values are google.protobuf.Value messages, so null is representable.
-    private readonly bool IsSparseValue(int member) =>
-        context == Context.Map && member == 1 && container!.Sparse;
+        /// <summary>A packed repeated field's elements: bodies only, inside one length.</summary>
+        Packed,
 
-    // Generic rather than a callback: a lambda capturing the value would allocate its closure on
-    // every call of the enclosing write method, sparse or not.
-    private readonly void WriteSparseValue<TValue>(Schema<TValue> schema, TValue? value)
-    {
-        writer.WriteTag(2, WireType.Len);
-        var prefix = writer.BeginLengthDelimited();
-        ProtoWire.EncodeScalarValueMessage(writer, schema, value);
-        writer.EndLengthDelimited(prefix);
+        /// <summary>A repeated field's elements, each tagged with the field's number.</summary>
+        Repeated,
+
+        /// <summary>A map field's entries, each a key/value message tagged with the field's number.</summary>
+        Map,
     }
 
     public readonly bool WritesDefault(int member) => false;
@@ -140,19 +97,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
     public readonly void WriteLong(int member, long value) =>
         WriteInteger(member, value, ShapeKind.Long);
 
-    private readonly void WriteInteger(int member, long value, ShapeKind kind)
-    {
-        if (IsSparseValue(member))
-        {
-            WriteSparseValue(Schemas.Double, (double)value);
-            return;
-        }
-
-        var plan = Entry(member);
-        Tag(member, plan.WireType);
-        ProtoWire.WriteInteger(writer, plan.Encoding, value);
-    }
-
     public readonly void WriteFloat(int member, float value)
     {
         if (IsSparseValue(member))
@@ -175,40 +119,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
 
         Tag(member, WireType.I64);
         writer.WriteFixed64(BitConverter.DoubleToUInt64Bits(value));
-    }
-
-    public void WriteBigInteger(int member, BigInteger value) =>
-        WriteUtf8(member, value.ToString(CultureInfo.InvariantCulture));
-
-    public void WriteBigDecimal(int member, decimal value) =>
-        WriteUtf8(member, value.ToString(CultureInfo.InvariantCulture));
-
-    public void WriteString(int member, string value)
-    {
-        // A map's key is member 0: it opens an entry, which holds the key and the value after it.
-        if (context == Context.Map && member == 0)
-        {
-            CloseEntry();
-            writer.WriteTag(fieldNumber, WireType.Len);
-            entryPrefix = writer.BeginLengthDelimited();
-            writer.WriteTag(1, WireType.Len);
-            writer.WriteLengthDelimitedUtf8(value);
-            return;
-        }
-
-        if (IsSparseValue(member))
-        {
-            WriteSparseValue(Schemas.String, value);
-            return;
-        }
-
-        WriteUtf8(member, value);
-    }
-
-    private void WriteUtf8(int member, string value)
-    {
-        Tag(member, WireType.Len);
-        writer.WriteLengthDelimitedUtf8(value);
     }
 
     public readonly void WriteBlob(int member, byte[] value)
@@ -340,5 +250,96 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         var entries = new ProtoShapeSerializer(writer, plan.Shape!, Context.Map, plan.FieldNumber);
         schema.SerializeEntries(value, ref entries);
         entries.CloseEntry();
+    }
+
+    public void WriteBigInteger(int member, BigInteger value) =>
+        WriteUtf8(member, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteBigDecimal(int member, decimal value) =>
+        WriteUtf8(member, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteString(int member, string value)
+    {
+        // A map's key is member 0: it opens an entry, which holds the key and the value after it.
+        if (context == Context.Map && member == 0)
+        {
+            CloseEntry();
+            writer.WriteTag(fieldNumber, WireType.Len);
+            entryPrefix = writer.BeginLengthDelimited();
+            writer.WriteTag(1, WireType.Len);
+            writer.WriteLengthDelimitedUtf8(value);
+            return;
+        }
+
+        if (IsSparseValue(member))
+        {
+            WriteSparseValue(Schemas.String, value);
+            return;
+        }
+
+        WriteUtf8(member, value);
+    }
+
+    // A list's elements are its member 0, so they index like any other member.
+    private readonly ProtoMemberPlan Entry(int member) =>
+        member == MemberIndex.Root ? root! : container!.Members[member];
+
+    /// <summary>Writes the tag that precedes a value of <paramref name="member"/>, if it has one.</summary>
+    private readonly void Tag(int member, WireType wireType)
+    {
+        switch (context)
+        {
+            case Context.Message:
+                writer.WriteTag(container!.Members[member].FieldNumber, wireType);
+                break;
+            case Context.Repeated:
+                writer.WriteTag(fieldNumber, wireType);
+                break;
+            case Context.Map:
+                writer.WriteTag(2, wireType);
+                break;
+        }
+    }
+
+    private void CloseEntry()
+    {
+        if (entryPrefix >= 0)
+        {
+            writer.EndLengthDelimited(entryPrefix);
+            entryPrefix = -1;
+        }
+    }
+
+    // A sparse map's values are google.protobuf.Value messages, so null is representable.
+    private readonly bool IsSparseValue(int member) =>
+        context == Context.Map && member == 1 && container!.Sparse;
+
+    // Generic rather than a callback: a lambda capturing the value would allocate its closure on
+    // every call of the enclosing write method, sparse or not.
+    private readonly void WriteSparseValue<TValue>(Schema<TValue> schema, TValue? value)
+    {
+        writer.WriteTag(2, WireType.Len);
+        var prefix = writer.BeginLengthDelimited();
+        ProtoWire.EncodeScalarValueMessage(writer, schema, value);
+        writer.EndLengthDelimited(prefix);
+    }
+
+    private readonly void WriteInteger(int member, long value, ShapeKind kind)
+    {
+        if (IsSparseValue(member))
+        {
+            WriteSparseValue(Schemas.Double, (double)value);
+            return;
+        }
+
+        var plan = Entry(member);
+        Tag(member, plan.WireType);
+        ProtoWire.WriteInteger(writer, plan.Encoding, value);
+    }
+
+    private void WriteUtf8(int member, string value)
+    {
+        Tag(member, WireType.Len);
+        writer.WriteLengthDelimitedUtf8(value);
     }
 }

@@ -13,74 +13,20 @@ internal enum QueryProtocolKind
 }
 
 /// <summary>
-/// Serializes an operation input as an AWS Query / EC2 Query form body. The plan is compiled once
-/// per operation; a request only walks it.
-/// </summary>
-internal sealed class QueryFormSerializer<T>
-{
-    private readonly string action;
-    private readonly string version;
-    private readonly Schema<T> schema;
-    private readonly QueryMemberPlan root;
-
-    public QueryFormSerializer(
-        QueryProtocolKind kind,
-        string action,
-        string version,
-        Schema<T> schema
-    )
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(action);
-        ArgumentException.ThrowIfNullOrWhiteSpace(version);
-        ArgumentNullException.ThrowIfNull(schema);
-        this.action = action;
-        this.version = version;
-        this.schema = schema;
-        root = new QueryPlans(kind).ForMember(schema, memberTraits: null, name: "");
-    }
-
-    public byte[] Serialize(T value)
-    {
-        var parameters = new List<KeyValuePair<string, string>>
-        {
-            new("Action", action),
-            new("Version", version),
-        };
-        var serializer = QueryFormShapeSerializer.ForRoot(parameters, root);
-        schema.Write(MemberIndex.Root, value, ref serializer);
-
-        return Encoding.UTF8.GetBytes(
-            string.Join(
-                "&",
-                parameters.Select(parameter =>
-                    $"{Uri.EscapeDataString(parameter.Key)}={Uri.EscapeDataString(parameter.Value)}"
-                )
-            )
-        );
-    }
-}
-
-/// <summary>
 /// Writes form parameters for the values of one structure, list, or map, each under its name
 /// joined to the aggregate's prefix. A scalar at the root has no name to be written under.
 /// </summary>
 internal struct QueryFormShapeSerializer : IShapeSerializer
 {
-    private enum Context
-    {
-        Root,
-        Struct,
-        List,
-        Map,
-    }
-
     private readonly List<KeyValuePair<string, string>> parameters;
+
     private readonly string prefix;
     private readonly QueryMemberPlan plan;
     private readonly Context context;
 
     // The position of the next list element or map entry, from one; and the open entry's prefix.
     private int index;
+
     private string entryPrefix = "";
 
     private QueryFormShapeSerializer(
@@ -96,40 +42,18 @@ internal struct QueryFormShapeSerializer : IShapeSerializer
         this.context = context;
     }
 
+    private enum Context
+    {
+        Root,
+        Struct,
+        List,
+        Map,
+    }
+
     public static QueryFormShapeSerializer ForRoot(
         List<KeyValuePair<string, string>> parameters,
         QueryMemberPlan root
     ) => new(parameters, "", root, Context.Root);
-
-    /// <summary>The plan of the value <paramref name="member"/> is written as, and its name.</summary>
-    private (QueryMemberPlan Plan, string Name) Next(int member)
-    {
-        switch (context)
-        {
-            case Context.Struct:
-                var memberPlan = plan.Members![member];
-                return (memberPlan, Join(prefix, memberPlan.Name));
-            case Context.List:
-                index++;
-                return (
-                    plan.Element!,
-                    Join(prefix, plan.ItemName, index.ToString(CultureInfo.InvariantCulture))
-                );
-            case Context.Map:
-                return (plan.Value!, Join(entryPrefix, plan.ValueName));
-            default:
-                return (plan, prefix);
-        }
-    }
-
-    private void Add(int member, string text)
-    {
-        var (_, name) = Next(member);
-        if (name.Length > 0)
-        {
-            parameters.Add(new(name, text));
-        }
-    }
 
     public readonly bool WritesDefault(int member) => false;
 
@@ -271,14 +195,6 @@ internal struct QueryFormShapeSerializer : IShapeSerializer
     public void WriteUnion<T>(int member, T value, UnionSchema<T> schema) =>
         throw Unsupported(member);
 
-    private NotSupportedException Unsupported(int member)
-    {
-        var target = Next(member).Plan.Target;
-        return new NotSupportedException(
-            $"AWS Query does not support schema kind '{target.Kind}' on shape '{target.Id}'."
-        );
-    }
-
     private static string Join(string first, params string?[] parts)
     {
         var values = parts.Where(part => !string.IsNullOrEmpty(part));
@@ -307,5 +223,91 @@ internal struct QueryFormShapeSerializer : IShapeSerializer
             CultureInfo.InvariantCulture
         );
         return $"{unixSeconds}{fractional[1..]}";
+    }
+
+    /// <summary>The plan of the value <paramref name="member"/> is written as, and its name.</summary>
+    private (QueryMemberPlan Plan, string Name) Next(int member)
+    {
+        switch (context)
+        {
+            case Context.Struct:
+                var memberPlan = plan.Members![member];
+                return (memberPlan, Join(prefix, memberPlan.Name));
+            case Context.List:
+                index++;
+                return (
+                    plan.Element!,
+                    Join(prefix, plan.ItemName, index.ToString(CultureInfo.InvariantCulture))
+                );
+            case Context.Map:
+                return (plan.Value!, Join(entryPrefix, plan.ValueName));
+            default:
+                return (plan, prefix);
+        }
+    }
+
+    private void Add(int member, string text)
+    {
+        var (_, name) = Next(member);
+        if (name.Length > 0)
+        {
+            parameters.Add(new(name, text));
+        }
+    }
+
+    private NotSupportedException Unsupported(int member)
+    {
+        var target = Next(member).Plan.Target;
+        return new NotSupportedException(
+            $"AWS Query does not support schema kind '{target.Kind}' on shape '{target.Id}'."
+        );
+    }
+}
+
+/// <summary>
+/// Serializes an operation input as an AWS Query / EC2 Query form body. The plan is compiled once
+/// per operation; a request only walks it.
+/// </summary>
+internal sealed class QueryFormSerializer<T>
+{
+    private readonly string action;
+    private readonly string version;
+    private readonly Schema<T> schema;
+    private readonly QueryMemberPlan root;
+
+    public QueryFormSerializer(
+        QueryProtocolKind kind,
+        string action,
+        string version,
+        Schema<T> schema
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        ArgumentNullException.ThrowIfNull(schema);
+        this.action = action;
+        this.version = version;
+        this.schema = schema;
+        root = new QueryPlans(kind).ForMember(schema, memberTraits: null, name: "");
+    }
+
+    public byte[] Serialize(T value)
+    {
+        var parameters = new List<KeyValuePair<string, string>>
+        {
+            new("Action", action),
+            new("Version", version),
+        };
+        var serializer = QueryFormShapeSerializer.ForRoot(parameters, root);
+        schema.Write(MemberIndex.Root, value, ref serializer);
+
+        return Encoding.UTF8.GetBytes(
+            string.Join(
+                "&",
+                parameters.Select(parameter =>
+                    $"{Uri.EscapeDataString(parameter.Key)}={Uri.EscapeDataString(parameter.Value)}"
+                )
+            )
+        );
     }
 }

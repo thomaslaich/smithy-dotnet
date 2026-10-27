@@ -3,6 +3,17 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Http;
 
+/// <summary>
+/// Compiles one modeled error into the function that reads it from an error response, with the
+/// error's CLR type in scope. Compilation runs once per operation; the returned function runs per
+/// response.
+/// </summary>
+public interface IErrorReaderCompiler
+{
+    Func<SmithyHttpClientResponse, TError> Compile<TError>(OperationErrorSchema<TError> schema)
+        where TError : Exception;
+}
+
 public sealed class HttpOperationError(
     ShapeId id,
     int httpStatusCode,
@@ -16,8 +27,6 @@ public sealed class HttpOperationError(
 
     public int HttpStatusCode { get; } = httpStatusCode;
 
-    public Exception Deserialize(SmithyHttpClientResponse response) => deserialize(response);
-
     /// <summary>Compiles each of an operation's modeled errors with <paramref name="reader"/>.</summary>
     public static HttpOperationError[] Compile(
         IReadOnlyList<IOperationErrorSchema> errors,
@@ -30,23 +39,14 @@ public sealed class HttpOperationError(
         return [.. errors.Select(error => error.Accept(compiler))];
     }
 
+    public Exception Deserialize(SmithyHttpClientResponse response) => deserialize(response);
+
     private sealed class Compiler(IErrorReaderCompiler reader)
         : IOperationErrorSchemaVisitor<HttpOperationError>
     {
         public HttpOperationError Visit<TError>(OperationErrorSchema<TError> error)
             where TError : Exception => new(error.Id, error.HttpStatusCode, reader.Compile(error));
     }
-}
-
-/// <summary>
-/// Compiles one modeled error into the function that reads it from an error response, with the
-/// error's CLR type in scope. Compilation runs once per operation; the returned function runs per
-/// response.
-/// </summary>
-public interface IErrorReaderCompiler
-{
-    Func<SmithyHttpClientResponse, TError> Compile<TError>(OperationErrorSchema<TError> schema)
-        where TError : Exception;
 }
 
 /// <summary>

@@ -25,15 +25,15 @@ public class ClientBenchmarks : IDisposable
     private IBenchClient client = null!;
     private Func<IBenchClient, Task<string>> invoke = null!;
 
+    public static IEnumerable<string> ClientNames => BenchClientFactory.Names;
+
+    public static IEnumerable<string> ScenarioNames => BenchClientScenarios.All.Select(s => s.Name);
+
     [ParamsSource(nameof(ClientNames))]
     public string Client { get; set; } = BenchClientFactory.NSmithy;
 
     [ParamsSource(nameof(ScenarioNames))]
     public string Scenario { get; set; } = "";
-
-    public static IEnumerable<string> ClientNames => BenchClientFactory.Names;
-
-    public static IEnumerable<string> ScenarioNames => BenchClientScenarios.All.Select(s => s.Name);
 
     [GlobalSetup]
     public async Task SetupAsync()

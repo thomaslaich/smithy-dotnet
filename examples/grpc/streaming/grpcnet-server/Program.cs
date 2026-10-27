@@ -25,6 +25,15 @@ var app = builder.Build();
 app.MapGrpcService<GrpcNetChatService>();
 app.Run();
 
+internal static class ChatEvents
+{
+    public static ChatEvent FromMessage(string user, string text) =>
+        new()
+        {
+            Message = new MessageEvent { User = user, Text = text },
+        };
+}
+
 internal sealed class GrpcNetChatService(ChatRooms rooms) : ChatService.ChatServiceBase
 {
     public override async Task WatchRoom(
@@ -200,13 +209,4 @@ internal sealed class ChatRoomSubscription(
         leave();
         return ValueTask.CompletedTask;
     }
-}
-
-internal static class ChatEvents
-{
-    public static ChatEvent FromMessage(string user, string text) =>
-        new()
-        {
-            Message = new MessageEvent { User = user, Text = text },
-        };
 }

@@ -12,6 +12,15 @@ public interface ISmithyIdentity
     DateTimeOffset? Expiration => null;
 }
 
+/// <summary>Resolves an identity for one operation invocation.</summary>
+public interface ISmithyIdentityResolver
+{
+    ValueTask<ISmithyIdentity> ResolveIdentityAsync(
+        SmithyIdentityProperties properties,
+        CancellationToken cancellationToken = default
+    );
+}
+
 /// <summary>A token, API key, or encoded credential used by the built-in HTTP auth schemes.</summary>
 public sealed class SmithyTokenIdentity(string value, DateTimeOffset? expiration = null)
     : ISmithyIdentity
@@ -22,15 +31,6 @@ public sealed class SmithyTokenIdentity(string value, DateTimeOffset? expiration
             : value;
 
     public DateTimeOffset? Expiration { get; } = expiration;
-}
-
-/// <summary>Resolves an identity for one operation invocation.</summary>
-public interface ISmithyIdentityResolver
-{
-    ValueTask<ISmithyIdentity> ResolveIdentityAsync(
-        SmithyIdentityProperties properties,
-        CancellationToken cancellationToken = default
-    );
 }
 
 /// <summary>The operation and endpoint for which an identity is being resolved.</summary>

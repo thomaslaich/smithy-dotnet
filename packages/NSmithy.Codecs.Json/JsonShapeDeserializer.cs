@@ -70,25 +70,6 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         }
     }
 
-    private static void Start(ref Utf8JsonReader reader)
-    {
-        if (!reader.Read())
-        {
-            throw new JsonException("The input does not contain any JSON tokens.");
-        }
-    }
-
-    // Reading past the value is what makes the reader reject anything after it.
-    private static void End(ref Utf8JsonReader reader)
-    {
-        while (reader.Read()) { }
-    }
-
-    private static MalformedRequestException NotJson(JsonException exception) =>
-        MalformedRequestException.Serialization(
-            $"Request body is not valid JSON: {exception.Message}"
-        );
-
     public readonly bool TryReadNull() => reader.TokenType == JsonTokenType.Null;
 
     public bool ReadBoolean()
@@ -331,80 +312,6 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         return schema.Build(builder);
     }
 
-    /// <summary>
-    /// Reads the members of a structure into <paramref name="builder"/>, in one pass over the
-    /// object. An explicit null reads as an absent member, so a modeled default still applies.
-    /// </summary>
-    private void ReadMembers<T, TBuilder>(
-        JsonShapePlan plan,
-        StructSchema<T, TBuilder> schema,
-        TBuilder builder,
-        bool projection
-    )
-    {
-        if (reader.TokenType != JsonTokenType.StartObject)
-        {
-            throw Malformed(ref reader, "a JSON object");
-        }
-
-        var members = plan.Members;
-        Span<bool> seen = members.Length <= 64 ? stackalloc bool[64] : new bool[members.Length];
-
-        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
-        {
-            var index = plan.IndexOf(ref reader);
-            reader.Read();
-
-            // First occurrence wins, as it does for a payload carrying a duplicate key.
-            if (index < 0 || seen[index] || !plan.IsIncluded(index))
-            {
-                reader.Skip();
-                continue;
-            }
-
-            var member = members[index];
-            if (reader.TokenType == JsonTokenType.Null)
-            {
-                if (projection && member.IsRequired)
-                {
-                    throw new MissingRequiredMemberException(member.WireName);
-                }
-
-                continue;
-            }
-
-            seen[index] = true;
-            var outer = entry;
-            entry = member;
-            try
-            {
-                schema.DeserializeMember(builder, index, ref this);
-            }
-            catch (MissingRequiredMemberException exception)
-            {
-                exception.PrependPathToken(member.WireName);
-                throw;
-            }
-
-            entry = outer;
-        }
-
-        for (var index = 0; index < members.Length; index++)
-        {
-            if (seen[index] || !plan.IsIncluded(index))
-            {
-                continue;
-            }
-
-            // An absent member keeps the value its builder started with: its modeled default, or
-            // none.
-            if (members[index].IsRequired)
-            {
-                throw new MissingRequiredMemberException(members[index].WireName);
-            }
-        }
-    }
-
     public TCollection ReadList<TCollection, TElement, TBuilder>(
         ListSchema<TCollection, TElement, TBuilder> schema
     )
@@ -512,6 +419,124 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         return plan.Discriminator is not null
             ? ReadDiscriminated(schema, plan)
             : ReadSingleCase(schema, plan);
+    }
+
+    private static void Start(ref Utf8JsonReader reader)
+    {
+        if (!reader.Read())
+        {
+            throw new JsonException("The input does not contain any JSON tokens.");
+        }
+    }
+
+    // Reading past the value is what makes the reader reject anything after it.
+    private static void End(ref Utf8JsonReader reader)
+    {
+        while (reader.Read()) { }
+    }
+
+    private static MalformedRequestException NotJson(JsonException exception) =>
+        MalformedRequestException.Serialization(
+            $"Request body is not valid JSON: {exception.Message}"
+        );
+
+    private static bool IsValueError(Exception exception) =>
+        exception
+            is FormatException
+                or InvalidOperationException
+                or OverflowException
+                or ArgumentException;
+
+    private static MalformedRequestException Malformed(ref Utf8JsonReader reader, string expected)
+    {
+        const int limit = 64;
+        var found = reader.TokenType switch
+        {
+            JsonTokenType.StartObject => "an object",
+            JsonTokenType.StartArray => "an array",
+            JsonTokenType.String => $"\"{Encoding.UTF8.GetString(reader.ValueSpan)}\"",
+            _ => Encoding.UTF8.GetString(reader.ValueSpan),
+        };
+        if (found.Length > limit)
+        {
+            found = string.Concat(found.AsSpan(0, limit), "…");
+        }
+
+        return MalformedRequestException.Serialization($"Expected {expected} but found {found}.");
+    }
+
+    /// <summary>
+    /// Reads the members of a structure into <paramref name="builder"/>, in one pass over the
+    /// object. An explicit null reads as an absent member, so a modeled default still applies.
+    /// </summary>
+    private void ReadMembers<T, TBuilder>(
+        JsonShapePlan plan,
+        StructSchema<T, TBuilder> schema,
+        TBuilder builder,
+        bool projection
+    )
+    {
+        if (reader.TokenType != JsonTokenType.StartObject)
+        {
+            throw Malformed(ref reader, "a JSON object");
+        }
+
+        var members = plan.Members;
+        Span<bool> seen = members.Length <= 64 ? stackalloc bool[64] : new bool[members.Length];
+
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            var index = plan.IndexOf(ref reader);
+            reader.Read();
+
+            // First occurrence wins, as it does for a payload carrying a duplicate key.
+            if (index < 0 || seen[index] || !plan.IsIncluded(index))
+            {
+                reader.Skip();
+                continue;
+            }
+
+            var member = members[index];
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                if (projection && member.IsRequired)
+                {
+                    throw new MissingRequiredMemberException(member.WireName);
+                }
+
+                continue;
+            }
+
+            seen[index] = true;
+            var outer = entry;
+            entry = member;
+            try
+            {
+                schema.DeserializeMember(builder, index, ref this);
+            }
+            catch (MissingRequiredMemberException exception)
+            {
+                exception.PrependPathToken(member.WireName);
+                throw;
+            }
+
+            entry = outer;
+        }
+
+        for (var index = 0; index < members.Length; index++)
+        {
+            if (seen[index] || !plan.IsIncluded(index))
+            {
+                continue;
+            }
+
+            // An absent member keeps the value its builder started with: its modeled default, or
+            // none.
+            if (members[index].IsRequired)
+            {
+                throw new MissingRequiredMemberException(members[index].WireName);
+            }
+        }
     }
 
     private T ReadSingleCase<T>(UnionSchema<T> schema, JsonShapePlan plan)
@@ -642,30 +667,5 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         var value = schema.DeserializeCase(index, ref this);
         entry = outer;
         return value;
-    }
-
-    private static bool IsValueError(Exception exception) =>
-        exception
-            is FormatException
-                or InvalidOperationException
-                or OverflowException
-                or ArgumentException;
-
-    private static MalformedRequestException Malformed(ref Utf8JsonReader reader, string expected)
-    {
-        const int limit = 64;
-        var found = reader.TokenType switch
-        {
-            JsonTokenType.StartObject => "an object",
-            JsonTokenType.StartArray => "an array",
-            JsonTokenType.String => $"\"{Encoding.UTF8.GetString(reader.ValueSpan)}\"",
-            _ => Encoding.UTF8.GetString(reader.ValueSpan),
-        };
-        if (found.Length > limit)
-        {
-            found = string.Concat(found.AsSpan(0, limit), "…");
-        }
-
-        return MalformedRequestException.Serialization($"Expected {expected} but found {found}.");
     }
 }

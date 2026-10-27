@@ -41,76 +41,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         this.skipName = skipName;
     }
 
-    /// <summary>Writes <paramref name="value"/> as an object of the members <paramref name="plan"/> includes.</summary>
-    internal static void WriteObject<T>(
-        Utf8JsonWriter writer,
-        JsonShapePlan plan,
-        bool materializeDefaults,
-        IStructSchema<T> schema,
-        T value
-    )
-    {
-        if (value is null)
-        {
-            writer.WriteNullValue();
-            return;
-        }
-
-        writer.WriteStartObject();
-        var serializer = new JsonShapeSerializer(writer, plan, materializeDefaults);
-        schema.SerializeMembers(value, ref serializer);
-        writer.WriteEndObject();
-    }
-
-    private JsonMemberPlan Entry(int member) =>
-        member == MemberIndex.Root ? root! : container!.Members[member];
-
-    /// <summary>
-    /// Positions the writer for a value of <paramref name="member"/>: its property name inside a
-    /// structure, its wrapping object inside a closed union. False means the member is not written.
-    /// </summary>
-    private bool Begin(int member)
-    {
-        if (container is null)
-        {
-            return true;
-        }
-
-        switch (container.Kind)
-        {
-            case ShapeKind.Structure:
-                if (!container.IsIncluded(member))
-                {
-                    return false;
-                }
-
-                var entry = container.Members[member];
-                if (skipName is not null && entry.WireName == skipName)
-                {
-                    return false;
-                }
-
-                writer.WritePropertyName(entry.EncodedName);
-                return true;
-            case ShapeKind.Union:
-                // Inside the object the union opens: the case's name, or for a discriminated
-                // union the discriminator and then the case's value.
-                if (container.Discriminator is { } discriminator)
-                {
-                    writer.WriteString(discriminator, container.Members[member].WireName);
-                    writer.WritePropertyName("value");
-                }
-                else
-                {
-                    writer.WritePropertyName(container.Members[member].EncodedName);
-                }
-
-                return true;
-            default:
-                return true;
-        }
-    }
-
     public bool WritesDefault(int member) =>
         materializeDefaults
         && container?.Kind == ShapeKind.Structure
@@ -301,9 +231,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         }
     }
 
-    private bool IsExcluded(int member) =>
-        container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
-
     public void WriteStruct<T>(int member, T value, IStructSchema<T> schema)
     {
         var entry = Entry(member);
@@ -409,4 +336,77 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
             writer.WriteEndObject();
         }
     }
+
+    /// <summary>Writes <paramref name="value"/> as an object of the members <paramref name="plan"/> includes.</summary>
+    internal static void WriteObject<T>(
+        Utf8JsonWriter writer,
+        JsonShapePlan plan,
+        bool materializeDefaults,
+        IStructSchema<T> schema,
+        T value
+    )
+    {
+        if (value is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        writer.WriteStartObject();
+        var serializer = new JsonShapeSerializer(writer, plan, materializeDefaults);
+        schema.SerializeMembers(value, ref serializer);
+        writer.WriteEndObject();
+    }
+
+    private JsonMemberPlan Entry(int member) =>
+        member == MemberIndex.Root ? root! : container!.Members[member];
+
+    /// <summary>
+    /// Positions the writer for a value of <paramref name="member"/>: its property name inside a
+    /// structure, its wrapping object inside a closed union. False means the member is not written.
+    /// </summary>
+    private bool Begin(int member)
+    {
+        if (container is null)
+        {
+            return true;
+        }
+
+        switch (container.Kind)
+        {
+            case ShapeKind.Structure:
+                if (!container.IsIncluded(member))
+                {
+                    return false;
+                }
+
+                var entry = container.Members[member];
+                if (skipName is not null && entry.WireName == skipName)
+                {
+                    return false;
+                }
+
+                writer.WritePropertyName(entry.EncodedName);
+                return true;
+            case ShapeKind.Union:
+                // Inside the object the union opens: the case's name, or for a discriminated
+                // union the discriminator and then the case's value.
+                if (container.Discriminator is { } discriminator)
+                {
+                    writer.WriteString(discriminator, container.Members[member].WireName);
+                    writer.WritePropertyName("value");
+                }
+                else
+                {
+                    writer.WritePropertyName(container.Members[member].EncodedName);
+                }
+
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private bool IsExcluded(int member) =>
+        container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
 }

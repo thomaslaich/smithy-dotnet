@@ -16,17 +16,6 @@ internal struct UniqueElements : IShapeSerializer
 
     public bool HasDuplicate { get; private set; }
 
-    private void Add(Action<CanonicalSerializer> write)
-    {
-        var key = new StringBuilder();
-        write(new CanonicalSerializer(key));
-        seen ??= new HashSet<string>(StringComparer.Ordinal);
-        if (!seen.Add(key.ToString()))
-        {
-            HasDuplicate = true;
-        }
-    }
-
     public readonly bool WritesDefault(int member) => false;
 
     public void WriteNull(int member) => Add(c => c.WriteNull(member));
@@ -91,6 +80,17 @@ internal struct UniqueElements : IShapeSerializer
 
     public void WriteUnion<T>(int member, T value, UnionSchema<T> schema) =>
         Add(c => c.WriteUnion(member, value, schema));
+
+    private void Add(Action<CanonicalSerializer> write)
+    {
+        var key = new StringBuilder();
+        write(new CanonicalSerializer(key));
+        seen ??= new HashSet<string>(StringComparer.Ordinal);
+        if (!seen.Add(key.ToString()))
+        {
+            HasDuplicate = true;
+        }
+    }
 }
 
 /// <summary>
@@ -108,22 +108,6 @@ internal readonly struct CanonicalSerializer(StringBuilder key) : IShapeSerializ
     {
         this.entryStarts = entryStarts;
     }
-
-    private StringBuilder Begin(int member, char tag) =>
-        key.Append('#')
-            .Append(member.ToString(CultureInfo.InvariantCulture))
-            .Append('=')
-            .Append(tag);
-
-    private void Text(int member, char tag, string value) =>
-        Begin(member, tag)
-            .Append(value.Length.ToString(CultureInfo.InvariantCulture))
-            .Append(':')
-            .Append(value)
-            .Append(';');
-
-    private void Number(int member, char tag, IFormattable value, string? format = null) =>
-        Begin(member, tag).Append(value.ToString(format, CultureInfo.InvariantCulture)).Append(';');
 
     public bool WritesDefault(int member) => false;
 
@@ -292,4 +276,20 @@ internal readonly struct CanonicalSerializer(StringBuilder key) : IShapeSerializ
                 break;
         }
     }
+
+    private StringBuilder Begin(int member, char tag) =>
+        key.Append('#')
+            .Append(member.ToString(CultureInfo.InvariantCulture))
+            .Append('=')
+            .Append(tag);
+
+    private void Text(int member, char tag, string value) =>
+        Begin(member, tag)
+            .Append(value.Length.ToString(CultureInfo.InvariantCulture))
+            .Append(':')
+            .Append(value)
+            .Append(';');
+
+    private void Number(int member, char tag, IFormattable value, string? format = null) =>
+        Begin(member, tag).Append(value.ToString(format, CultureInfo.InvariantCulture)).Append(';');
 }

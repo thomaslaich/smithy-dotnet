@@ -100,6 +100,13 @@ public sealed class ContainerAwsCredentialsProvider : IAwsCredentialsProvider
         );
     }
 
+    private static bool IsAllowedHttpHost(Uri uri) =>
+        uri.IsLoopback
+        || (
+            IPAddress.TryParse(uri.IdnHost.Trim('[', ']'), out var address)
+            && (IPAddress.IsLoopback(address) || AllowedHttpHosts.Contains(address))
+        );
+
     private Uri Endpoint()
     {
         var relative = getEnvironmentVariable("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
@@ -133,13 +140,6 @@ public sealed class ContainerAwsCredentialsProvider : IAwsCredentialsProvider
         }
         return uri;
     }
-
-    private static bool IsAllowedHttpHost(Uri uri) =>
-        uri.IsLoopback
-        || (
-            IPAddress.TryParse(uri.IdnHost.Trim('[', ']'), out var address)
-            && (IPAddress.IsLoopback(address) || AllowedHttpHosts.Contains(address))
-        );
 
     private async Task<string?> AuthorizationTokenAsync(CancellationToken cancellationToken)
     {

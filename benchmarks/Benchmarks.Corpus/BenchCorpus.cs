@@ -202,8 +202,8 @@ public sealed record BenchRequest(
     /// <summary>Body size in bytes, for reporting alongside throughput numbers.</summary>
     public int BodyBytes => Body?.Length ?? 0;
 
-    public override string ToString() => Name;
-
     /// <summary>The body as UTF-8 text. Diagnostics and parity failure messages only.</summary>
     public string? BodyText => Body is null ? null : Encoding.UTF8.GetString(Body);
+
+    public override string ToString() => Name;
 }

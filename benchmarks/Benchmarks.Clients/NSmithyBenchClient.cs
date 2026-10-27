@@ -107,6 +107,12 @@ public sealed class NSmithyBenchClient : IBenchClient
         return new BenchOrderResult(output.OrderId, output.TotalCents, output.LineCount);
     }
 
+    public ValueTask DisposeAsync()
+    {
+        httpClient.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
     private static Address? ToAddress(BenchAddress? address) =>
         address is null
             ? null
@@ -118,10 +124,4 @@ public sealed class NSmithyBenchClient : IBenchClient
                 Line2: address.Line2,
                 Region: address.Region
             );
-
-    public ValueTask DisposeAsync()
-    {
-        httpClient.Dispose();
-        return ValueTask.CompletedTask;
-    }
 }

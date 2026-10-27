@@ -5,9 +5,9 @@ namespace NSmithy.Codecs.Cbor;
 /// <summary>Creates schema and projection codecs for the Smithy RPCv2 CBOR representation.</summary>
 public sealed class CborCodecFactory : IProjectionCodecFactory
 {
-    public static CborCodecFactory Default { get; } = new();
-
     private CborCodecFactory() { }
+
+    public static CborCodecFactory Default { get; } = new();
 
     public ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null)
     {

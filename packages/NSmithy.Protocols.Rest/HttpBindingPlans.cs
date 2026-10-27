@@ -41,6 +41,15 @@ internal enum PayloadKind
     EventStream,
 }
 
+internal static class HttpBindingPlans
+{
+    internal static Schema UnwrapNullable(Schema schema)
+    {
+        var resolved = schema.Resolved;
+        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
+    }
+}
+
 /// <summary>
 /// How the scalars of an HTTP-bound value are written as text: the shape they target, and the
 /// traits that change their text form. A list's elements and a map's values are the scalars here.
@@ -135,6 +144,11 @@ internal sealed class HttpMemberPlan
 
     public IRestBodyCodecFactory CodecFactory { get; init; } = null!;
 
+    /// <summary>The schema a string or enum payload is encoded with: as a string either way.</summary>
+    public Schema<string> StringSchema => Target as Schema<string> ?? Schemas.String;
+
+    public Schema<Document> DocumentSchema => Target as Schema<Document> ?? Schemas.Document;
+
     public ICodec<T> CodecFor<T>(Schema<T> schema) =>
         (ICodec<T>)(codec ??= CodecFactory.FromMember(schema, Member.MemberTraits));
 
@@ -151,11 +165,6 @@ internal sealed class HttpMemberPlan
                     )
             )
         );
-
-    /// <summary>The schema a string or enum payload is encoded with: as a string either way.</summary>
-    public Schema<string> StringSchema => Target as Schema<string> ?? Schemas.String;
-
-    public Schema<Document> DocumentSchema => Target as Schema<Document> ?? Schemas.Document;
 
     /// <summary>A payload equal to its modeled default is not written, as a body codec would not write it.</summary>
     public bool IsDefault(string value) =>
@@ -204,13 +213,4 @@ internal sealed class HttpMessageParts(HttpUriBuilder? uri)
 
     public void AddPrefixHeader(string name, string value) =>
         (PrefixHeaders ??= []).Add(new(name, value));
-}
-
-internal static class HttpBindingPlans
-{
-    internal static Schema UnwrapNullable(Schema schema)
-    {
-        var resolved = schema.Resolved;
-        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
-    }
 }

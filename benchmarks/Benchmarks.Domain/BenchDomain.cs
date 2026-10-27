@@ -1,5 +1,14 @@
 namespace Bench.Domain;
 
+/// <summary>A search hit window plus the total the caller would page through.</summary>
+public readonly record struct SearchResult(ArraySegment<BenchItem> Items, int TotalCount);
+
+/// <summary>The subset of an order line the domain needs to price an order.</summary>
+public readonly record struct OrderLineInput(string ItemId, int Quantity, int UnitPriceCents);
+
+/// <summary>The priced result of an order.</summary>
+public readonly record struct OrderResult(string OrderId, long TotalCents, int LineCount);
+
 /// <summary>
 /// The business logic every stack in the suite calls into.
 /// </summary>
@@ -19,26 +28,6 @@ public static class BenchDomain
     ];
 
     private static readonly BenchItem[] Catalog = BuildCatalog();
-
-    private static BenchItem[] BuildCatalog()
-    {
-        var items = new BenchItem[CatalogSize];
-        for (var i = 0; i < items.Length; i++)
-        {
-            // Deterministic, and varied enough that JSON escaping and number
-            // widths are not uniformly the cheapest case.
-            items[i] = new BenchItem(
-                ItemId: $"item-{i:D5}",
-                Name: $"Benchmark Item {i} \u2014 {Categories[i % Categories.Length]}",
-                PriceCents: 199 + (i * 37 % 90_000),
-                InStock: i % 3 != 0,
-                Category: Categories[i % Categories.Length],
-                Tags: i % 4 == 0 ? ["featured", "sale"] : ["standard"]
-            );
-        }
-
-        return items;
-    }
 
     /// <summary>Scenario: minimal work. Returns null when the id is not in the catalog.</summary>
     public static BenchItem? GetItem(string itemId)
@@ -109,6 +98,26 @@ public static class BenchDomain
         );
     }
 
+    private static BenchItem[] BuildCatalog()
+    {
+        var items = new BenchItem[CatalogSize];
+        for (var i = 0; i < items.Length; i++)
+        {
+            // Deterministic, and varied enough that JSON escaping and number
+            // widths are not uniformly the cheapest case.
+            items[i] = new BenchItem(
+                ItemId: $"item-{i:D5}",
+                Name: $"Benchmark Item {i} \u2014 {Categories[i % Categories.Length]}",
+                PriceCents: 199 + (i * 37 % 90_000),
+                InStock: i % 3 != 0,
+                Category: Categories[i % Categories.Length],
+                Tags: i % 4 == 0 ? ["featured", "sale"] : ["standard"]
+            );
+        }
+
+        return items;
+    }
+
     private static int ParseItemIndex(string itemId) =>
         itemId.StartsWith("item-", StringComparison.Ordinal)
         && int.TryParse(itemId.AsSpan(5), out var index)
@@ -125,12 +134,3 @@ public sealed record BenchItem(
     string? Category,
     IReadOnlyList<string>? Tags
 );
-
-/// <summary>A search hit window plus the total the caller would page through.</summary>
-public readonly record struct SearchResult(ArraySegment<BenchItem> Items, int TotalCount);
-
-/// <summary>The subset of an order line the domain needs to price an order.</summary>
-public readonly record struct OrderLineInput(string ItemId, int Quantity, int UnitPriceCents);
-
-/// <summary>The priced result of an order.</summary>
-public readonly record struct OrderResult(string OrderId, long TotalCents, int LineCount);

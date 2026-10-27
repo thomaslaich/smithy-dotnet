@@ -3,6 +3,8 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Xml;
 
+internal readonly record struct XmlNamespace(string Uri, string? Prefix);
+
 internal static class XmlTraits
 {
     private static readonly ShapeId XmlNameId = ShapeId.Parse("smithy.api#xmlName");
@@ -41,19 +43,6 @@ internal static class XmlTraits
             ? ReadXmlNamespace(memberTrait)
             : GetXmlNamespace(schema);
 
-    private static XmlNamespace? ReadXmlNamespace(Trait? trait)
-    {
-        if (trait is not { HasValue: true })
-            return null;
-
-        var value = trait.GetValueOrDefault().Value.AsObject();
-        var uri = value["uri"].AsString();
-        var prefix = value.TryGetValue("prefix", out var prefixValue)
-            ? prefixValue.AsString()
-            : null;
-        return new XmlNamespace(uri, prefix);
-    }
-
     public static string? GetTimestampFormat(
         Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits
@@ -72,6 +61,17 @@ internal static class XmlTraits
             ? trait.Value.AsString()
             : null;
     }
-}
 
-internal readonly record struct XmlNamespace(string Uri, string? Prefix);
+    private static XmlNamespace? ReadXmlNamespace(Trait? trait)
+    {
+        if (trait is not { HasValue: true })
+            return null;
+
+        var value = trait.GetValueOrDefault().Value.AsObject();
+        var uri = value["uri"].AsString();
+        var prefix = value.TryGetValue("prefix", out var prefixValue)
+            ? prefixValue.AsString()
+            : null;
+        return new XmlNamespace(uri, prefix);
+    }
+}

@@ -73,33 +73,6 @@ public static class SmithyAspNetCoreHost
             .ConfigureAwait(false);
     }
 
-    // For callers that already built the request, such as dispatch routing, which reads the
-    // request to resolve the operation before it can dispatch.
-    internal static async Task DispatchBuiltRequestAsync(
-        HttpContext httpContext,
-        IServerOperationBinding operation,
-        SmithyHttpRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        var services = httpContext.RequestServices;
-        var response = await operation
-            .DispatchAsync(
-                services.GetService<SmithyServerRuntime>() ?? SmithyServerRuntime.Default,
-                request,
-                services,
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
-    }
-
-    internal static Task WriteResponseAsync(
-        HttpContext httpContext,
-        SmithyHttpServerResponse response,
-        CancellationToken cancellationToken
-    ) => WriteAsync(httpContext, response, cancellationToken);
-
     public static bool HasExpectedQueryLiteral(
         HttpContext httpContext,
         string name,
@@ -174,6 +147,33 @@ public static class SmithyAspNetCoreHost
 
         return request;
     }
+
+    // For callers that already built the request, such as dispatch routing, which reads the
+    // request to resolve the operation before it can dispatch.
+    internal static async Task DispatchBuiltRequestAsync(
+        HttpContext httpContext,
+        IServerOperationBinding operation,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var services = httpContext.RequestServices;
+        var response = await operation
+            .DispatchAsync(
+                services.GetService<SmithyServerRuntime>() ?? SmithyServerRuntime.Default,
+                request,
+                services,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static Task WriteResponseAsync(
+        HttpContext httpContext,
+        SmithyHttpServerResponse response,
+        CancellationToken cancellationToken
+    ) => WriteAsync(httpContext, response, cancellationToken);
 
     private static async Task WriteAsync(
         HttpContext httpContext,

@@ -20,6 +20,18 @@ public interface ISmithyValidator<in T>
 }
 
 /// <summary>
+/// Where a value sits: its container's node, plus the member name or element index within it. A
+/// value with neither is the container itself, such as the root or a map key.
+/// </summary>
+internal readonly struct ValuePath(PathNode? container, string? name = null, int index = -1)
+{
+    public string Render() => new PathNode(container, name, index).Render();
+
+    /// <summary>The node for an aggregate the validator descends into at this path.</summary>
+    public PathNode ToNode() => new(container, name, index);
+}
+
+/// <summary>
 /// One constraint violation. <see cref="Path"/> is a JSONPointer (RFC 6901) into the validated
 /// value, matching what <c>smithy.framework#ValidationExceptionField</c> documents its path member
 /// to be; the empty string points at the value itself.
@@ -65,58 +77,6 @@ internal static class JsonPointer
 
     /// <summary>Renders a path for an error message, since the root pointer is empty.</summary>
     public static string Describe(string path) => path.Length == 0 ? "the value" : $"'{path}'";
-}
-
-/// <summary>
-/// An aggregate the validator has descended into, linked to the aggregate holding it. The pointer
-/// string is only rendered when a value inside it fails a check, so a valid request builds none.
-/// </summary>
-internal sealed class PathNode(PathNode? parent, string? name, int index)
-{
-    public string Render()
-    {
-        var path = parent?.Render() ?? JsonPointer.Root;
-        return name is not null ? JsonPointer.Append(path, name)
-            : index >= 0 ? JsonPointer.Append(path, index)
-            : path;
-    }
-}
-
-/// <summary>
-/// Where a value sits: its container's node, plus the member name or element index within it. A
-/// value with neither is the container itself, such as the root or a map key.
-/// </summary>
-internal readonly struct ValuePath(PathNode? container, string? name = null, int index = -1)
-{
-    public string Render() => new PathNode(container, name, index).Render();
-
-    /// <summary>The node for an aggregate the validator descends into at this path.</summary>
-    public PathNode ToNode() => new(container, name, index);
-}
-
-/// <summary>
-/// Validates a value by serializing it into a <see cref="ShapeValidator"/>, whose plan checks
-/// each member's constraints as the value is written.
-/// </summary>
-internal sealed class SchemaValidator<T>(Schema<T> schema, ValidatorMemberPlan root)
-    : ISmithyValidator<T>
-{
-    public void Validate(T value)
-    {
-        var errors = GetErrors(value);
-        if (errors.Count > 0)
-        {
-            throw ValidationException.FromErrors(errors);
-        }
-    }
-
-    public IReadOnlyList<SmithyValidationError> GetErrors(T value)
-    {
-        List<SmithyValidationError> errors = [];
-        var serializer = new ShapeValidator(root, errors);
-        schema.Write(MemberIndex.Root, value, ref serializer);
-        return new ReadOnlyCollection<SmithyValidationError>(errors);
-    }
 }
 
 internal static class ConstraintTraits
@@ -180,6 +140,46 @@ internal static class ConstraintMessages
             ConstraintTraits.Enum,
             Failed(path, $"Member must satisfy enum value set: [{string.Join(", ", published)}]")
         );
+}
+
+/// <summary>
+/// An aggregate the validator has descended into, linked to the aggregate holding it. The pointer
+/// string is only rendered when a value inside it fails a check, so a valid request builds none.
+/// </summary>
+internal sealed class PathNode(PathNode? parent, string? name, int index)
+{
+    public string Render()
+    {
+        var path = parent?.Render() ?? JsonPointer.Root;
+        return name is not null ? JsonPointer.Append(path, name)
+            : index >= 0 ? JsonPointer.Append(path, index)
+            : path;
+    }
+}
+
+/// <summary>
+/// Validates a value by serializing it into a <see cref="ShapeValidator"/>, whose plan checks
+/// each member's constraints as the value is written.
+/// </summary>
+internal sealed class SchemaValidator<T>(Schema<T> schema, ValidatorMemberPlan root)
+    : ISmithyValidator<T>
+{
+    public void Validate(T value)
+    {
+        var errors = GetErrors(value);
+        if (errors.Count > 0)
+        {
+            throw ValidationException.FromErrors(errors);
+        }
+    }
+
+    public IReadOnlyList<SmithyValidationError> GetErrors(T value)
+    {
+        List<SmithyValidationError> errors = [];
+        var serializer = new ShapeValidator(root, errors);
+        schema.Write(MemberIndex.Root, value, ref serializer);
+        return new ReadOnlyCollection<SmithyValidationError>(errors);
+    }
 }
 
 /// <summary>

@@ -11,11 +11,6 @@ namespace NSmithy.Client;
 /// </summary>
 public interface IEndpointResolver
 {
-    ValueTask<SmithyEndpoint> ResolveEndpointAsync(
-        SmithyEndpointParameters parameters,
-        CancellationToken cancellationToken = default
-    );
-
     /// <summary>
     /// The endpoint this resolver returns for every operation regardless of its parameters, or null
     /// when resolution genuinely depends on them. Defaulted to null, so existing resolvers keep
@@ -28,6 +23,11 @@ public interface IEndpointResolver
     /// if the result truly does not vary by service, operation, or input.
     /// </remarks>
     SmithyEndpoint? StaticEndpoint => null;
+
+    ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+        SmithyEndpointParameters parameters,
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>
@@ -121,10 +121,10 @@ public sealed class StaticEndpointResolver(Uri uri) : IEndpointResolver
         uri ?? throw new ArgumentNullException(nameof(uri))
     );
 
+    public SmithyEndpoint? StaticEndpoint => endpoint;
+
     public ValueTask<SmithyEndpoint> ResolveEndpointAsync(
         SmithyEndpointParameters parameters,
         CancellationToken cancellationToken = default
     ) => ValueTask.FromResult(endpoint);
-
-    public SmithyEndpoint? StaticEndpoint => endpoint;
 }

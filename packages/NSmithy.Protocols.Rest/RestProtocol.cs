@@ -11,6 +11,16 @@ using NSmithy.Http;
 namespace NSmithy.Protocols.Rest;
 
 /// <summary>
+/// An error-response writer with every schema-derived decision already made. Produced by
+/// <c>RestProtocol.CompileErrorSerializer</c> once per error shape and invoked per response.
+/// </summary>
+internal delegate SmithyHttpServerResponse RestErrorSerializer<in TError>(
+    TError value,
+    string errorShapeId,
+    int statusCode
+);
+
+/// <summary>
 /// Supplies the body wire format for a REST protocol: the content types it emits and a factory for
 /// building body codecs (JSON for restJson1 / simpleRestJson, XML for restXml). Codecs are compiled
 /// once per operation when the <see cref="RestOperationBinding{TInput, TOutput}"/> is built, never
@@ -24,16 +34,6 @@ public interface IRestBodyCodecFactory : IProjectionCodecFactory
 
     byte[] PrepareErrorBody(byte[] content) => content;
 }
-
-/// <summary>
-/// An error-response writer with every schema-derived decision already made. Produced by
-/// <c>RestProtocol.CompileErrorSerializer</c> once per error shape and invoked per response.
-/// </summary>
-internal delegate SmithyHttpServerResponse RestErrorSerializer<in TError>(
-    TError value,
-    string errorShapeId,
-    int statusCode
-);
 
 public readonly record struct RestBody(
     byte[] Content,
@@ -279,6 +279,143 @@ public static class RestProtocol
         return ReadResponse(binding.Output, response, prepareBody: null);
     }
 
+    internal static HttpOperationError[] CompileErrorDeserializers(
+        IReadOnlyList<IOperationErrorSchema> errors,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    )
+    {
+        ArgumentNullException.ThrowIfNull(codecFactory);
+        return HttpOperationError.Compile(errors, new ErrorReader(codecFactory, rawStringPayloads));
+    }
+
+    /// <summary>
+    /// Compiles an error shape into a response writer, resolving everything the shape determines —
+    /// which members bind to headers, which to the body, the projected body codec — once instead of
+    /// per response.
+    /// </summary>
+    /// <remarks>
+    /// The shape id and status code stay parameters rather than being baked in, because the
+    /// malformed-request schema is one shape serving several of each.
+    /// </remarks>
+    internal static RestErrorSerializer<TError> CompileErrorSerializer<TError>(
+        Schema<TError> errorSchema,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    )
+    {
+        ArgumentNullException.ThrowIfNull(errorSchema);
+        ArgumentNullException.ThrowIfNull(codecFactory);
+
+        if (errorSchema.Resolved is not IStructSchema<TError> schema)
+        {
+            throw new InvalidOperationException(
+                $"Error schema '{errorSchema.Id}' must be a structure schema."
+            );
+        }
+
+        return schema.Accept(
+            new StructuredErrorCompiler<TError>(codecFactory, rawStringPayloads, errorTypeHeader)
+        );
+    }
+
+    internal static async IAsyncEnumerable<TEvent> ReadEventsAsync<TEvent>(
+        Stream stream,
+        ICodec<TEvent> codec,
+        string payloadContentType,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        await using (stream.ConfigureAwait(false))
+        {
+            await foreach (
+                var message in EventStreamMessageReader
+                    .ReadAllAsync(stream, cancellationToken)
+                    .WithCancellation(cancellationToken)
+                    .ConfigureAwait(false)
+            )
+            {
+                var value = codec.Deserialize(
+                    EventStreamEvents.ReadPayload(message, payloadContentType).ToArray()
+                );
+                if (value is not null)
+                {
+                    yield return value;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Content-Type advertised for an <c>@httpPayload</c> output; used to precompute the request
+    /// Accept header. Schema-kind based, so no value is needed.
+    /// </summary>
+    internal static string PayloadContentType(
+        Schema target,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    )
+    {
+        if (GetMediaType(target, traits) is { } mediaType)
+        {
+            return mediaType;
+        }
+
+        return HttpBindingPlans.UnwrapNullable(target).Kind switch
+        {
+            _ when target.Resolved is IEventStreamSchema => EventStreamContentType,
+            ShapeKind.Blob => codecFactory.BlobContentType,
+            ShapeKind.String
+            or ShapeKind.Enum when !UseBodyCodecForPayload(target, traits, rawStringPayloads) =>
+                "text/plain",
+            _ => codecFactory.ContentType,
+        };
+    }
+
+    internal static bool UseBodyCodecForPayload(
+        Schema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        bool rawStringPayloads
+    )
+    {
+        var kind = HttpBindingPlans.UnwrapNullable(schema).Kind;
+        if (kind is not (ShapeKind.String or ShapeKind.Enum))
+        {
+            return true;
+        }
+
+        // String/enum payloads are raw text under restJson1/restXml; protocols that don't use raw
+        // string payloads (alloy simpleRestJson) route them through the body codec, as do members
+        // carrying an explicit @default.
+        return traits.ContainsKey(DefaultTrait) || !rawStringPayloads;
+    }
+
+    internal static string? GetMediaType(
+        Schema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits
+    ) =>
+        (
+            traits.TryGetValue(RestTraits.MediaType, out var trait)
+                ? trait
+                : schema.GetTrait(RestTraits.MediaType)
+        )?.Value.AsString();
+
+    /// <summary>
+    /// Whether an <c>@httpPayload</c> member carries bytes the protocol assigns no meaning to: a blob
+    /// the model does not give a <c>@mediaType</c>. <c>application/octet-stream</c> is what such a
+    /// payload is written as, not what it has to be read as, so a caller may label those bytes
+    /// however it likes and a caller's <c>Accept</c> constrains nothing.
+    /// </summary>
+    internal static bool IsOpaquePayload(
+        Schema target,
+        IReadOnlyDictionary<ShapeId, Trait> traits
+    ) =>
+        GetMediaType(target, traits) is null
+        && target.Resolved is not IEventStreamSchema
+        && HttpBindingPlans.UnwrapNullable(target).Kind == ShapeKind.Blob;
+
     /// <summary>Writes a response's bound members, and its headers into <paramref name="headers"/>.</summary>
     private static HttpMessageParts WriteHeaders<T, TBuilder>(
         RestStructBinding<T, TBuilder> bound,
@@ -345,103 +482,6 @@ public static class RestProtocol
         }
 
         return bound.Schema.Build(builder);
-    }
-
-    internal static HttpOperationError[] CompileErrorDeserializers(
-        IReadOnlyList<IOperationErrorSchema> errors,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    )
-    {
-        ArgumentNullException.ThrowIfNull(codecFactory);
-        return HttpOperationError.Compile(errors, new ErrorReader(codecFactory, rawStringPayloads));
-    }
-
-    /// <summary>
-    /// Reads a modeled error the way a response is read: header and payload bindings first, then
-    /// the remaining members from the body.
-    /// </summary>
-    private sealed class ErrorReader(IRestBodyCodecFactory codecFactory, bool rawStringPayloads)
-        : IErrorReaderCompiler
-    {
-        public Func<SmithyHttpClientResponse, TError> Compile<TError>(
-            OperationErrorSchema<TError> schema
-        )
-            where TError : Exception =>
-            schema.Schema.Resolved is IStructSchema<TError> structure
-                ? structure.Accept(new ErrorStructReader<TError>(codecFactory, rawStringPayloads))
-                : throw new InvalidOperationException(
-                    $"Error schema '{schema.Schema.Id}' must be a structure schema."
-                );
-    }
-
-    private sealed class ErrorStructReader<TError>(
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    ) : IStructSchemaVisitor<TError, Func<SmithyHttpClientResponse, TError>>
-    {
-        public Func<SmithyHttpClientResponse, TError> Visit<TBuilder>(
-            StructSchema<TError, TBuilder> schema
-        )
-        {
-            var bound = RestStructBinding<TError, TBuilder>.Compile(
-                schema,
-                HttpBindingSide.Response,
-                codecFactory,
-                rawStringPayloads,
-                emptyStructOnNullPayload: false
-            );
-            if (bound.PayloadMember is null && bound.BodyMemberNames.Count > 0)
-            {
-                bound.BodyCodec = bound.CompileBodyCodec(
-                    codecFactory,
-                    new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
-                );
-            }
-
-            return response => ReadResponse(bound, response, codecFactory.PrepareErrorBody);
-        }
-    }
-
-    /// <summary>
-    /// Compiles an error shape into a response writer, resolving everything the shape determines —
-    /// which members bind to headers, which to the body, the projected body codec — once instead of
-    /// per response.
-    /// </summary>
-    /// <remarks>
-    /// The shape id and status code stay parameters rather than being baked in, because the
-    /// malformed-request schema is one shape serving several of each.
-    /// </remarks>
-    internal static RestErrorSerializer<TError> CompileErrorSerializer<TError>(
-        Schema<TError> errorSchema,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads,
-        string errorTypeHeader
-    )
-    {
-        ArgumentNullException.ThrowIfNull(errorSchema);
-        ArgumentNullException.ThrowIfNull(codecFactory);
-
-        if (errorSchema.Resolved is not IStructSchema<TError> schema)
-        {
-            throw new InvalidOperationException(
-                $"Error schema '{errorSchema.Id}' must be a structure schema."
-            );
-        }
-
-        return schema.Accept(
-            new StructuredErrorCompiler<TError>(codecFactory, rawStringPayloads, errorTypeHeader)
-        );
-    }
-
-    private sealed class StructuredErrorCompiler<TError>(
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads,
-        string errorTypeHeader
-    ) : IStructSchemaVisitor<TError, RestErrorSerializer<TError>>
-    {
-        public RestErrorSerializer<TError> Visit<TBuilder>(StructSchema<TError, TBuilder> schema) =>
-            CompileStructuredError(schema, codecFactory, rawStringPayloads, errorTypeHeader);
     }
 
     private static RestErrorSerializer<TError> CompileStructuredError<TError, TBuilder>(
@@ -584,33 +624,6 @@ public static class RestProtocol
     private static Stream? BodyStreamOrNull(SmithyHttpBody body) =>
         body is SmithyHttpBody.Streaming stream ? stream.Content : null;
 
-    internal static async IAsyncEnumerable<TEvent> ReadEventsAsync<TEvent>(
-        Stream stream,
-        ICodec<TEvent> codec,
-        string payloadContentType,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
-    )
-    {
-        await using (stream.ConfigureAwait(false))
-        {
-            await foreach (
-                var message in EventStreamMessageReader
-                    .ReadAllAsync(stream, cancellationToken)
-                    .WithCancellation(cancellationToken)
-                    .ConfigureAwait(false)
-            )
-            {
-                var value = codec.Deserialize(
-                    EventStreamEvents.ReadPayload(message, payloadContentType).ToArray()
-                );
-                if (value is not null)
-                {
-                    yield return value;
-                }
-            }
-        }
-    }
-
     private static string LocalName(string shapeId)
     {
         var hash = shapeId.LastIndexOf('#');
@@ -624,75 +637,6 @@ public static class RestProtocol
             request.ContentType = contentType;
         }
     }
-
-    /// <summary>
-    /// Content-Type advertised for an <c>@httpPayload</c> output; used to precompute the request
-    /// Accept header. Schema-kind based, so no value is needed.
-    /// </summary>
-    internal static string PayloadContentType(
-        Schema target,
-        IReadOnlyDictionary<ShapeId, Trait> traits,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    )
-    {
-        if (GetMediaType(target, traits) is { } mediaType)
-        {
-            return mediaType;
-        }
-
-        return HttpBindingPlans.UnwrapNullable(target).Kind switch
-        {
-            _ when target.Resolved is IEventStreamSchema => EventStreamContentType,
-            ShapeKind.Blob => codecFactory.BlobContentType,
-            ShapeKind.String
-            or ShapeKind.Enum when !UseBodyCodecForPayload(target, traits, rawStringPayloads) =>
-                "text/plain",
-            _ => codecFactory.ContentType,
-        };
-    }
-
-    internal static bool UseBodyCodecForPayload(
-        Schema schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits,
-        bool rawStringPayloads
-    )
-    {
-        var kind = HttpBindingPlans.UnwrapNullable(schema).Kind;
-        if (kind is not (ShapeKind.String or ShapeKind.Enum))
-        {
-            return true;
-        }
-
-        // String/enum payloads are raw text under restJson1/restXml; protocols that don't use raw
-        // string payloads (alloy simpleRestJson) route them through the body codec, as do members
-        // carrying an explicit @default.
-        return traits.ContainsKey(DefaultTrait) || !rawStringPayloads;
-    }
-
-    internal static string? GetMediaType(
-        Schema schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits
-    ) =>
-        (
-            traits.TryGetValue(RestTraits.MediaType, out var trait)
-                ? trait
-                : schema.GetTrait(RestTraits.MediaType)
-        )?.Value.AsString();
-
-    /// <summary>
-    /// Whether an <c>@httpPayload</c> member carries bytes the protocol assigns no meaning to: a blob
-    /// the model does not give a <c>@mediaType</c>. <c>application/octet-stream</c> is what such a
-    /// payload is written as, not what it has to be read as, so a caller may label those bytes
-    /// however it likes and a caller's <c>Accept</c> constrains nothing.
-    /// </summary>
-    internal static bool IsOpaquePayload(
-        Schema target,
-        IReadOnlyDictionary<ShapeId, Trait> traits
-    ) =>
-        GetMediaType(target, traits) is null
-        && target.Resolved is not IEventStreamSchema
-        && HttpBindingPlans.UnwrapNullable(target).Kind == ShapeKind.Blob;
 
     private static Dictionary<string, string> ExtractLabels(string pattern, string requestUri)
     {
@@ -920,5 +864,61 @@ public static class RestProtocol
 
         value = string.Empty;
         return false;
+    }
+
+    /// <summary>
+    /// Reads a modeled error the way a response is read: header and payload bindings first, then
+    /// the remaining members from the body.
+    /// </summary>
+    private sealed class ErrorReader(IRestBodyCodecFactory codecFactory, bool rawStringPayloads)
+        : IErrorReaderCompiler
+    {
+        public Func<SmithyHttpClientResponse, TError> Compile<TError>(
+            OperationErrorSchema<TError> schema
+        )
+            where TError : Exception =>
+            schema.Schema.Resolved is IStructSchema<TError> structure
+                ? structure.Accept(new ErrorStructReader<TError>(codecFactory, rawStringPayloads))
+                : throw new InvalidOperationException(
+                    $"Error schema '{schema.Schema.Id}' must be a structure schema."
+                );
+    }
+
+    private sealed class ErrorStructReader<TError>(
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    ) : IStructSchemaVisitor<TError, Func<SmithyHttpClientResponse, TError>>
+    {
+        public Func<SmithyHttpClientResponse, TError> Visit<TBuilder>(
+            StructSchema<TError, TBuilder> schema
+        )
+        {
+            var bound = RestStructBinding<TError, TBuilder>.Compile(
+                schema,
+                HttpBindingSide.Response,
+                codecFactory,
+                rawStringPayloads,
+                emptyStructOnNullPayload: false
+            );
+            if (bound.PayloadMember is null && bound.BodyMemberNames.Count > 0)
+            {
+                bound.BodyCodec = bound.CompileBodyCodec(
+                    codecFactory,
+                    new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
+                );
+            }
+
+            return response => ReadResponse(bound, response, codecFactory.PrepareErrorBody);
+        }
+    }
+
+    private sealed class StructuredErrorCompiler<TError>(
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    ) : IStructSchemaVisitor<TError, RestErrorSerializer<TError>>
+    {
+        public RestErrorSerializer<TError> Visit<TBuilder>(StructSchema<TError, TBuilder> schema) =>
+            CompileStructuredError(schema, codecFactory, rawStringPayloads, errorTypeHeader);
     }
 }

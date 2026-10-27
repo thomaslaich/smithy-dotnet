@@ -16,15 +16,15 @@ internal sealed class JsonRestBodyCodecFactory(WireReadMode readMode) : IRestBod
     private static readonly JsonRestBodyCodecFactory Lenient = new(WireReadMode.Lenient);
     private static readonly JsonRestBodyCodecFactory Strict = new(WireReadMode.Strict);
 
-    /// <summary>The instance whose codecs read by the given rules; see <see cref="WireReadMode"/>.</summary>
-    public static IRestBodyCodecFactory For(WireReadMode readMode) =>
-        readMode == WireReadMode.Strict ? Strict : Lenient;
+    private readonly JsonCodecFactory codecFactory = new(readMode);
 
     public string ContentType => "application/json";
 
     public string BlobContentType => "application/octet-stream";
 
-    private readonly JsonCodecFactory codecFactory = new(readMode);
+    /// <summary>The instance whose codecs read by the given rules; see <see cref="WireReadMode"/>.</summary>
+    public static IRestBodyCodecFactory For(WireReadMode readMode) =>
+        readMode == WireReadMode.Strict ? Strict : Lenient;
 
     public ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null) =>
         codecFactory.FromSchema(schema, options);

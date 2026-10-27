@@ -28,13 +28,6 @@ public sealed class BenchServer : IAsyncDisposable
     /// <summary>An <see cref="HttpClient"/> bound to this server's in-memory transport.</summary>
     public HttpClient Client { get; }
 
-    /// <summary>
-    /// A fresh handler onto this server's in-memory transport, for callers that
-    /// need to wrap or compose it, the parity gate layers a recording
-    /// handler over this one.
-    /// </summary>
-    public HttpMessageHandler CreateHandler() => app.GetTestServer().CreateHandler();
-
     /// <summary>Starts a stack given its endpoint/service registration.</summary>
     public static async Task<BenchServer> StartAsync(
         string name,
@@ -90,6 +83,13 @@ public sealed class BenchServer : IAsyncDisposable
 
         return message;
     }
+
+    /// <summary>
+    /// A fresh handler onto this server's in-memory transport, for callers that
+    /// need to wrap or compose it, the parity gate layers a recording
+    /// handler over this one.
+    /// </summary>
+    public HttpMessageHandler CreateHandler() => app.GetTestServer().CreateHandler();
 
     public async ValueTask DisposeAsync()
     {

@@ -120,6 +120,12 @@ public sealed class NSwagBenchClient : IBenchClient
         return new BenchOrderResult(output.OrderId, output.TotalCents, output.LineCount);
     }
 
+    public ValueTask DisposeAsync()
+    {
+        httpClient.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
     /// <summary>NSwag models Smithy maps as a named subclass of Dictionary.</summary>
     private static StringMap? ToStringMap(IReadOnlyDictionary<string, string>? source)
     {
@@ -162,10 +168,4 @@ public sealed class NSwagBenchClient : IBenchClient
                 PostalCode = address.PostalCode,
                 Country = address.Country,
             };
-
-    public ValueTask DisposeAsync()
-    {
-        httpClient.Dispose();
-        return ValueTask.CompletedTask;
-    }
 }

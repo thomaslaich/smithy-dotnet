@@ -7,20 +7,6 @@ namespace NSmithy.Protocols.RestJson;
 
 public sealed class RestJson1Protocol : IProtocol
 {
-    /// <summary>
-    /// Binds the protocol to a service, yielding per-operation protocols. REST derives each
-    /// operation's binding from its <c>@http</c> trait, so the service schema is accepted for a
-    /// uniform factory signature but not otherwise consulted. restJson1 writes string/enum payloads
-    /// as raw text and signals modeled errors via <c>X-Amzn-Errortype</c>.
-    /// </summary>
-    public IServiceProtocol ForService(ServiceSchema service) =>
-        new RestServiceProtocol(
-            JsonRestBodyCodecFactory.For,
-            DeserializeErrorType,
-            rawStringPayloads: true,
-            errorTypeHeader: "X-Amzn-Errortype"
-        );
-
     public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
@@ -69,6 +55,20 @@ public sealed class RestJson1Protocol : IProtocol
 
         return null;
     }
+
+    /// <summary>
+    /// Binds the protocol to a service, yielding per-operation protocols. REST derives each
+    /// operation's binding from its <c>@http</c> trait, so the service schema is accepted for a
+    /// uniform factory signature but not otherwise consulted. restJson1 writes string/enum payloads
+    /// as raw text and signals modeled errors via <c>X-Amzn-Errortype</c>.
+    /// </summary>
+    public IServiceProtocol ForService(ServiceSchema service) =>
+        new RestServiceProtocol(
+            JsonRestBodyCodecFactory.For,
+            DeserializeErrorType,
+            rawStringPayloads: true,
+            errorTypeHeader: "X-Amzn-Errortype"
+        );
 
     private static string? TryGetFirstHeaderValue(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,

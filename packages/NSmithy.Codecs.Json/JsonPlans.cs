@@ -109,18 +109,18 @@ internal sealed class JsonPlans(
     bool bigNumbersAsStrings = false
 )
 {
-    public bool HonorTimestampFormatTrait { get; } = honorTimestampFormatTrait;
-
-    public bool BigNumbersAsStrings { get; } = bigNumbersAsStrings;
-
     private static readonly ShapeId SparseTrait = new("smithy.api", "sparse");
+
     private static readonly ShapeId JsonNameTrait = new("smithy.api", "jsonName");
     private static readonly ShapeId AlloyDiscriminatedTrait = new("alloy", "discriminated");
     private static readonly ShapeId AlloyJsonUnknownTrait = new("alloy", "jsonUnknown");
-
     private readonly Dictionary<Schema, JsonShapePlan> plans = new(
         ReferenceEqualityComparer.Instance
     );
+
+    public bool HonorTimestampFormatTrait { get; } = honorTimestampFormatTrait;
+
+    public bool BigNumbersAsStrings { get; } = bigNumbersAsStrings;
 
     /// <summary>The plan for a top-level value, which is no member of anything.</summary>
     public JsonMemberPlan ForRoot(
@@ -199,6 +199,12 @@ internal sealed class JsonPlans(
         return plan;
     }
 
+    private static Schema Unwrap(Schema schema)
+    {
+        var resolved = schema.Resolved;
+        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
+    }
+
     private JsonMemberPlan Member(MemberSchema member) =>
         new(
             member.Name,
@@ -223,10 +229,4 @@ internal sealed class JsonPlans(
         honorJsonNameTrait && traits.TryGetValue(JsonNameTrait, out var trait)
             ? trait.Value.AsString()
             : name;
-
-    private static Schema Unwrap(Schema schema)
-    {
-        var resolved = schema.Resolved;
-        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
-    }
 }

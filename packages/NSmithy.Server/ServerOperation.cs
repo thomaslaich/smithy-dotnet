@@ -84,17 +84,17 @@ public sealed class ServerOperation<TInput, TOutput>(
         Func<TInput, CancellationToken, Task<TOutput>>
     > resolveHandler = resolveHandler ?? throw new ArgumentNullException(nameof(resolveHandler));
 
+    // For invocation with decoded input; HTTP dispatch validates through its protocol instead.
+    private readonly ISmithyValidator<TInput>? inputValidator = SmithyValidator.FromSchema(
+        schema.Input
+    );
+
     public OperationSchema<TInput, TOutput> Schema { get; } =
         schema ?? throw new ArgumentNullException(nameof(schema));
 
     IOperationSchema IServerOperation.Schema => Schema;
 
     public OperationJsonSchemas? JsonSchemas { get; } = jsonSchemas;
-
-    // For invocation with decoded input; HTTP dispatch validates through its protocol instead.
-    private readonly ISmithyValidator<TInput>? inputValidator = SmithyValidator.FromSchema(
-        schema.Input
-    );
 
     public IServerOperationBinding Bind(IServiceProtocol protocol)
     {

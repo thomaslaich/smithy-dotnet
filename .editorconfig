@@ -28,6 +28,21 @@ dotnet_diagnostic.CA1307.severity = warning
 dotnet_diagnostic.CA1310.severity = warning
 dotnet_diagnostic.CA1311.severity = warning
 
+# Members are ordered by kind (fields, constructors, properties, methods, nested types), then
+# by access, then static before instance. StyleCop's other rules stay off.
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.DocumentationRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.LayoutRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.MaintainabilityRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.NamingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.OrderingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.ReadabilityRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.SpacingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.SpecialRules.severity = none
+dotnet_diagnostic.SA0001.severity = none
+dotnet_diagnostic.SA1201.severity = warning
+dotnet_diagnostic.SA1202.severity = warning
+dotnet_diagnostic.SA1204.severity = warning
+
 [CSharpShapeGenerator.*.cs]
 max_line_length = 140
 
@@ -38,6 +53,10 @@ max_line_length = 140
 # string behavior is not a real concern, so the globalization rules above would be
 # pure noise here.
 [tests/**/*.cs]
+# Tests read top to bottom as cases with their helpers, not as an API, so member order is free.
+dotnet_diagnostic.SA1201.severity = none
+dotnet_diagnostic.SA1202.severity = none
+dotnet_diagnostic.SA1204.severity = none
 dotnet_diagnostic.CA1305.severity = none
 dotnet_diagnostic.CA1307.severity = none
 dotnet_diagnostic.CA1310.severity = none

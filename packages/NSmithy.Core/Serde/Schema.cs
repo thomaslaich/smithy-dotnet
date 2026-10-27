@@ -6,6 +6,518 @@ using NSmithy.Core.Validation;
 
 namespace NSmithy.Core.Serde;
 
+public interface IStructSchema
+{
+    /// <summary>The members in declaration order; a member's position is its index.</summary>
+    IReadOnlyList<MemberSchema> Members { get; }
+
+    MemberSchema? GetMember(string name);
+
+    /// <summary>Writes a value of this structure with no member set, as member <paramref name="member"/>.</summary>
+    void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
+}
+
+public interface IStructSchema<T> : IStructSchema
+{
+    /// <summary>
+    /// Dispatches to <paramref name="visitor"/> with this structure's otherwise hidden builder type.
+    /// </summary>
+    TResult Accept<TResult>(IStructSchemaVisitor<T, TResult> visitor);
+
+    T BuildEmpty();
+
+    /// <summary>Writes each member of <paramref name="value"/> under its index.</summary>
+    void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
+}
+
+/// <summary>
+/// Recovers the builder type hidden by <see cref="IStructSchema{T}"/> without reflection or the
+/// runtime binder.
+/// </summary>
+public interface IStructSchemaVisitor<T, out TResult>
+{
+    TResult Visit<TBuilder>(StructSchema<T, TBuilder> schema);
+}
+
+public interface INullableSchema
+{
+    Schema Target { get; }
+}
+
+public interface IStringEnumSchema
+{
+    /// <summary>Every value the model declares.</summary>
+    IReadOnlyList<string> Values { get; }
+
+    /// <summary>
+    /// The values without <c>@internal</c> — what a caller is told when a value is rejected. See
+    /// <see cref="StringEnumSchema{T}.PublishedValues"/>.
+    /// </summary>
+    IReadOnlyList<string> PublishedValues { get; }
+
+    /// <summary>Whether the value is one the model declares.</summary>
+    bool Contains(string value);
+}
+
+public interface IStringEnumValue
+{
+    string Value { get; }
+}
+
+public interface IStringEnumValue<TSelf> : IStringEnumValue
+    where TSelf : IStringEnumValue<TSelf>
+{
+    static abstract TSelf FromValue(string value);
+}
+
+public interface IIntEnumSchema
+{
+    IReadOnlyList<int> Values { get; }
+
+    /// <summary>Whether the value is one the model declares.</summary>
+    bool Contains(int value);
+}
+
+public interface IEventStreamSchema
+{
+    Schema EventSchema { get; }
+
+    /// <summary>Dispatches to <paramref name="visitor"/> with the event type in scope.</summary>
+    TResult Accept<TResult>(IEventStreamSchemaVisitor<TResult> visitor);
+}
+
+/// <summary>
+/// Recovers the event type hidden by <see cref="IEventStreamSchema"/> without reflection or the
+/// runtime binder.
+/// </summary>
+public interface IEventStreamSchemaVisitor<out TResult>
+{
+    TResult Visit<TEvent>(EventStreamSchema<TEvent> schema);
+}
+
+public interface IListSchema
+{
+    MemberSchema ElementMember { get; }
+
+    Schema Element { get; }
+}
+
+public interface IListSchema<TCollection, TElement> : IListSchema
+{
+    Schema<TElement> ElementSchema { get; }
+
+    IEnumerable<TElement> GetElements(TCollection value);
+
+    /// <summary>Writes each element of <paramref name="value"/> as member 0.</summary>
+    void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
+}
+
+public interface IMapSchema
+{
+    /// <summary>
+    /// The key as the model declares it. A map key is always a string on the wire — that is what a
+    /// JSON object name is — but the shape it targets can still say more about which strings are
+    /// allowed, and an enum shape says exactly that. Keeping the shape rather than flattening it to
+    /// <see cref="Schemas.String"/> is what lets a server hold a key to it.
+    /// </summary>
+    MemberSchema KeyMember { get; }
+
+    MemberSchema ValueMember { get; }
+
+    Schema Value { get; }
+}
+
+public interface IMapSchema<TDictionary, TValue> : IMapSchema
+{
+    Schema<TValue> ValueSchema { get; }
+
+    IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value);
+
+    /// <summary>Writes each entry of <paramref name="value"/>: its key as member 0, then its value as member 1.</summary>
+    void SerializeEntries<TSerializer>(TDictionary value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
+}
+
+public interface IUnionSchema
+{
+    ShapeId Id { get; }
+
+    IReadOnlyList<MemberSchema> Cases { get; }
+
+    MemberSchema? GetCase(string name);
+
+    /// <summary>The index of the case named <paramref name="name"/>, or -1.</summary>
+    int IndexOf(string name);
+}
+
+public interface IOperationSchema
+{
+    ShapeId Id { get; }
+
+    ShapeKind Kind { get; }
+
+    Schema Input { get; }
+
+    Schema Output { get; }
+
+    /// <summary>Whether the operation has a streaming input or output.</summary>
+    bool IsStreaming { get; }
+
+    IReadOnlyList<IOperationErrorSchema> Errors { get; }
+
+    IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+
+    Trait? GetTrait(ShapeId id);
+
+    bool HasTrait(ShapeId id);
+
+    /// <summary>Dispatches to <paramref name="visitor"/> with the input and output types in scope.</summary>
+    TResult Accept<TResult>(IOperationSchemaVisitor<TResult> visitor);
+}
+
+/// <summary>
+/// Recovers the input and output types hidden by <see cref="IOperationSchema"/> without reflection
+/// or the runtime binder.
+/// </summary>
+public interface IOperationSchemaVisitor<out TResult>
+{
+    TResult Visit<TInput, TOutput>(OperationSchema<TInput, TOutput> schema);
+}
+
+public interface IOperationErrorSchema
+{
+    ShapeId Id { get; }
+
+    Schema UntypedSchema { get; }
+
+    int HttpStatusCode { get; }
+
+    TResult Accept<TResult>(IOperationErrorSchemaVisitor<TResult> visitor);
+}
+
+/// <summary>Recovers a modeled error's exception type without runtime binder dispatch.</summary>
+public interface IOperationErrorSchemaVisitor<out TResult>
+{
+    TResult Visit<TError>(OperationErrorSchema<TError> schema)
+        where TError : Exception;
+}
+
+public static class Schemas
+{
+    private const string PreludeNamespace = "smithy.api";
+
+    private static readonly ShapeId SyntheticOriginalShapeId = new(
+        "smithy.synthetic",
+        "originalShapeId"
+    );
+
+    private const string UnitShapeId = "smithy.api#Unit";
+
+    public static Schema<bool> Boolean { get; } =
+        new BooleanSchema(new ShapeId(PreludeNamespace, "Boolean"));
+
+    public static Schema<sbyte> Byte { get; } =
+        new ByteSchema(new ShapeId(PreludeNamespace, "Byte"));
+
+    public static Schema<short> Short { get; } =
+        new ShortSchema(new ShapeId(PreludeNamespace, "Short"));
+
+    public static Schema<int> Integer { get; } =
+        new IntegerSchema(new ShapeId(PreludeNamespace, "Integer"));
+
+    public static Schema<long> Long { get; } =
+        new LongSchema(new ShapeId(PreludeNamespace, "Long"));
+
+    public static Schema<float> Float { get; } =
+        new FloatSchema(new ShapeId(PreludeNamespace, "Float"));
+
+    public static Schema<double> Double { get; } =
+        new DoubleSchema(new ShapeId(PreludeNamespace, "Double"));
+
+    public static Schema<BigInteger> BigInteger { get; } =
+        new BigIntegerSchema(new ShapeId(PreludeNamespace, "BigInteger"));
+
+    public static Schema<decimal> BigDecimal { get; } =
+        new BigDecimalSchema(new ShapeId(PreludeNamespace, "BigDecimal"));
+
+    public static Schema<string> String { get; } =
+        new StringSchema(new ShapeId(PreludeNamespace, "String"));
+
+    public static Schema<byte[]> Blob { get; } =
+        new BlobSchema(new ShapeId(PreludeNamespace, "Blob"));
+
+    public static Schema<Stream> StreamingBlob { get; } =
+        new StreamingBlobSchema(
+            new ShapeId(PreludeNamespace, "Blob"),
+            [new Trait(new ShapeId(PreludeNamespace, "streaming"))]
+        );
+
+    public static Schema<DateTimeOffset> Timestamp { get; } =
+        new TimestampSchema(new ShapeId(PreludeNamespace, "Timestamp"));
+
+    public static Schema<Document> Document { get; } =
+        new DocumentSchema(new ShapeId(PreludeNamespace, "Document"));
+
+    public static Schema<SmithyUnit> Unit { get; } = new UnitSchema();
+
+    /// <summary>Whether a structure schema has an event-stream member.</summary>
+    public static bool HasEventStreamMember(Schema schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        return schema.Resolved is IStructSchema structure
+            && structure.Members.Any(member => member.Target.Resolved is IEventStreamSchema);
+    }
+
+    /// <summary>
+    /// Whether a schema is the empty structure Smithy synthesizes for an operation input or output
+    /// of <c>smithy.api#Unit</c>. Protocols treat it differently from a declared structure without
+    /// members: it has no body, where the declared one has an empty body. Only its
+    /// <c>smithy.synthetic#originalShapeId</c> trait, pointing back at the unit, tells them apart.
+    /// </summary>
+    public static bool IsSyntheticUnit(Schema schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        return schema.GetTrait(SyntheticOriginalShapeId)?.Value is { Kind: DocumentKind.String } id
+            && id.AsString() == UnitShapeId;
+    }
+
+    /// <summary>
+    /// A timestamp schema carrying traits (e.g. <c>@timestampFormat</c>) so codecs can resolve the
+    /// wire format from the schema rather than a shared singleton.
+    /// </summary>
+    public static Schema<DateTimeOffset> TimestampWithTraits(IEnumerable<Trait>? traits) =>
+        new TimestampSchema(new ShapeId(PreludeNamespace, "Timestamp"), traits);
+
+    public static Schema<T> Lazy<T>(Func<Schema<T>> resolve) => new LazySchema<T>(resolve);
+
+    public static Schema<T?> Nullable<T>(Schema<T> target)
+        where T : struct => new NullableSchema<T>(target);
+
+    public static Schema<T?> NullableReference<T>(Schema<T> target)
+        where T : class => (Schema<T?>)(object)target;
+
+    public static EventStreamSchema<TEvent> EventStream<TEvent>(Schema<TEvent> eventSchema) =>
+        new(eventSchema);
+
+    public static StringEnumSchema<T> StringEnum<T>(
+        ShapeId id,
+        IEnumerable<string>? values = null,
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<string>? internalValues = null
+    )
+        where T : IStringEnumValue<T> => new(id, values, traits, internalValues);
+
+    public static IntEnumSchema<T> IntEnum<T>(
+        ShapeId id,
+        IEnumerable<int>? values = null,
+        IEnumerable<Trait>? traits = null
+    )
+        where T : struct, Enum => new(id, values, traits);
+
+    /// <summary>A list read as <see cref="IReadOnlyList{T}"/>; the form a hand-written schema wants.</summary>
+    public static ListSchema<IReadOnlyList<TElement>, TElement, List<TElement>> List<TElement>(
+        ShapeId id,
+        Schema<TElement> element,
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<Trait>? elementTraits = null
+    ) =>
+        new DelegateListSchema<IReadOnlyList<TElement>, TElement, List<TElement>>(
+            id,
+            ShapeKind.List,
+            element,
+            static value => value,
+            static () => [],
+            static (builder, value) => builder.Add(value),
+            static builder => new ReadOnlyCollection<TElement>(builder.ToArray()),
+            traits,
+            elementTraits
+        );
+
+    public static ListSchema<TCollection, TElement, TBuilder> List<TCollection, TElement, TBuilder>(
+        ShapeId id,
+        Schema<TElement> element,
+        Func<TCollection, IEnumerable<TElement>> getElements,
+        Func<TBuilder> createBuilder,
+        Action<TBuilder, TElement> add,
+        Func<TBuilder, TCollection> build,
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<Trait>? elementTraits = null
+    ) =>
+        new DelegateListSchema<TCollection, TElement, TBuilder>(
+            id,
+            ShapeKind.List,
+            element,
+            getElements,
+            createBuilder,
+            add,
+            build,
+            traits,
+            elementTraits
+        );
+
+    public static ListSchema<IReadOnlySet<TElement>, TElement, HashSet<TElement>> Set<TElement>(
+        ShapeId id,
+        Schema<TElement> element,
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<Trait>? elementTraits = null
+    ) =>
+        new DelegateListSchema<IReadOnlySet<TElement>, TElement, HashSet<TElement>>(
+            id,
+            ShapeKind.Set,
+            element,
+            static value => value,
+            static () => [],
+            static (builder, value) => builder.Add(value),
+            static builder => builder,
+            traits,
+            elementTraits
+        );
+
+    public static ListSchema<TCollection, TElement, TBuilder> Set<TCollection, TElement, TBuilder>(
+        ShapeId id,
+        Schema<TElement> element,
+        Func<TCollection, IEnumerable<TElement>> getElements,
+        Func<TBuilder> createBuilder,
+        Action<TBuilder, TElement> add,
+        Func<TBuilder, TCollection> build,
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<Trait>? elementTraits = null
+    ) =>
+        new DelegateListSchema<TCollection, TElement, TBuilder>(
+            id,
+            ShapeKind.Set,
+            element,
+            getElements,
+            createBuilder,
+            add,
+            build,
+            traits,
+            elementTraits
+        );
+
+    /// <param name="key">
+    /// The shape the key targets. Defaults to <see cref="String"/>, which is what a map key with no
+    /// shape of its own is; pass the modeled shape when the model gives it one, so a server can hold
+    /// the key to what that shape says.
+    /// </param>
+    public static MapSchema<
+        IReadOnlyDictionary<string, TValue>,
+        TValue,
+        Dictionary<string, TValue>
+    > Map<TValue>(
+        ShapeId id,
+        Schema<TValue> value,
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<Trait>? keyTraits = null,
+        IEnumerable<Trait>? valueTraits = null,
+        Schema? key = null
+    ) =>
+        new DelegateMapSchema<
+            IReadOnlyDictionary<string, TValue>,
+            TValue,
+            Dictionary<string, TValue>
+        >(
+            id,
+            value,
+            static value => value,
+            static () => new Dictionary<string, TValue>(StringComparer.Ordinal),
+            static (builder, entryKey, entryValue) => builder.Add(entryKey, entryValue),
+            static builder => new ReadOnlyDictionary<string, TValue>(builder),
+            traits,
+            keyTraits,
+            valueTraits,
+            key
+        );
+
+    public static MapSchema<TDictionary, TValue, TBuilder> Map<TDictionary, TValue, TBuilder>(
+        ShapeId id,
+        Schema<TValue> value,
+        Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries,
+        Func<TBuilder> createBuilder,
+        Action<TBuilder, string, TValue> add,
+        Func<TBuilder, TDictionary> build,
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<Trait>? keyTraits = null,
+        IEnumerable<Trait>? valueTraits = null,
+        Schema? key = null
+    ) =>
+        new DelegateMapSchema<TDictionary, TValue, TBuilder>(
+            id,
+            value,
+            getEntries,
+            createBuilder,
+            add,
+            build,
+            traits,
+            keyTraits,
+            valueTraits,
+            key
+        );
+
+    public static OperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
+        ShapeId id,
+        Schema<TInput> input,
+        Schema<TOutput> output,
+        IEnumerable<Trait>? traits = null,
+        bool isStreaming = false
+    ) => new(id, input, output, null, traits, isStreaming);
+
+    public static OperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
+        ShapeId id,
+        Schema<TInput> input,
+        Schema<TOutput> output,
+        IEnumerable<IOperationErrorSchema>? errors,
+        IEnumerable<Trait>? traits = null,
+        bool isStreaming = false
+    ) => new(id, input, output, errors, traits, isStreaming);
+
+    public static OperationErrorSchema<TError> OperationError<TError>(
+        ShapeId id,
+        Schema<TError> schema,
+        int httpStatusCode
+    )
+        where TError : Exception => new(id, schema, httpStatusCode);
+
+    public static ServiceSchema Service(ShapeId id, IEnumerable<Trait>? traits = null) =>
+        new(id, traits);
+
+    public static ServiceSchema Service(
+        ShapeId id,
+        string version,
+        IEnumerable<Trait>? traits = null
+    ) => new(id, version, traits);
+
+    /// <summary>The members of <paramref name="source"/> for which <paramref name="include"/> holds.</summary>
+    public static StructProjection<T, TBuilder> Project<T, TBuilder>(
+        StructSchema<T, TBuilder> source,
+        Func<MemberSchema, bool> include
+    ) => new(source, include);
+
+    /// <summary>The members of <paramref name="source"/> named in <paramref name="memberNames"/>.</summary>
+    public static StructProjection<T, TBuilder> Project<T, TBuilder>(
+        StructSchema<T, TBuilder> source,
+        IReadOnlySet<string> memberNames
+    )
+    {
+        ArgumentNullException.ThrowIfNull(memberNames);
+        return new(source, member => memberNames.Contains(member.Name));
+    }
+
+    /// <summary>
+    /// Compiles the function that names the case a union value holds, e.g. for an event stream's
+    /// <c>:event-type</c>.
+    /// </summary>
+    public static Func<TUnion, string> CompileCaseName<TUnion>(UnionSchema<TUnion> schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        var names = schema.Cases.Select(@case => @case.Name).ToArray();
+        return value => names[schema.CaseOf(value)];
+    }
+}
+
 public abstract class Schema
 {
     private readonly ShapeId id;
@@ -329,41 +841,6 @@ public sealed class MemberSchema
     }
 }
 
-public interface IStructSchema
-{
-    MemberSchema? GetMember(string name);
-
-    /// <summary>The members in declaration order; a member's position is its index.</summary>
-    IReadOnlyList<MemberSchema> Members { get; }
-
-    /// <summary>Writes a value of this structure with no member set, as member <paramref name="member"/>.</summary>
-    void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
-}
-
-public interface IStructSchema<T> : IStructSchema
-{
-    /// <summary>
-    /// Dispatches to <paramref name="visitor"/> with this structure's otherwise hidden builder type.
-    /// </summary>
-    TResult Accept<TResult>(IStructSchemaVisitor<T, TResult> visitor);
-
-    T BuildEmpty();
-
-    /// <summary>Writes each member of <paramref name="value"/> under its index.</summary>
-    void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
-}
-
-/// <summary>
-/// Recovers the builder type hidden by <see cref="IStructSchema{T}"/> without reflection or the
-/// runtime binder.
-/// </summary>
-public interface IStructSchemaVisitor<T, out TResult>
-{
-    TResult Visit<TBuilder>(StructSchema<T, TBuilder> schema);
-}
-
 /// <summary>
 /// A structure. Code generation derives one class per structure, which reads and writes the
 /// structure's properties directly; this base carries what every structure has in common.
@@ -461,11 +938,6 @@ public sealed class UnitSchema : StructSchema<SmithyUnit, SmithyUnit>
     ) { }
 }
 
-public interface INullableSchema
-{
-    Schema Target { get; }
-}
-
 public sealed class NullableSchema<T> : Schema<T?>, INullableSchema
     where T : struct
 {
@@ -495,35 +967,11 @@ public sealed class NullableSchema<T> : Schema<T?>, INullableSchema
         deserializer.TryReadNull() ? null : TypedTarget.Read(ref deserializer);
 }
 
-public interface IStringEnumSchema
-{
-    /// <summary>Whether the value is one the model declares.</summary>
-    bool Contains(string value);
-
-    /// <summary>Every value the model declares.</summary>
-    IReadOnlyList<string> Values { get; }
-
-    /// <summary>
-    /// The values without <c>@internal</c> — what a caller is told when a value is rejected. See
-    /// <see cref="StringEnumSchema{T}.PublishedValues"/>.
-    /// </summary>
-    IReadOnlyList<string> PublishedValues { get; }
-}
-
-public interface IStringEnumValue
-{
-    string Value { get; }
-}
-
-public interface IStringEnumValue<TSelf> : IStringEnumValue
-    where TSelf : IStringEnumValue<TSelf>
-{
-    static abstract TSelf FromValue(string value);
-}
-
 public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
     where T : IStringEnumValue<T>
 {
+    private readonly FrozenSet<string> lookup;
+
     internal StringEnumSchema(
         ShapeId id,
         IEnumerable<string>? values = null,
@@ -540,10 +988,6 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
         PublishedValues = hidden.Count == 0 ? Values : [.. Values.Where(v => !hidden.Contains(v))];
     }
 
-    private readonly FrozenSet<string> lookup;
-
-    public bool Contains(string value) => lookup.Contains(value);
-
     /// <summary>Every value the model declares, which is what membership is decided against.</summary>
     public IReadOnlyList<string> Values { get; }
 
@@ -552,6 +996,8 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
     /// internal member is still accepted on the wire, but naming it back would advertise it.
     /// </summary>
     public IReadOnlyList<string> PublishedValues { get; }
+
+    public bool Contains(string value) => lookup.Contains(value);
 
     public T Create(string value) => T.FromValue(value);
 
@@ -573,17 +1019,11 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
         deserializer.ReadStringEnum() is { } value ? T.FromValue(value) : default!;
 }
 
-public interface IIntEnumSchema
-{
-    /// <summary>Whether the value is one the model declares.</summary>
-    bool Contains(int value);
-
-    IReadOnlyList<int> Values { get; }
-}
-
 public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
     where T : struct, Enum
 {
+    private readonly FrozenSet<int> lookup;
+
     internal IntEnumSchema(
         ShapeId id,
         IEnumerable<int>? values = null,
@@ -595,11 +1035,9 @@ public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
         lookup = Values.ToFrozenSet();
     }
 
-    private readonly FrozenSet<int> lookup;
+    public IReadOnlyList<int> Values { get; }
 
     public bool Contains(int value) => lookup.Contains(value);
-
-    public IReadOnlyList<int> Values { get; }
 
     public int GetIntegerValue(T value) => Convert.ToInt32(value, CultureInfo.InvariantCulture);
 
@@ -610,23 +1048,6 @@ public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
 
     public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
         Create(deserializer.ReadIntEnum());
-}
-
-public interface IEventStreamSchema
-{
-    Schema EventSchema { get; }
-
-    /// <summary>Dispatches to <paramref name="visitor"/> with the event type in scope.</summary>
-    TResult Accept<TResult>(IEventStreamSchemaVisitor<TResult> visitor);
-}
-
-/// <summary>
-/// Recovers the event type hidden by <see cref="IEventStreamSchema"/> without reflection or the
-/// runtime binder.
-/// </summary>
-public interface IEventStreamSchemaVisitor<out TResult>
-{
-    TResult Visit<TEvent>(EventStreamSchema<TEvent> schema);
 }
 
 public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>, IEventStreamSchema
@@ -666,62 +1087,6 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
 
     public override IAsyncEnumerable<TEvent> Read<TDeserializer>(ref TDeserializer deserializer) =>
         deserializer.ReadEventStream(TypedEventSchema);
-}
-
-public interface IListSchema
-{
-    MemberSchema ElementMember { get; }
-
-    Schema Element { get; }
-}
-
-public interface IListSchema<TCollection, TElement> : IListSchema
-{
-    Schema<TElement> ElementSchema { get; }
-
-    IEnumerable<TElement> GetElements(TCollection value);
-
-    /// <summary>Writes each element of <paramref name="value"/> as member 0.</summary>
-    void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
-}
-
-public interface IMapSchema
-{
-    /// <summary>
-    /// The key as the model declares it. A map key is always a string on the wire — that is what a
-    /// JSON object name is — but the shape it targets can still say more about which strings are
-    /// allowed, and an enum shape says exactly that. Keeping the shape rather than flattening it to
-    /// <see cref="Schemas.String"/> is what lets a server hold a key to it.
-    /// </summary>
-    MemberSchema KeyMember { get; }
-
-    MemberSchema ValueMember { get; }
-
-    Schema Value { get; }
-}
-
-public interface IMapSchema<TDictionary, TValue> : IMapSchema
-{
-    Schema<TValue> ValueSchema { get; }
-
-    IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value);
-
-    /// <summary>Writes each entry of <paramref name="value"/>: its key as member 0, then its value as member 1.</summary>
-    void SerializeEntries<TSerializer>(TDictionary value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
-}
-
-public interface IUnionSchema
-{
-    ShapeId Id { get; }
-
-    IReadOnlyList<MemberSchema> Cases { get; }
-
-    MemberSchema? GetCase(string name);
-
-    /// <summary>The index of the case named <paramref name="name"/>, or -1.</summary>
-    int IndexOf(string name);
 }
 
 /// <summary>
@@ -795,57 +1160,6 @@ public abstract class ListSchema<TCollection, TElement, TBuilder>
         ref TDeserializer deserializer
     )
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
-}
-
-/// <summary>A list whose elements go through its element schema, as a hand-written schema builds one.</summary>
-internal sealed class DelegateListSchema<TCollection, TElement, TBuilder>(
-    ShapeId id,
-    ShapeKind kind,
-    Schema<TElement> element,
-    Func<TCollection, IEnumerable<TElement>> getElements,
-    Func<TBuilder> createBuilder,
-    Action<TBuilder, TElement> add,
-    Func<TBuilder, TCollection> build,
-    IEnumerable<Trait>? traits = null,
-    IEnumerable<Trait>? elementTraits = null
-) : ListSchema<TCollection, TElement, TBuilder>(id, kind, element, traits, elementTraits)
-{
-    public override IEnumerable<TElement> GetElements(TCollection value) => getElements(value);
-
-    public override TBuilder CreateTypedBuilder() => createBuilder();
-
-    public override void Add(TBuilder builder, TElement value) => add(builder, value);
-
-    public override TCollection Build(TBuilder builder) => build(builder);
-
-    public override void SerializeElements<TSerializer>(
-        TCollection value,
-        ref TSerializer serializer
-    )
-    {
-        // Indexed when possible: foreach over an IEnumerable boxes the collection's enumerator,
-        // an allocation per list written.
-        var elements = getElements(value);
-        if (elements is IReadOnlyList<TElement> list)
-        {
-            for (var index = 0; index < list.Count; index++)
-            {
-                ElementSchema.Write(0, list[index], ref serializer);
-            }
-
-            return;
-        }
-
-        foreach (var element in elements)
-        {
-            ElementSchema.Write(0, element, ref serializer);
-        }
-    }
-
-    public override void DeserializeElement<TDeserializer>(
-        TBuilder builder,
-        ref TDeserializer deserializer
-    ) => add(builder, ElementSchema.Read(ref deserializer));
 }
 
 /// <summary>
@@ -924,49 +1238,6 @@ public abstract class MapSchema<TDictionary, TValue, TBuilder>
         ref TDeserializer deserializer
     )
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
-}
-
-/// <summary>A map whose values go through its value schema, as a hand-written schema builds one.</summary>
-internal sealed class DelegateMapSchema<TDictionary, TValue, TBuilder>(
-    ShapeId id,
-    Schema<TValue> value,
-    Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries,
-    Func<TBuilder> createBuilder,
-    Action<TBuilder, string, TValue> add,
-    Func<TBuilder, TDictionary> build,
-    IEnumerable<Trait>? traits = null,
-    IEnumerable<Trait>? keyTraits = null,
-    IEnumerable<Trait>? valueTraits = null,
-    Schema? key = null
-) : MapSchema<TDictionary, TValue, TBuilder>(id, value, traits, keyTraits, valueTraits, key)
-{
-    public override IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value) =>
-        getEntries(value);
-
-    public override TBuilder CreateTypedBuilder() => createBuilder();
-
-    public override void Add(TBuilder builder, string key, TValue value) =>
-        add(builder, key, value);
-
-    public override TDictionary Build(TBuilder builder) => build(builder);
-
-    public override void SerializeEntries<TSerializer>(
-        TDictionary value,
-        ref TSerializer serializer
-    )
-    {
-        foreach (var (key, entry) in getEntries(value))
-        {
-            serializer.WriteString(0, key);
-            ValueSchema.Write(1, entry, ref serializer);
-        }
-    }
-
-    public override void DeserializeEntry<TDeserializer>(
-        TBuilder builder,
-        string key,
-        ref TDeserializer deserializer
-    ) => add(builder, key, ValueSchema.Read(ref deserializer));
 }
 
 /// <summary>
@@ -1076,58 +1347,6 @@ public sealed class StructProjection<T, TBuilder>
     }
 }
 
-public interface IOperationSchema
-{
-    ShapeId Id { get; }
-
-    ShapeKind Kind { get; }
-
-    Schema Input { get; }
-
-    Schema Output { get; }
-
-    /// <summary>Whether the operation has a streaming input or output.</summary>
-    bool IsStreaming { get; }
-
-    IReadOnlyList<IOperationErrorSchema> Errors { get; }
-
-    IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
-
-    Trait? GetTrait(ShapeId id);
-
-    bool HasTrait(ShapeId id);
-
-    /// <summary>Dispatches to <paramref name="visitor"/> with the input and output types in scope.</summary>
-    TResult Accept<TResult>(IOperationSchemaVisitor<TResult> visitor);
-}
-
-/// <summary>
-/// Recovers the input and output types hidden by <see cref="IOperationSchema"/> without reflection
-/// or the runtime binder.
-/// </summary>
-public interface IOperationSchemaVisitor<out TResult>
-{
-    TResult Visit<TInput, TOutput>(OperationSchema<TInput, TOutput> schema);
-}
-
-public interface IOperationErrorSchema
-{
-    ShapeId Id { get; }
-
-    Schema UntypedSchema { get; }
-
-    int HttpStatusCode { get; }
-
-    TResult Accept<TResult>(IOperationErrorSchemaVisitor<TResult> visitor);
-}
-
-/// <summary>Recovers a modeled error's exception type without runtime binder dispatch.</summary>
-public interface IOperationErrorSchemaVisitor<out TResult>
-{
-    TResult Visit<TError>(OperationErrorSchema<TError> schema)
-        where TError : Exception;
-}
-
 public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
 {
     internal OperationSchema(
@@ -1163,15 +1382,15 @@ public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
 
     public bool IsStreaming { get; }
 
+    public IReadOnlyList<IOperationErrorSchema> Errors { get; }
+
+    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+
     public TResult Accept<TResult>(IOperationSchemaVisitor<TResult> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.Visit(this);
     }
-
-    public IReadOnlyList<IOperationErrorSchema> Errors { get; }
-
-    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
 
     public Trait? GetTrait(ShapeId id) => Traits.TryGetValue(id, out var trait) ? trait : null;
 
@@ -1248,315 +1467,96 @@ public sealed class ServiceSchema
     public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
 }
 
-public static class Schemas
+/// <summary>A list whose elements go through its element schema, as a hand-written schema builds one.</summary>
+internal sealed class DelegateListSchema<TCollection, TElement, TBuilder>(
+    ShapeId id,
+    ShapeKind kind,
+    Schema<TElement> element,
+    Func<TCollection, IEnumerable<TElement>> getElements,
+    Func<TBuilder> createBuilder,
+    Action<TBuilder, TElement> add,
+    Func<TBuilder, TCollection> build,
+    IEnumerable<Trait>? traits = null,
+    IEnumerable<Trait>? elementTraits = null
+) : ListSchema<TCollection, TElement, TBuilder>(id, kind, element, traits, elementTraits)
 {
-    private const string PreludeNamespace = "smithy.api";
+    public override IEnumerable<TElement> GetElements(TCollection value) => getElements(value);
 
-    private static readonly ShapeId SyntheticOriginalShapeId = new(
-        "smithy.synthetic",
-        "originalShapeId"
-    );
+    public override TBuilder CreateTypedBuilder() => createBuilder();
 
-    private const string UnitShapeId = "smithy.api#Unit";
+    public override void Add(TBuilder builder, TElement value) => add(builder, value);
 
-    /// <summary>Whether a structure schema has an event-stream member.</summary>
-    public static bool HasEventStreamMember(Schema schema)
-    {
-        ArgumentNullException.ThrowIfNull(schema);
-        return schema.Resolved is IStructSchema structure
-            && structure.Members.Any(member => member.Target.Resolved is IEventStreamSchema);
-    }
+    public override TCollection Build(TBuilder builder) => build(builder);
 
-    /// <summary>
-    /// Whether a schema is the empty structure Smithy synthesizes for an operation input or output
-    /// of <c>smithy.api#Unit</c>. Protocols treat it differently from a declared structure without
-    /// members: it has no body, where the declared one has an empty body. Only its
-    /// <c>smithy.synthetic#originalShapeId</c> trait, pointing back at the unit, tells them apart.
-    /// </summary>
-    public static bool IsSyntheticUnit(Schema schema)
-    {
-        ArgumentNullException.ThrowIfNull(schema);
-        return schema.GetTrait(SyntheticOriginalShapeId)?.Value is { Kind: DocumentKind.String } id
-            && id.AsString() == UnitShapeId;
-    }
-
-    public static Schema<bool> Boolean { get; } =
-        new BooleanSchema(new ShapeId(PreludeNamespace, "Boolean"));
-
-    public static Schema<sbyte> Byte { get; } =
-        new ByteSchema(new ShapeId(PreludeNamespace, "Byte"));
-
-    public static Schema<short> Short { get; } =
-        new ShortSchema(new ShapeId(PreludeNamespace, "Short"));
-
-    public static Schema<int> Integer { get; } =
-        new IntegerSchema(new ShapeId(PreludeNamespace, "Integer"));
-
-    public static Schema<long> Long { get; } =
-        new LongSchema(new ShapeId(PreludeNamespace, "Long"));
-
-    public static Schema<float> Float { get; } =
-        new FloatSchema(new ShapeId(PreludeNamespace, "Float"));
-
-    public static Schema<double> Double { get; } =
-        new DoubleSchema(new ShapeId(PreludeNamespace, "Double"));
-
-    public static Schema<BigInteger> BigInteger { get; } =
-        new BigIntegerSchema(new ShapeId(PreludeNamespace, "BigInteger"));
-
-    public static Schema<decimal> BigDecimal { get; } =
-        new BigDecimalSchema(new ShapeId(PreludeNamespace, "BigDecimal"));
-
-    public static Schema<string> String { get; } =
-        new StringSchema(new ShapeId(PreludeNamespace, "String"));
-
-    public static Schema<byte[]> Blob { get; } =
-        new BlobSchema(new ShapeId(PreludeNamespace, "Blob"));
-
-    public static Schema<Stream> StreamingBlob { get; } =
-        new StreamingBlobSchema(
-            new ShapeId(PreludeNamespace, "Blob"),
-            [new Trait(new ShapeId(PreludeNamespace, "streaming"))]
-        );
-
-    public static Schema<DateTimeOffset> Timestamp { get; } =
-        new TimestampSchema(new ShapeId(PreludeNamespace, "Timestamp"));
-
-    /// <summary>
-    /// A timestamp schema carrying traits (e.g. <c>@timestampFormat</c>) so codecs can resolve the
-    /// wire format from the schema rather than a shared singleton.
-    /// </summary>
-    public static Schema<DateTimeOffset> TimestampWithTraits(IEnumerable<Trait>? traits) =>
-        new TimestampSchema(new ShapeId(PreludeNamespace, "Timestamp"), traits);
-
-    public static Schema<Document> Document { get; } =
-        new DocumentSchema(new ShapeId(PreludeNamespace, "Document"));
-
-    public static Schema<SmithyUnit> Unit { get; } = new UnitSchema();
-
-    public static Schema<T> Lazy<T>(Func<Schema<T>> resolve) => new LazySchema<T>(resolve);
-
-    public static Schema<T?> Nullable<T>(Schema<T> target)
-        where T : struct => new NullableSchema<T>(target);
-
-    public static Schema<T?> NullableReference<T>(Schema<T> target)
-        where T : class => (Schema<T?>)(object)target;
-
-    public static EventStreamSchema<TEvent> EventStream<TEvent>(Schema<TEvent> eventSchema) =>
-        new(eventSchema);
-
-    public static StringEnumSchema<T> StringEnum<T>(
-        ShapeId id,
-        IEnumerable<string>? values = null,
-        IEnumerable<Trait>? traits = null,
-        IEnumerable<string>? internalValues = null
-    )
-        where T : IStringEnumValue<T> => new(id, values, traits, internalValues);
-
-    public static IntEnumSchema<T> IntEnum<T>(
-        ShapeId id,
-        IEnumerable<int>? values = null,
-        IEnumerable<Trait>? traits = null
-    )
-        where T : struct, Enum => new(id, values, traits);
-
-    /// <summary>A list read as <see cref="IReadOnlyList{T}"/>; the form a hand-written schema wants.</summary>
-    public static ListSchema<IReadOnlyList<TElement>, TElement, List<TElement>> List<TElement>(
-        ShapeId id,
-        Schema<TElement> element,
-        IEnumerable<Trait>? traits = null,
-        IEnumerable<Trait>? elementTraits = null
-    ) =>
-        new DelegateListSchema<IReadOnlyList<TElement>, TElement, List<TElement>>(
-            id,
-            ShapeKind.List,
-            element,
-            static value => value,
-            static () => [],
-            static (builder, value) => builder.Add(value),
-            static builder => new ReadOnlyCollection<TElement>(builder.ToArray()),
-            traits,
-            elementTraits
-        );
-
-    public static ListSchema<TCollection, TElement, TBuilder> List<TCollection, TElement, TBuilder>(
-        ShapeId id,
-        Schema<TElement> element,
-        Func<TCollection, IEnumerable<TElement>> getElements,
-        Func<TBuilder> createBuilder,
-        Action<TBuilder, TElement> add,
-        Func<TBuilder, TCollection> build,
-        IEnumerable<Trait>? traits = null,
-        IEnumerable<Trait>? elementTraits = null
-    ) =>
-        new DelegateListSchema<TCollection, TElement, TBuilder>(
-            id,
-            ShapeKind.List,
-            element,
-            getElements,
-            createBuilder,
-            add,
-            build,
-            traits,
-            elementTraits
-        );
-
-    public static ListSchema<IReadOnlySet<TElement>, TElement, HashSet<TElement>> Set<TElement>(
-        ShapeId id,
-        Schema<TElement> element,
-        IEnumerable<Trait>? traits = null,
-        IEnumerable<Trait>? elementTraits = null
-    ) =>
-        new DelegateListSchema<IReadOnlySet<TElement>, TElement, HashSet<TElement>>(
-            id,
-            ShapeKind.Set,
-            element,
-            static value => value,
-            static () => [],
-            static (builder, value) => builder.Add(value),
-            static builder => builder,
-            traits,
-            elementTraits
-        );
-
-    public static ListSchema<TCollection, TElement, TBuilder> Set<TCollection, TElement, TBuilder>(
-        ShapeId id,
-        Schema<TElement> element,
-        Func<TCollection, IEnumerable<TElement>> getElements,
-        Func<TBuilder> createBuilder,
-        Action<TBuilder, TElement> add,
-        Func<TBuilder, TCollection> build,
-        IEnumerable<Trait>? traits = null,
-        IEnumerable<Trait>? elementTraits = null
-    ) =>
-        new DelegateListSchema<TCollection, TElement, TBuilder>(
-            id,
-            ShapeKind.Set,
-            element,
-            getElements,
-            createBuilder,
-            add,
-            build,
-            traits,
-            elementTraits
-        );
-
-    /// <param name="key">
-    /// The shape the key targets. Defaults to <see cref="String"/>, which is what a map key with no
-    /// shape of its own is; pass the modeled shape when the model gives it one, so a server can hold
-    /// the key to what that shape says.
-    /// </param>
-    public static MapSchema<
-        IReadOnlyDictionary<string, TValue>,
-        TValue,
-        Dictionary<string, TValue>
-    > Map<TValue>(
-        ShapeId id,
-        Schema<TValue> value,
-        IEnumerable<Trait>? traits = null,
-        IEnumerable<Trait>? keyTraits = null,
-        IEnumerable<Trait>? valueTraits = null,
-        Schema? key = null
-    ) =>
-        new DelegateMapSchema<
-            IReadOnlyDictionary<string, TValue>,
-            TValue,
-            Dictionary<string, TValue>
-        >(
-            id,
-            value,
-            static value => value,
-            static () => new Dictionary<string, TValue>(StringComparer.Ordinal),
-            static (builder, entryKey, entryValue) => builder.Add(entryKey, entryValue),
-            static builder => new ReadOnlyDictionary<string, TValue>(builder),
-            traits,
-            keyTraits,
-            valueTraits,
-            key
-        );
-
-    public static MapSchema<TDictionary, TValue, TBuilder> Map<TDictionary, TValue, TBuilder>(
-        ShapeId id,
-        Schema<TValue> value,
-        Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries,
-        Func<TBuilder> createBuilder,
-        Action<TBuilder, string, TValue> add,
-        Func<TBuilder, TDictionary> build,
-        IEnumerable<Trait>? traits = null,
-        IEnumerable<Trait>? keyTraits = null,
-        IEnumerable<Trait>? valueTraits = null,
-        Schema? key = null
-    ) =>
-        new DelegateMapSchema<TDictionary, TValue, TBuilder>(
-            id,
-            value,
-            getEntries,
-            createBuilder,
-            add,
-            build,
-            traits,
-            keyTraits,
-            valueTraits,
-            key
-        );
-
-    public static OperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
-        ShapeId id,
-        Schema<TInput> input,
-        Schema<TOutput> output,
-        IEnumerable<Trait>? traits = null,
-        bool isStreaming = false
-    ) => new(id, input, output, null, traits, isStreaming);
-
-    public static OperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
-        ShapeId id,
-        Schema<TInput> input,
-        Schema<TOutput> output,
-        IEnumerable<IOperationErrorSchema>? errors,
-        IEnumerable<Trait>? traits = null,
-        bool isStreaming = false
-    ) => new(id, input, output, errors, traits, isStreaming);
-
-    public static OperationErrorSchema<TError> OperationError<TError>(
-        ShapeId id,
-        Schema<TError> schema,
-        int httpStatusCode
-    )
-        where TError : Exception => new(id, schema, httpStatusCode);
-
-    public static ServiceSchema Service(ShapeId id, IEnumerable<Trait>? traits = null) =>
-        new(id, traits);
-
-    public static ServiceSchema Service(
-        ShapeId id,
-        string version,
-        IEnumerable<Trait>? traits = null
-    ) => new(id, version, traits);
-
-    /// <summary>The members of <paramref name="source"/> for which <paramref name="include"/> holds.</summary>
-    public static StructProjection<T, TBuilder> Project<T, TBuilder>(
-        StructSchema<T, TBuilder> source,
-        Func<MemberSchema, bool> include
-    ) => new(source, include);
-
-    /// <summary>The members of <paramref name="source"/> named in <paramref name="memberNames"/>.</summary>
-    public static StructProjection<T, TBuilder> Project<T, TBuilder>(
-        StructSchema<T, TBuilder> source,
-        IReadOnlySet<string> memberNames
+    public override void SerializeElements<TSerializer>(
+        TCollection value,
+        ref TSerializer serializer
     )
     {
-        ArgumentNullException.ThrowIfNull(memberNames);
-        return new(source, member => memberNames.Contains(member.Name));
+        // Indexed when possible: foreach over an IEnumerable boxes the collection's enumerator,
+        // an allocation per list written.
+        var elements = getElements(value);
+        if (elements is IReadOnlyList<TElement> list)
+        {
+            for (var index = 0; index < list.Count; index++)
+            {
+                ElementSchema.Write(0, list[index], ref serializer);
+            }
+
+            return;
+        }
+
+        foreach (var element in elements)
+        {
+            ElementSchema.Write(0, element, ref serializer);
+        }
     }
 
-    /// <summary>
-    /// Compiles the function that names the case a union value holds, e.g. for an event stream's
-    /// <c>:event-type</c>.
-    /// </summary>
-    public static Func<TUnion, string> CompileCaseName<TUnion>(UnionSchema<TUnion> schema)
+    public override void DeserializeElement<TDeserializer>(
+        TBuilder builder,
+        ref TDeserializer deserializer
+    ) => add(builder, ElementSchema.Read(ref deserializer));
+}
+
+/// <summary>A map whose values go through its value schema, as a hand-written schema builds one.</summary>
+internal sealed class DelegateMapSchema<TDictionary, TValue, TBuilder>(
+    ShapeId id,
+    Schema<TValue> value,
+    Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries,
+    Func<TBuilder> createBuilder,
+    Action<TBuilder, string, TValue> add,
+    Func<TBuilder, TDictionary> build,
+    IEnumerable<Trait>? traits = null,
+    IEnumerable<Trait>? keyTraits = null,
+    IEnumerable<Trait>? valueTraits = null,
+    Schema? key = null
+) : MapSchema<TDictionary, TValue, TBuilder>(id, value, traits, keyTraits, valueTraits, key)
+{
+    public override IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value) =>
+        getEntries(value);
+
+    public override TBuilder CreateTypedBuilder() => createBuilder();
+
+    public override void Add(TBuilder builder, string key, TValue value) =>
+        add(builder, key, value);
+
+    public override TDictionary Build(TBuilder builder) => build(builder);
+
+    public override void SerializeEntries<TSerializer>(
+        TDictionary value,
+        ref TSerializer serializer
+    )
     {
-        ArgumentNullException.ThrowIfNull(schema);
-        var names = schema.Cases.Select(@case => @case.Name).ToArray();
-        return value => names[schema.CaseOf(value)];
+        foreach (var (key, entry) in getEntries(value))
+        {
+            serializer.WriteString(0, key);
+            ValueSchema.Write(1, entry, ref serializer);
+        }
     }
+
+    public override void DeserializeEntry<TDeserializer>(
+        TBuilder builder,
+        string key,
+        ref TDeserializer deserializer
+    ) => add(builder, key, ValueSchema.Read(ref deserializer));
 }

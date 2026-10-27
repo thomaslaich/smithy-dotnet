@@ -104,23 +104,6 @@ internal sealed class LibraryHandler : ILibraryServiceHandler
         ),
     };
 
-    private static Book WithId(Book book, string id)
-    {
-        return new Book(
-            Author: book.Author,
-            Id: id,
-            Title: book.Title,
-            Category: book.Category,
-            Checksum: book.Checksum,
-            Format: book.Format,
-            Metadata: book.Metadata,
-            NullableAttributes: book.NullableAttributes,
-            PageCount: book.PageCount,
-            PublishedAt: book.PublishedAt,
-            Tags: book.Tags
-        );
-    }
-
     public Task<GetBookOutput> GetBookAsync(
         GetBookInput input,
         CancellationToken cancellationToken = default
@@ -210,5 +193,22 @@ internal sealed class LibraryHandler : ILibraryServiceHandler
             _books[id] = WithId(book, id);
         }
         return Task.FromResult(new UploadBooksOutput(input.Books.Count));
+    }
+
+    private static Book WithId(Book book, string id)
+    {
+        return new Book(
+            Author: book.Author,
+            Id: id,
+            Title: book.Title,
+            Category: book.Category,
+            Checksum: book.Checksum,
+            Format: book.Format,
+            Metadata: book.Metadata,
+            NullableAttributes: book.NullableAttributes,
+            PageCount: book.PageCount,
+            PublishedAt: book.PublishedAt,
+            Tags: book.Tags
+        );
     }
 }

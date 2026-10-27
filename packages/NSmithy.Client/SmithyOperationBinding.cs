@@ -53,6 +53,19 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     public IClientOperationProtocol<TInput, TOutput> Protocol { get; }
 
     /// <summary>
+    /// The operation's effective modeled auth scheme ids in Smithy priority order — the
+    /// service's effective schemes, overridden by a per-operation <c>@auth</c> trait. Empty for
+    /// anonymous operations.
+    /// </summary>
+    public IReadOnlyList<string> AuthSchemeIds { get; }
+
+    /// <summary>
+    /// Expands this operation's modeled endpoint host prefix from its typed input, or null when the
+    /// operation has no <c>@endpoint</c> trait.
+    /// </summary>
+    public Func<TInput, string>? HostPrefix { get; }
+
+    /// <summary>
     /// The span name for this operation, built once here rather than interpolated per invocation.
     /// <see cref="System.Diagnostics.ActivitySource.StartActivity(string, System.Diagnostics.ActivityKind)"/>
     /// returns null when nothing is subscribed, but its argument is evaluated either way, so
@@ -66,17 +79,4 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     /// value is constant per binding, so it is materialized once with the binding.
     /// </summary>
     internal string ServiceIdTag { get; }
-
-    /// <summary>
-    /// The operation's effective modeled auth scheme ids in Smithy priority order — the
-    /// service's effective schemes, overridden by a per-operation <c>@auth</c> trait. Empty for
-    /// anonymous operations.
-    /// </summary>
-    public IReadOnlyList<string> AuthSchemeIds { get; }
-
-    /// <summary>
-    /// Expands this operation's modeled endpoint host prefix from its typed input, or null when the
-    /// operation has no <c>@endpoint</c> trait.
-    /// </summary>
-    public Func<TInput, string>? HostPrefix { get; }
 }

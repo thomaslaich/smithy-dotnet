@@ -5,6 +5,16 @@ using NSmithy.Http;
 
 namespace NSmithy.Client;
 
+/// <summary>How a retry strategy classified one failed attempt.</summary>
+public enum SmithyRetryVerdict
+{
+    NotRetryable,
+    Retryable,
+
+    /// <summary>Retryable, but the service is shedding load; back off from a larger base delay.</summary>
+    Throttling,
+}
+
 /// <summary>
 /// The recommended retry strategy: exponential backoff with full jitter and a backoff cap, a
 /// client-shared retry quota, and <c>Retry-After</c> support. Retryability comes from transport
@@ -86,48 +96,6 @@ public sealed class SmithyStandardRetryStrategy : ISmithyRetryStrategy
     public TimeSpan MaxDelay { get; }
 
     public ISmithyRetrySession Begin() => new Session(this);
-
-    /// <summary>
-    /// One execution's session: tracks how much quota this execution acquired so an eventual
-    /// success refunds exactly that amount.
-    /// </summary>
-    private sealed class Session(SmithyStandardRetryStrategy strategy) : ISmithyRetrySession
-    {
-        private int acquired;
-
-        public SmithyRetryDecision Classify(SmithyRetryOutcome outcome)
-        {
-            ArgumentNullException.ThrowIfNull(outcome);
-
-            if (outcome.Attempt >= strategy.MaxAttempts)
-            {
-                return SmithyRetryDecision.GiveUp;
-            }
-
-            var verdict = strategy.classifyOutcome?.Invoke(outcome) ?? DefaultClassify(outcome);
-            if (verdict == SmithyRetryVerdict.NotRetryable)
-            {
-                return SmithyRetryDecision.GiveUp;
-            }
-
-            var cost = outcome.IsTransportFailure ? TransportFailureRetryCost : RetryCost;
-            if (!strategy.TryAcquireQuota(cost))
-            {
-                return SmithyRetryDecision.GiveUp;
-            }
-
-            acquired += cost;
-            return SmithyRetryDecision.RetryAfter(
-                strategy.RetryAfterDelay(outcome.Response)
-                    ?? strategy.BackoffDelay(outcome.Attempt, verdict)
-            );
-        }
-
-        // Refund what this execution's retries consumed; a first-attempt success slowly
-        // replenishes quota spent by other executions.
-        public void RecordSuccess() =>
-            strategy.ReleaseQuota(acquired == 0 ? SuccessRefund : acquired);
-    }
 
     private static SmithyRetryVerdict DefaultClassify(SmithyRetryOutcome outcome)
     {
@@ -226,14 +194,46 @@ public sealed class SmithyStandardRetryStrategy : ISmithyRetryStrategy
 
         return null;
     }
-}
 
-/// <summary>How a retry strategy classified one failed attempt.</summary>
-public enum SmithyRetryVerdict
-{
-    NotRetryable,
-    Retryable,
+    /// <summary>
+    /// One execution's session: tracks how much quota this execution acquired so an eventual
+    /// success refunds exactly that amount.
+    /// </summary>
+    private sealed class Session(SmithyStandardRetryStrategy strategy) : ISmithyRetrySession
+    {
+        private int acquired;
 
-    /// <summary>Retryable, but the service is shedding load; back off from a larger base delay.</summary>
-    Throttling,
+        public SmithyRetryDecision Classify(SmithyRetryOutcome outcome)
+        {
+            ArgumentNullException.ThrowIfNull(outcome);
+
+            if (outcome.Attempt >= strategy.MaxAttempts)
+            {
+                return SmithyRetryDecision.GiveUp;
+            }
+
+            var verdict = strategy.classifyOutcome?.Invoke(outcome) ?? DefaultClassify(outcome);
+            if (verdict == SmithyRetryVerdict.NotRetryable)
+            {
+                return SmithyRetryDecision.GiveUp;
+            }
+
+            var cost = outcome.IsTransportFailure ? TransportFailureRetryCost : RetryCost;
+            if (!strategy.TryAcquireQuota(cost))
+            {
+                return SmithyRetryDecision.GiveUp;
+            }
+
+            acquired += cost;
+            return SmithyRetryDecision.RetryAfter(
+                strategy.RetryAfterDelay(outcome.Response)
+                    ?? strategy.BackoffDelay(outcome.Attempt, verdict)
+            );
+        }
+
+        // Refund what this execution's retries consumed; a first-attempt success slowly
+        // replenishes quota spent by other executions.
+        public void RecordSuccess() =>
+            strategy.ReleaseQuota(acquired == 0 ? SuccessRefund : acquired);
+    }
 }

@@ -51,6 +51,71 @@ public sealed class ProfileAwsCredentialsProvider(
             .ConfigureAwait(false);
     }
 
+    private static TimeSpan? Duration(string name, Dictionary<string, string> values)
+    {
+        if (!values.TryGetValue("duration_seconds", out var text))
+        {
+            return null;
+        }
+        return int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
+            ? TimeSpan.FromSeconds(seconds)
+            : throw Failure(
+                $"AWS profile '{name}' has duration_seconds '{text}', which is not a number."
+            );
+    }
+
+    private static bool TryGetStaticCredentials(
+        Dictionary<string, string> values,
+        out AwsCredentials credentials
+    )
+    {
+        if (
+            values.TryGetValue("aws_access_key_id", out var accessKeyId)
+            && values.TryGetValue("aws_secret_access_key", out var secretAccessKey)
+        )
+        {
+            values.TryGetValue("aws_session_token", out var sessionToken);
+            credentials = new AwsCredentials(accessKeyId, secretAccessKey, sessionToken);
+            return true;
+        }
+        credentials = null!;
+        return false;
+    }
+
+    private static bool TryGetSsoSettings(
+        AwsSharedConfig config,
+        Dictionary<string, string> values,
+        out SsoSettings settings
+    )
+    {
+        var merged = new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
+        if (
+            values.TryGetValue("sso_session", out var session)
+            && config.ConfigSection("sso-session " + session) is { } sessionValues
+        )
+        {
+            foreach (var value in sessionValues)
+            {
+                merged[value.Key] = value.Value;
+            }
+        }
+        if (
+            merged.TryGetValue("sso_start_url", out var startUrl)
+            && merged.TryGetValue("sso_region", out var region)
+            && merged.TryGetValue("sso_account_id", out var accountId)
+            && merged.TryGetValue("sso_role_name", out var roleName)
+        )
+        {
+            settings = new SsoSettings(startUrl, region, accountId, roleName);
+            return true;
+        }
+        settings = default;
+        return false;
+    }
+
+    private static AwsCredentialsProviderException Failure(string message) =>
+        new(nameof(ProfileAwsCredentialsProvider), message);
+
     private async ValueTask<AwsCredentials> ResolveAsync(
         AwsSharedConfig config,
         string name,
@@ -217,71 +282,6 @@ public sealed class ProfileAwsCredentialsProvider(
             $"AWS profile '{name}' has role_arn but no source_profile, credential_source, or web_identity_token_file."
         );
     }
-
-    private static TimeSpan? Duration(string name, Dictionary<string, string> values)
-    {
-        if (!values.TryGetValue("duration_seconds", out var text))
-        {
-            return null;
-        }
-        return int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
-            ? TimeSpan.FromSeconds(seconds)
-            : throw Failure(
-                $"AWS profile '{name}' has duration_seconds '{text}', which is not a number."
-            );
-    }
-
-    private static bool TryGetStaticCredentials(
-        Dictionary<string, string> values,
-        out AwsCredentials credentials
-    )
-    {
-        if (
-            values.TryGetValue("aws_access_key_id", out var accessKeyId)
-            && values.TryGetValue("aws_secret_access_key", out var secretAccessKey)
-        )
-        {
-            values.TryGetValue("aws_session_token", out var sessionToken);
-            credentials = new AwsCredentials(accessKeyId, secretAccessKey, sessionToken);
-            return true;
-        }
-        credentials = null!;
-        return false;
-    }
-
-    private static bool TryGetSsoSettings(
-        AwsSharedConfig config,
-        Dictionary<string, string> values,
-        out SsoSettings settings
-    )
-    {
-        var merged = new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
-        if (
-            values.TryGetValue("sso_session", out var session)
-            && config.ConfigSection("sso-session " + session) is { } sessionValues
-        )
-        {
-            foreach (var value in sessionValues)
-            {
-                merged[value.Key] = value.Value;
-            }
-        }
-        if (
-            merged.TryGetValue("sso_start_url", out var startUrl)
-            && merged.TryGetValue("sso_region", out var region)
-            && merged.TryGetValue("sso_account_id", out var accountId)
-            && merged.TryGetValue("sso_role_name", out var roleName)
-        )
-        {
-            settings = new SsoSettings(startUrl, region, accountId, roleName);
-            return true;
-        }
-        settings = default;
-        return false;
-    }
-
-    private static AwsCredentialsProviderException Failure(string message) =>
-        new(nameof(ProfileAwsCredentialsProvider), message);
 
     private readonly record struct SsoSettings(
         string StartUrl,

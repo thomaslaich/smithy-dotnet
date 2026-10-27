@@ -29,37 +29,25 @@ public sealed class EventStreamMessage
         Payload = payload;
     }
 
+    private delegate void SpanWriter(Span<byte> span);
+
+    private enum HeaderType : byte
+    {
+        BoolTrue = 0,
+        BoolFalse = 1,
+        Byte = 2,
+        Int16 = 3,
+        Int32 = 4,
+        Int64 = 5,
+        ByteArray = 6,
+        String = 7,
+        Timestamp = 8,
+        Uuid = 9,
+    }
+
     public IReadOnlyDictionary<string, EventStreamHeaderValue> Headers { get; }
 
     public ReadOnlyMemory<byte> Payload { get; }
-
-    /// <summary>Convenience accessor: the header's string value, or null when absent or non-string.</summary>
-    public string? StringHeader(string name) =>
-        Headers.TryGetValue(name, out var value) && value is EventStreamHeaderValue.Text text
-            ? text.Value
-            : null;
-
-    /// <summary>Encodes the message into its framed wire form.</summary>
-    public byte[] Encode()
-    {
-        var headersBlock = EncodeHeaders(Headers);
-        var totalLength = PreludeLength + headersBlock.Length + Payload.Length + MessageCrcLength;
-
-        var message = new byte[totalLength];
-        BinaryPrimitives.WriteUInt32BigEndian(message.AsSpan(0, 4), (uint)totalLength);
-        BinaryPrimitives.WriteUInt32BigEndian(message.AsSpan(4, 4), (uint)headersBlock.Length);
-        BinaryPrimitives.WriteUInt32BigEndian(
-            message.AsSpan(8, 4),
-            Crc32.HashToUInt32(message.AsSpan(0, 8))
-        );
-        headersBlock.CopyTo(message.AsSpan(PreludeLength));
-        Payload.Span.CopyTo(message.AsSpan(PreludeLength + headersBlock.Length));
-        BinaryPrimitives.WriteUInt32BigEndian(
-            message.AsSpan(totalLength - MessageCrcLength, 4),
-            Crc32.HashToUInt32(message.AsSpan(0, totalLength - MessageCrcLength))
-        );
-        return message;
-    }
 
     /// <summary>
     /// Decodes one complete framed message, validating both CRCs.
@@ -105,6 +93,34 @@ public sealed class EventStreamMessage
         var headers = DecodeHeaders(span.Slice(PreludeLength, headersLength));
         var payload = message.Slice(PreludeLength + headersLength, payloadLength);
         return new EventStreamMessage(headers, payload);
+    }
+
+    /// <summary>Convenience accessor: the header's string value, or null when absent or non-string.</summary>
+    public string? StringHeader(string name) =>
+        Headers.TryGetValue(name, out var value) && value is EventStreamHeaderValue.Text text
+            ? text.Value
+            : null;
+
+    /// <summary>Encodes the message into its framed wire form.</summary>
+    public byte[] Encode()
+    {
+        var headersBlock = EncodeHeaders(Headers);
+        var totalLength = PreludeLength + headersBlock.Length + Payload.Length + MessageCrcLength;
+
+        var message = new byte[totalLength];
+        BinaryPrimitives.WriteUInt32BigEndian(message.AsSpan(0, 4), (uint)totalLength);
+        BinaryPrimitives.WriteUInt32BigEndian(message.AsSpan(4, 4), (uint)headersBlock.Length);
+        BinaryPrimitives.WriteUInt32BigEndian(
+            message.AsSpan(8, 4),
+            Crc32.HashToUInt32(message.AsSpan(0, 8))
+        );
+        headersBlock.CopyTo(message.AsSpan(PreludeLength));
+        Payload.Span.CopyTo(message.AsSpan(PreludeLength + headersBlock.Length));
+        BinaryPrimitives.WriteUInt32BigEndian(
+            message.AsSpan(totalLength - MessageCrcLength, 4),
+            Crc32.HashToUInt32(message.AsSpan(0, totalLength - MessageCrcLength))
+        );
+        return message;
     }
 
     internal static int ReadLength(ReadOnlySpan<byte> lengthBytes, string what)
@@ -208,8 +224,6 @@ public sealed class EventStreamMessage
                 throw new ArgumentException($"Unknown event stream header value: {value}.");
         }
     }
-
-    private delegate void SpanWriter(Span<byte> span);
 
     private static void WriteBigEndian(MemoryStream buffer, Span<byte> scratch, SpanWriter write)
     {
@@ -318,19 +332,5 @@ public sealed class EventStreamMessage
         var slice = block.Slice(offset, length);
         offset += length;
         return slice;
-    }
-
-    private enum HeaderType : byte
-    {
-        BoolTrue = 0,
-        BoolFalse = 1,
-        Byte = 2,
-        Int16 = 3,
-        Int32 = 4,
-        Int64 = 5,
-        ByteArray = 6,
-        String = 7,
-        Timestamp = 8,
-        Uuid = 9,
     }
 }

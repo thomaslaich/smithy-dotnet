@@ -87,6 +87,17 @@ public sealed class SsoAwsCredentialsProvider : IAwsCredentialsProvider
         );
     }
 
+    private static bool TryParseExpiration(string? value, out DateTimeOffset expiration) =>
+        DateTimeOffset.TryParse(
+            value?.Replace("UTC", "Z", StringComparison.OrdinalIgnoreCase),
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out expiration
+        );
+
+    private static DateTimeOffset ParseExpiration(string? value) =>
+        TryParseExpiration(value, out var expiration) ? expiration : DateTimeOffset.MinValue;
+
     private string FindCachedToken()
     {
         if (!Directory.Exists(cacheDirectory))
@@ -132,17 +143,6 @@ public sealed class SsoAwsCredentialsProvider : IAwsCredentialsProvider
 
         return selected?.AccessToken ?? throw MissingToken();
     }
-
-    private static bool TryParseExpiration(string? value, out DateTimeOffset expiration) =>
-        DateTimeOffset.TryParse(
-            value?.Replace("UTC", "Z", StringComparison.OrdinalIgnoreCase),
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-            out expiration
-        );
-
-    private static DateTimeOffset ParseExpiration(string? value) =>
-        TryParseExpiration(value, out var expiration) ? expiration : DateTimeOffset.MinValue;
 
     private AwsCredentialsProviderException MissingToken() =>
         new(

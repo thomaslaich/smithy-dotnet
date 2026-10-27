@@ -73,132 +73,6 @@ public sealed class AwsSigV4Signer(
     }
 
     /// <summary>
-    /// The signing options for one request: the resolved endpoint's SigV4 auth scheme properties
-    /// where it sets them, otherwise the values this signer was constructed with.
-    /// </summary>
-    private SigningOptions ResolveSigningOptions(SmithyContext context)
-    {
-        SmithyEndpointAuthScheme? properties = null;
-        if (
-            context.TryGet(SmithyContextKeys.ResolvedEndpoint, out var endpoint)
-            && endpoint?.AuthSchemes is { } authSchemes
-        )
-        {
-            properties = authSchemes.FirstOrDefault(authScheme =>
-                string.Equals(authScheme.SchemeId, AwsSigV4AuthScheme.Id, StringComparison.Ordinal)
-            );
-        }
-
-        var signingName =
-            properties?.GetString("signingName")
-            ?? service
-            ?? throw new InvalidOperationException(
-                "AWS SigV4 needs a signing name: the resolved endpoint sets none, so construct the "
-                    + "auth scheme with the service's signing name."
-            );
-        var signingRegion =
-            properties?.GetString("signingRegion")
-            ?? region
-            ?? throw new InvalidOperationException(
-                "AWS SigV4 needs a signing region: set the client's Region, or construct the auth "
-                    + "scheme with a region."
-            );
-        var s3 = UsesS3PathRules(signingName);
-        return new SigningOptions(
-            signingName,
-            signingRegion,
-            properties?.GetBoolean("disableDoubleEncoding") ?? s3,
-            properties?.GetBoolean("disableNormalizePath") ?? s3
-        );
-    }
-
-    private SigningOptions DefaultSigningOptions()
-    {
-        if (service is null || region is null)
-        {
-            throw new InvalidOperationException(
-                "AWS SigV4 needs a signing name and region: construct the signer with both."
-            );
-        }
-        var s3 = UsesS3PathRules(service);
-        return new SigningOptions(service, region, s3, s3);
-    }
-
-    // S3 signs the path as sent: encoded once and not normalized. Its endpoint rules say so through
-    // the disableDoubleEncoding and disableNormalizePath properties; this covers requests signed
-    // without them.
-    private static bool UsesS3PathRules(string signingName) =>
-        signingName is "s3" or "s3-outposts" or "s3express";
-
-    private static void Sign(
-        SmithyHttpRequest request,
-        AwsCredentials credentials,
-        DateTimeOffset now,
-        SigningOptions options
-    )
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(credentials);
-
-        // A retry or caller may hand the signer a previously signed request. Authentication
-        // material is output, never canonical input; remove it before rebuilding the signature.
-        request.Headers.Remove("Authorization");
-        var requestUri = ResolveRequestUri(request.RequestUri);
-        var amzDate = now.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", InvariantDateTime);
-        var date = now.UtcDateTime.ToString("yyyyMMdd", InvariantDateTime);
-        var payloadHash = Sha256Hex(SignablePayloadBytes(request.Body));
-
-        request.Headers["Host"] = [HostHeader(requestUri)];
-        request.Headers["X-Amz-Date"] = [amzDate];
-        request.Headers["X-Amz-Content-Sha256"] = [payloadHash];
-        if (!string.IsNullOrEmpty(credentials.SessionToken))
-        {
-            request.Headers["X-Amz-Security-Token"] = [credentials.SessionToken];
-        }
-        else
-        {
-            request.Headers.Remove("X-Amz-Security-Token");
-        }
-
-        var canonicalHeaders = CanonicalHeaders(request);
-        var signedHeaders = string.Join(';', canonicalHeaders.Select(h => h.Name));
-        var canonicalRequest = string.Join(
-            '\n',
-            request.Method.Method.ToUpperInvariant(),
-            CanonicalPath(requestUri, options),
-            CanonicalQuery(requestUri),
-            string.Concat(canonicalHeaders.Select(h => $"{h.Name}:{h.Value}\n")),
-            signedHeaders,
-            payloadHash
-        );
-
-        var credentialScope = $"{date}/{options.Region}/{options.Service}/aws4_request";
-        var stringToSign = string.Join(
-            '\n',
-            Algorithm,
-            amzDate,
-            credentialScope,
-            Sha256Hex(Encoding.UTF8.GetBytes(canonicalRequest))
-        );
-        var signature = ToHex(
-            HmacSha256(
-                DeriveSigningKey(
-                    credentials.SecretAccessKey,
-                    date,
-                    options.Region,
-                    options.Service
-                ),
-                stringToSign
-            )
-        );
-
-        request.Headers["Authorization"] =
-        [
-            $"{Algorithm} Credential={credentials.AccessKeyId}/{credentialScope}, SignedHeaders={signedHeaders}, Signature={signature}",
-        ];
-    }
-
-    /// <summary>
     /// Adds SigV4 authentication query parameters to a request and returns its absolute presigned
     /// URI. The request is mutated so it can be sent directly after this call.
     /// </summary>
@@ -292,6 +166,80 @@ public sealed class AwsSigV4Signer(
         var presigned = WithQuery(requestUri, query);
         request.RequestUri = presigned.AbsoluteUri;
         return presigned;
+    }
+
+    // S3 signs the path as sent: encoded once and not normalized. Its endpoint rules say so through
+    // the disableDoubleEncoding and disableNormalizePath properties; this covers requests signed
+    // without them.
+    private static bool UsesS3PathRules(string signingName) =>
+        signingName is "s3" or "s3-outposts" or "s3express";
+
+    private static void Sign(
+        SmithyHttpRequest request,
+        AwsCredentials credentials,
+        DateTimeOffset now,
+        SigningOptions options
+    )
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(credentials);
+
+        // A retry or caller may hand the signer a previously signed request. Authentication
+        // material is output, never canonical input; remove it before rebuilding the signature.
+        request.Headers.Remove("Authorization");
+        var requestUri = ResolveRequestUri(request.RequestUri);
+        var amzDate = now.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", InvariantDateTime);
+        var date = now.UtcDateTime.ToString("yyyyMMdd", InvariantDateTime);
+        var payloadHash = Sha256Hex(SignablePayloadBytes(request.Body));
+
+        request.Headers["Host"] = [HostHeader(requestUri)];
+        request.Headers["X-Amz-Date"] = [amzDate];
+        request.Headers["X-Amz-Content-Sha256"] = [payloadHash];
+        if (!string.IsNullOrEmpty(credentials.SessionToken))
+        {
+            request.Headers["X-Amz-Security-Token"] = [credentials.SessionToken];
+        }
+        else
+        {
+            request.Headers.Remove("X-Amz-Security-Token");
+        }
+
+        var canonicalHeaders = CanonicalHeaders(request);
+        var signedHeaders = string.Join(';', canonicalHeaders.Select(h => h.Name));
+        var canonicalRequest = string.Join(
+            '\n',
+            request.Method.Method.ToUpperInvariant(),
+            CanonicalPath(requestUri, options),
+            CanonicalQuery(requestUri),
+            string.Concat(canonicalHeaders.Select(h => $"{h.Name}:{h.Value}\n")),
+            signedHeaders,
+            payloadHash
+        );
+
+        var credentialScope = $"{date}/{options.Region}/{options.Service}/aws4_request";
+        var stringToSign = string.Join(
+            '\n',
+            Algorithm,
+            amzDate,
+            credentialScope,
+            Sha256Hex(Encoding.UTF8.GetBytes(canonicalRequest))
+        );
+        var signature = ToHex(
+            HmacSha256(
+                DeriveSigningKey(
+                    credentials.SecretAccessKey,
+                    date,
+                    options.Region,
+                    options.Service
+                ),
+                stringToSign
+            )
+        );
+
+        request.Headers["Authorization"] =
+        [
+            $"{Algorithm} Credential={credentials.AccessKeyId}/{credentialScope}, SignedHeaders={signedHeaders}, Signature={signature}",
+        ];
     }
 
     private static List<KeyValuePair<string, string>> QueryWithoutAuthentication(Uri uri)
@@ -550,6 +498,58 @@ public sealed class AwsSigV4Signer(
     private static string ToHex(byte[] bytes)
     {
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// The signing options for one request: the resolved endpoint's SigV4 auth scheme properties
+    /// where it sets them, otherwise the values this signer was constructed with.
+    /// </summary>
+    private SigningOptions ResolveSigningOptions(SmithyContext context)
+    {
+        SmithyEndpointAuthScheme? properties = null;
+        if (
+            context.TryGet(SmithyContextKeys.ResolvedEndpoint, out var endpoint)
+            && endpoint?.AuthSchemes is { } authSchemes
+        )
+        {
+            properties = authSchemes.FirstOrDefault(authScheme =>
+                string.Equals(authScheme.SchemeId, AwsSigV4AuthScheme.Id, StringComparison.Ordinal)
+            );
+        }
+
+        var signingName =
+            properties?.GetString("signingName")
+            ?? service
+            ?? throw new InvalidOperationException(
+                "AWS SigV4 needs a signing name: the resolved endpoint sets none, so construct the "
+                    + "auth scheme with the service's signing name."
+            );
+        var signingRegion =
+            properties?.GetString("signingRegion")
+            ?? region
+            ?? throw new InvalidOperationException(
+                "AWS SigV4 needs a signing region: set the client's Region, or construct the auth "
+                    + "scheme with a region."
+            );
+        var s3 = UsesS3PathRules(signingName);
+        return new SigningOptions(
+            signingName,
+            signingRegion,
+            properties?.GetBoolean("disableDoubleEncoding") ?? s3,
+            properties?.GetBoolean("disableNormalizePath") ?? s3
+        );
+    }
+
+    private SigningOptions DefaultSigningOptions()
+    {
+        if (service is null || region is null)
+        {
+            throw new InvalidOperationException(
+                "AWS SigV4 needs a signing name and region: construct the signer with both."
+            );
+        }
+        var s3 = UsesS3PathRules(service);
+        return new SigningOptions(service, region, s3, s3);
     }
 
     private readonly record struct SigningOptions(

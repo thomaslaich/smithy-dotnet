@@ -68,6 +68,12 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     [Required]
     public string OutputFile { get; set; } = "";
 
+    private bool HasProjectBuildFile =>
+        !string.IsNullOrEmpty(ProjectBuildFile) && File.Exists(ProjectBuildFile);
+
+    private string ProjectBuildFileName =>
+        HasProjectBuildFile ? ProjectBuildFile : "smithy-build.json";
+
     public override bool Execute()
     {
         try
@@ -98,28 +104,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             );
             return false;
         }
-    }
-
-    private bool HasProjectBuildFile =>
-        !string.IsNullOrEmpty(ProjectBuildFile) && File.Exists(ProjectBuildFile);
-
-    private string ProjectBuildFileName =>
-        HasProjectBuildFile ? ProjectBuildFile : "smithy-build.json";
-
-    private JsonObject ReadProjectBuildFile()
-    {
-        if (!HasProjectBuildFile)
-            return new JsonObject { ["version"] = "1.0" };
-
-        var root = ParseObject(ProjectBuildFile);
-        var directory = Path.GetDirectoryName(Path.GetFullPath(ProjectBuildFile))!;
-        ResolvePaths(root, "sources", directory);
-        ResolvePaths(root, "imports", directory);
-        if (root["projections"] is JsonObject projections)
-            foreach (var (_, projection) in projections)
-                if (projection is JsonObject projectionObject)
-                    ResolvePaths(projectionObject, "imports", directory);
-        return root;
     }
 
     private static JsonObject ParseObject(string path) =>
@@ -160,6 +144,52 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                     repositories.Add(repository.DeepClone().AsObject());
     }
 
+    private static string PropertyFor(PropertySettings plugin, string key) =>
+        (plugin.Plugin, key) switch
+        {
+            (CSharpPlugin, "generateClient") => "SmithyGenerateClient",
+            (CSharpPlugin, "generateServer") => "SmithyGenerateServer",
+            ("openapi", "protocol") => "SmithyOpenApiProtocol",
+            (_, "service") => "SmithyService",
+            _ => plugin.Property,
+        };
+
+    private static void WriteMaven(
+        JsonObject root,
+        DependencySet dependencies,
+        List<JsonObject> repositories
+    )
+    {
+        var maven = root["maven"] as JsonObject ?? [];
+        root["maven"] = maven;
+        if (repositories.Count == 0)
+            repositories.Add(new JsonObject { ["url"] = MavenCentral });
+        var repos = new JsonArray();
+        foreach (var repository in repositories)
+            repos.Add(repository);
+        maven["repositories"] = repos;
+        var deps = new JsonArray();
+        foreach (var coordinate in dependencies.Coordinates)
+            deps.Add(coordinate);
+        maven["dependencies"] = deps;
+    }
+
+    private JsonObject ReadProjectBuildFile()
+    {
+        if (!HasProjectBuildFile)
+            return new JsonObject { ["version"] = "1.0" };
+
+        var root = ParseObject(ProjectBuildFile);
+        var directory = Path.GetDirectoryName(Path.GetFullPath(ProjectBuildFile))!;
+        ResolvePaths(root, "sources", directory);
+        ResolvePaths(root, "imports", directory);
+        if (root["projections"] is JsonObject projections)
+            foreach (var (_, projection) in projections)
+                if (projection is JsonObject projectionObject)
+                    ResolvePaths(projectionObject, "imports", directory);
+        return root;
+    }
+
     private void AddContracts(
         JsonObject root,
         DependencySet dependencies,
@@ -187,13 +217,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         foreach (var source in Sources)
             sources.Add(source.GetMetadata("FullPath"));
     }
-
-    private sealed record PropertySettings(
-        string Plugin,
-        string Property,
-        JsonObject Owned,
-        JsonObject Defaults
-    );
 
     // The settings that properties set, per plugin. Owned keys fail the build when a build file
     // sets them too; defaults apply only when it does not.
@@ -303,16 +326,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             );
     }
 
-    private static string PropertyFor(PropertySettings plugin, string key) =>
-        (plugin.Plugin, key) switch
-        {
-            (CSharpPlugin, "generateClient") => "SmithyGenerateClient",
-            (CSharpPlugin, "generateServer") => "SmithyGenerateServer",
-            ("openapi", "protocol") => "SmithyOpenApiProtocol",
-            (_, "service") => "SmithyService",
-            _ => plugin.Property,
-        };
-
     private JsonObject? ProjectionPlugins(JsonObject root)
     {
         var projections = root["projections"] as JsonObject;
@@ -370,26 +383,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             dependencies.Add($"software.amazon.smithy:smithy-openapi:{SmithyVersion}", "NSmithy");
     }
 
-    private static void WriteMaven(
-        JsonObject root,
-        DependencySet dependencies,
-        List<JsonObject> repositories
-    )
-    {
-        var maven = root["maven"] as JsonObject ?? [];
-        root["maven"] = maven;
-        if (repositories.Count == 0)
-            repositories.Add(new JsonObject { ["url"] = MavenCentral });
-        var repos = new JsonArray();
-        foreach (var repository in repositories)
-            repos.Add(repository);
-        maven["repositories"] = repos;
-        var deps = new JsonArray();
-        foreach (var coordinate in dependencies.Coordinates)
-            deps.Add(coordinate);
-        maven["dependencies"] = deps;
-    }
-
     private void Write(JsonObject root)
     {
         var result = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
@@ -417,6 +410,13 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             endColumnNumber: 0,
             message: message
         );
+
+    private sealed record PropertySettings(
+        string Plugin,
+        string Property,
+        JsonObject Owned,
+        JsonObject Defaults
+    );
 
     /// <summary>Maven coordinates combined by group and artifact, in first-seen order.</summary>
     private sealed class DependencySet

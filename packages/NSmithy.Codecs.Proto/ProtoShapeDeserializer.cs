@@ -76,17 +76,6 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
 
     public long ReadLong() => ReadInt64();
 
-    private long ReadInt64()
-    {
-        if (sparse)
-        {
-            return (long)ProtoSparseValues.ReadNumber(Bytes);
-        }
-
-        var reader = Reader;
-        return ProtoWire.ReadInteger(ref reader, entry.Encoding);
-    }
-
     public float ReadFloat() =>
         sparse
             ? (float)ProtoSparseValues.ReadNumber(Bytes)
@@ -134,101 +123,6 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
         var builder = schema.CreateTypedBuilder();
         ReadMessage(payload, value, entry.Shape!, schema, builder);
         return schema.Build(builder);
-    }
-
-    /// <summary>
-    /// Reads a message's fields into <paramref name="builder"/> in one pass. A field that occurs
-    /// more than once is read each time, so the last occurrence wins. A repeated or map field is
-    /// read once, at its first occurrence, by a deserializer that scans the rest of the message for
-    /// all of them, since protobuf lets other fields come between.
-    /// </summary>
-    private static void ReadMessage<T, TBuilder>(
-        byte[] payload,
-        ProtoOccurrence message,
-        ProtoShapePlan plan,
-        StructSchema<T, TBuilder> schema,
-        TBuilder builder
-    )
-    {
-        var members = plan.Members;
-        Span<bool> collectionsRead =
-            members.Length <= 256 ? stackalloc bool[members.Length] : new bool[members.Length];
-
-        // One handler for the whole message rather than one per field: a try region inside the loop
-        // would keep the JIT from optimizing the loop body.
-        ProtoMemberPlan? reading = null;
-        try
-        {
-            var reader = new ProtoReader(payload.AsSpan(message.Start, message.Length));
-            while (!reader.End)
-            {
-                var tagStart = reader.Position;
-                var (number, wireType) = reader.ReadTag();
-                if (!plan.TryGetField(number, out var field))
-                {
-                    reader.SkipField(wireType);
-                    continue;
-                }
-
-                var member = members[field.Member];
-                if (member.Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map)
-                {
-                    if (!collectionsRead[field.Member])
-                    {
-                        collectionsRead[field.Member] = true;
-                        var all = new ProtoShapeDeserializer(
-                            payload,
-                            member,
-                            number,
-                            new ProtoOccurrence(
-                                message.Start + tagStart,
-                                message.Length - tagStart,
-                                WireType.Len
-                            )
-                        );
-                        schema.DeserializeMember(builder, field.Member, ref all);
-                    }
-
-                    reader.SkipField(wireType);
-                    continue;
-                }
-
-                var (start, length) = reader.ReadValueRange(wireType);
-                var nested = new ProtoShapeDeserializer(
-                    payload,
-                    new ProtoOccurrence(message.Start + start, length, wireType),
-                    member,
-                    field.Case
-                );
-                reading = member;
-                schema.DeserializeMember(builder, field.Member, ref nested);
-                reading = null;
-            }
-        }
-        catch (MissingRequiredMemberException exception) when (reading is not null)
-        {
-            exception.PrependPathToken(reading.Name);
-            throw;
-        }
-
-        // An absent repeated or map field is an empty collection, not an absent one.
-        for (var index = 0; index < members.Length; index++)
-        {
-            var member = members[index];
-            if (
-                member.Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map
-                && !collectionsRead[index]
-            )
-            {
-                var none = new ProtoShapeDeserializer(
-                    payload,
-                    member,
-                    member.FieldNumber,
-                    new ProtoOccurrence(message.Start + message.Length, 0, WireType.Len)
-                );
-                schema.DeserializeMember(builder, index, ref none);
-            }
-        }
     }
 
     public TCollection ReadList<TCollection, TElement, TBuilder>(
@@ -382,6 +276,112 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
 
         var nested = new ProtoShapeDeserializer(payload, match.Value, plan.Members[match.Case]);
         return schema.DeserializeCase(match.Case, ref nested);
+    }
+
+    /// <summary>
+    /// Reads a message's fields into <paramref name="builder"/> in one pass. A field that occurs
+    /// more than once is read each time, so the last occurrence wins. A repeated or map field is
+    /// read once, at its first occurrence, by a deserializer that scans the rest of the message for
+    /// all of them, since protobuf lets other fields come between.
+    /// </summary>
+    private static void ReadMessage<T, TBuilder>(
+        byte[] payload,
+        ProtoOccurrence message,
+        ProtoShapePlan plan,
+        StructSchema<T, TBuilder> schema,
+        TBuilder builder
+    )
+    {
+        var members = plan.Members;
+        Span<bool> collectionsRead =
+            members.Length <= 256 ? stackalloc bool[members.Length] : new bool[members.Length];
+
+        // One handler for the whole message rather than one per field: a try region inside the loop
+        // would keep the JIT from optimizing the loop body.
+        ProtoMemberPlan? reading = null;
+        try
+        {
+            var reader = new ProtoReader(payload.AsSpan(message.Start, message.Length));
+            while (!reader.End)
+            {
+                var tagStart = reader.Position;
+                var (number, wireType) = reader.ReadTag();
+                if (!plan.TryGetField(number, out var field))
+                {
+                    reader.SkipField(wireType);
+                    continue;
+                }
+
+                var member = members[field.Member];
+                if (member.Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map)
+                {
+                    if (!collectionsRead[field.Member])
+                    {
+                        collectionsRead[field.Member] = true;
+                        var all = new ProtoShapeDeserializer(
+                            payload,
+                            member,
+                            number,
+                            new ProtoOccurrence(
+                                message.Start + tagStart,
+                                message.Length - tagStart,
+                                WireType.Len
+                            )
+                        );
+                        schema.DeserializeMember(builder, field.Member, ref all);
+                    }
+
+                    reader.SkipField(wireType);
+                    continue;
+                }
+
+                var (start, length) = reader.ReadValueRange(wireType);
+                var nested = new ProtoShapeDeserializer(
+                    payload,
+                    new ProtoOccurrence(message.Start + start, length, wireType),
+                    member,
+                    field.Case
+                );
+                reading = member;
+                schema.DeserializeMember(builder, field.Member, ref nested);
+                reading = null;
+            }
+        }
+        catch (MissingRequiredMemberException exception) when (reading is not null)
+        {
+            exception.PrependPathToken(reading.Name);
+            throw;
+        }
+
+        // An absent repeated or map field is an empty collection, not an absent one.
+        for (var index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (
+                member.Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map
+                && !collectionsRead[index]
+            )
+            {
+                var none = new ProtoShapeDeserializer(
+                    payload,
+                    member,
+                    member.FieldNumber,
+                    new ProtoOccurrence(message.Start + message.Length, 0, WireType.Len)
+                );
+                schema.DeserializeMember(builder, index, ref none);
+            }
+        }
+    }
+
+    private long ReadInt64()
+    {
+        if (sparse)
+        {
+            return (long)ProtoSparseValues.ReadNumber(Bytes);
+        }
+
+        var reader = Reader;
+        return ProtoWire.ReadInteger(ref reader, entry.Encoding);
     }
 }
 
