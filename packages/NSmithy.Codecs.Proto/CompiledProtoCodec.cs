@@ -1,3 +1,4 @@
+using System.Buffers;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Proto;
@@ -30,6 +31,28 @@ internal sealed class CompiledProtoCodec<T> : ICodec<T>
             var result = writer.ToArray();
             sizeHint = result.Length;
             return result;
+        }
+        finally
+        {
+            ProtoWriterCache.Return(writer);
+        }
+    }
+
+    public void Serialize(T value, IBufferWriter<byte> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        if (value is null)
+        {
+            return;
+        }
+
+        var writer = ProtoWriterCache.Rent(sizeHint);
+        try
+        {
+            var serializer = new ProtoShapeSerializer(writer, root);
+            schema.Write(MemberIndex.Root, value, ref serializer);
+            sizeHint = writer.Length;
+            destination.Write(writer.WrittenSpan);
         }
         finally
         {
