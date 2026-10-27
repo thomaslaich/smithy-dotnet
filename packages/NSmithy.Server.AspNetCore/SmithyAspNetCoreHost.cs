@@ -1,7 +1,9 @@
+using System.Buffers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Primitives;
 using NSmithy.Http;
 using NSmithy.Server;
 
@@ -148,12 +150,13 @@ public static class SmithyAspNetCoreHost
                 + httpContext.Request.QueryString.ToString()
             : rawTarget;
         var request = new SmithyHttpRequest(
-            new HttpMethod(httpContext.Request.Method),
+            HttpMethod.Parse(httpContext.Request.Method),
             requestTarget
         );
-        foreach (var header in httpContext.Request.Headers)
+        foreach (var (name, values) in httpContext.Request.Headers)
         {
-            request.Headers[header.Key] = [.. header.Value.Select(value => value ?? string.Empty)];
+            request.Headers[name] =
+                values.Count == 1 ? [values[0] ?? string.Empty] : ToList(values);
         }
 
         request.ContentType = httpContext.Request.ContentType;
@@ -175,7 +178,26 @@ public static class SmithyAspNetCoreHost
         return request;
     }
 
-    private static async Task WriteAsync(
+    private static string[] ToList(StringValues values)
+    {
+        var list = new string[values.Count];
+        for (var index = 0; index < list.Length; index++)
+        {
+            list[index] = values[index] ?? string.Empty;
+        }
+
+        return list;
+    }
+
+    private static StringValues ToStringValues(IReadOnlyList<string> values) =>
+        values switch
+        {
+            [var value] => new StringValues(value),
+            string[] array => new StringValues(array),
+            _ => new StringValues([.. values]),
+        };
+
+    private static Task WriteAsync(
         HttpContext httpContext,
         SmithyHttpServerResponse response,
         CancellationToken cancellationToken
@@ -184,9 +206,20 @@ public static class SmithyAspNetCoreHost
         ArgumentNullException.ThrowIfNull(response);
 
         httpContext.Response.StatusCode = response.StatusCode;
-        foreach (var header in response.Headers)
+        // Through the concrete type when it is one: the interface would box its enumerator.
+        if (response.Headers is Dictionary<string, IReadOnlyList<string>> headers)
         {
-            httpContext.Response.Headers[header.Key] = header.Value.ToArray();
+            foreach (var (name, values) in headers)
+            {
+                httpContext.Response.Headers[name] = ToStringValues(values);
+            }
+        }
+        else
+        {
+            foreach (var (name, values) in response.Headers)
+            {
+                httpContext.Response.Headers[name] = ToStringValues(values);
+            }
         }
 
         if (response.ContentLength is { } contentLength)
@@ -194,6 +227,39 @@ public static class SmithyAspNetCoreHost
             httpContext.Response.ContentLength = contentLength;
         }
 
+        // A unary response is one buffered chunk with nothing to follow it: written in one call,
+        // and the framework starts and completes the response around it.
+        if (response.Trailers is null && response.TryGetSingleChunk(out var content))
+        {
+            return content.IsEmpty
+                ? Task.CompletedTask
+                : WriteContentAsync(httpContext, content, cancellationToken);
+        }
+
+        return WriteChunksAsync(httpContext, response, cancellationToken);
+    }
+
+    private static async Task WriteContentAsync(
+        HttpContext httpContext,
+        ReadOnlyMemory<byte> content,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            await httpContext
+                .Response.BodyWriter.WriteAsync(content, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
+
+    private static async Task WriteChunksAsync(
+        HttpContext httpContext,
+        SmithyHttpServerResponse response,
+        CancellationToken cancellationToken
+    )
+    {
         var supportsTrailers =
             response.Trailers is not null && httpContext.Response.SupportsTrailers();
         if (response.Trailers is { } upfront && !supportsTrailers)
@@ -250,20 +316,77 @@ public static class SmithyAspNetCoreHost
         feature?.MinDataRate = null;
     }
 
-    private static async Task<byte[]> ReadRequestBodyContentAsync(
+    private static async ValueTask<byte[]> ReadRequestBodyContentAsync(
         HttpContext httpContext,
         CancellationToken cancellationToken
     )
     {
+        if (
+            httpContext.Request.ContentLength == 0
+            || (
+                httpContext.Request.ContentLength is null
+                && httpContext.Features.Get<IHttpRequestBodyDetectionFeature>()?.CanHaveBody
+                    == false
+            )
+        )
+        {
+            return [];
+        }
+
         if (httpContext.Items.TryGetValue(BufferedRequestBodyItemKey, out var cached))
         {
             return cached as byte[] ?? [];
         }
 
-        using var stream = new MemoryStream();
-        await httpContext.Request.Body.CopyToAsync(stream, cancellationToken).ConfigureAwait(false);
-        var content = stream.ToArray();
+        var content = await ReadToEndAsync(
+                httpContext.Request.Body,
+                httpContext.Request.ContentLength,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
         httpContext.Items[BufferedRequestBodyItemKey] = content;
         return content;
+    }
+
+    // Reads into a pooled buffer that grows only as bytes arrive, then copies them out once. A
+    // declared Content-Length only sizes the first buffer, up to a cap: it is the client's claim,
+    // and must not make the server allocate before the bytes exist.
+    private static async Task<byte[]> ReadToEndAsync(
+        Stream body,
+        long? declaredLength,
+        CancellationToken cancellationToken
+    )
+    {
+        const int FirstBufferCap = 64 * 1024;
+        var buffer = ArrayPool<byte>.Shared.Rent(
+            declaredLength is { } length ? (int)Math.Min(length + 1, FirstBufferCap) : 4096
+        );
+        var count = 0;
+        try
+        {
+            while (true)
+            {
+                if (count == buffer.Length)
+                {
+                    var larger = ArrayPool<byte>.Shared.Rent(buffer.Length * 2);
+                    buffer.AsSpan(0, count).CopyTo(larger);
+                    ArrayPool<byte>.Shared.Return(buffer);
+                    buffer = larger;
+                }
+
+                var read = await body.ReadAsync(buffer.AsMemory(count), cancellationToken)
+                    .ConfigureAwait(false);
+                if (read == 0)
+                {
+                    return buffer.AsSpan(0, count).ToArray();
+                }
+
+                count += read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 }

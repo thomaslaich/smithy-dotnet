@@ -523,7 +523,7 @@ public static class RestProtocol
     private static IAsyncEnumerable<ReadOnlyMemory<byte>> ToChunks(SmithyHttpBody body) =>
         body switch
         {
-            SmithyHttpBody.Bytes bytes => SingleChunk(bytes.Content),
+            SmithyHttpBody.Bytes bytes => SmithyHttpServerResponse.SingleChunk(bytes.Content),
             SmithyHttpBody.Streaming streaming => ReadStream(streaming.Content),
             SmithyHttpBody.EventStreaming eventStreaming => eventStreaming.Content,
             _ => AsyncEnumerable.Empty<ReadOnlyMemory<byte>>(),
@@ -537,14 +537,6 @@ public static class RestProtocol
             SmithyHttpBody.EventStreaming => null,
             _ => 0L,
         };
-
-    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
-        ReadOnlyMemory<byte> chunk
-    )
-    {
-        await Task.CompletedTask.ConfigureAwait(false);
-        yield return chunk;
-    }
 
     // A handler hands its response stream to the runtime, so the stream is disposed once written
     // (or once the host abandons the enumeration). The buffer is reused across iterations: valid

@@ -352,6 +352,34 @@ was neutral at 1.90 µs for one item and about 105 µs for 100 items.
 
 ## Fixed
 
+### The ASP.NET Core adapter's work per request
+
+`MEASURED`, steady state over the in-memory host, awaited as Kestrel runs
+requests. The adapter that turns an `HttpContext` into a request and a response
+back into the `HttpContext` cost about 1.9 µs and 4 KB per request more than the
+hand-written minimal API, on every scenario. It copied each request header
+through LINQ, read even a bodiless GET through a `MemoryStream` and `ToArray`,
+and wrote every response through an async iterator with an explicit start, a
+flush per chunk, and an explicit completion. It now copies headers directly,
+skips a body that is declared empty or cannot exist, reads a body into a pooled
+buffer that grows as bytes arrive (a declared length only sizes the first
+buffer, up to 64 KB, so a client cannot make the server allocate up front), and
+writes a unary response, which protocols now mark with
+`SmithyHttpServerResponse.SingleChunk`, in one `BodyWriter` call.
+
+| Scenario | Before | After | Minimal API |
+| --- | --- | --- | --- |
+| get-item-hit | 7.52 µs, 13.4 KB | **6.64 µs, 11.8 KB** | 5.49 µs, 9.0 KB |
+| list-items-1 | 7.44 µs, 13.1 KB | **7.10 µs, 12.3 KB** | 5.79 µs, 10.0 KB |
+| search-items | 11.97 µs, 23.0 KB | **10.82 µs, 21.3 KB** | 8.48 µs, 14.4 KB |
+| validation-range | 8.12 µs, 15.1 KB | **7.40 µs, 14.2 KB** | 6.38 µs, 10.6 KB |
+| create-order-small | 13.90 µs, 21.2 KB | **13.30 µs, 19.1 KB** | 12.15 µs, 17.8 KB |
+| list-items-100 | 34.04 µs, 63.0 KB | **32.38 µs, 62.1 KB** | 37.48 µs, 48.6 KB |
+
+What remains of the gap on small requests is mostly the REST protocol's own
+per-request work: the strings and dictionaries it builds for labels, query
+parameters, and headers.
+
 ### Buffered responses were copied twice
 
 `MEASURED`. `HttpClientTransport` read buffered responses with
