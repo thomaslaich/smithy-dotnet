@@ -314,6 +314,79 @@ public sealed class JsonCodecTests
         Assert.Equal("Unknown union member 'missing'.", ex.Message);
     }
 
+    [Fact]
+    public void JsonCodecRejectsUnionWithMoreThanOneMemberSet()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(ChoiceSchema.Schema);
+
+        var ex = Assert.Throws<MalformedRequestException>(() =>
+            codec.DeserializeText("{\"stringValue\":\"hello\",\"integerValue\":1}")
+        );
+
+        Assert.Equal("Expected a union with exactly one member set but found 2.", ex.Message);
+    }
+
+    [Fact]
+    public void JsonCodecRoundTripsDiscriminatedUnion()
+    {
+        Figure input = new Figure.Square(new Square(3));
+        var codec = JsonCodecFactory.Default.FromSchema(FigureSchema.Schema);
+
+        var json = codec.SerializeText(input);
+
+        Assert.Equal("{\"kind\":\"square\",\"side\":3}", json);
+        Assert.Equal(input, codec.DeserializeText(json));
+    }
+
+    [Fact]
+    public void JsonCodecFindsTheDiscriminatorAfterTheCaseMembers()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(FigureSchema.Schema);
+
+        var decoded = codec.DeserializeText("{\"side\":3,\"kind\":\"square\"}");
+
+        Assert.Equal(new Figure.Square(new Square(3)), decoded);
+    }
+
+    // ---------------- malformed payloads ----------------
+
+    [Theory]
+    [InlineData("{\"name\":\"Ada\"} {}")]
+    [InlineData("{\"name\":\"Ada\",}")]
+    [InlineData("{\"name\":\"Ada\",\"unmodeled\":[1,}")]
+    [InlineData("")]
+    public void JsonCodecRejectsPayloadThatIsNotOneJsonValue(string json)
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema.Schema);
+
+        var ex = Assert.Throws<MalformedRequestException>(() => codec.DeserializeText(json));
+
+        Assert.Equal(MalformedRequestKind.Serialization, ex.Kind);
+        Assert.StartsWith("Request body is not valid JSON", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void JsonCodecReadsTheFirstOccurrenceOfADuplicateMember()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema.Schema);
+
+        var decoded = codec.DeserializeText("{\"name\":\"Ada\",\"name\":\"Grace\"}");
+
+        Assert.Equal(new Profile("Ada"), decoded);
+    }
+
+    [Fact]
+    public void JsonCodecReportsTheValueItCouldNotRead()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema.Schema);
+
+        var ex = Assert.Throws<MalformedRequestException>(() =>
+            codec.DeserializeText("{\"name\":[1]}")
+        );
+
+        Assert.Equal("Expected a string but found an array.", ex.Message);
+    }
+
     // ---------------- enums ----------------
 
     [Fact]

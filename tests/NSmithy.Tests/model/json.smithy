@@ -27,6 +27,7 @@ operation UseShapes {
         order: Order
         requiredPerson: RequiredPerson
         arbitraryPrecision: ArbitraryPrecision
+        figure: Figure
     }
 }
 
@@ -182,4 +183,18 @@ structure Customer {
 structure RequiredPerson {
     @required
     name: String
+}
+
+@alloy#discriminated("kind")
+union Figure {
+    circle: Circle
+    square: Square
+}
+
+structure Circle {
+    radius: Integer
+}
+
+structure Square {
+    side: Integer
 }

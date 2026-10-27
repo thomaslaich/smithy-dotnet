@@ -30,6 +30,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- The JSON codec reads a payload forward-only with `Utf8JsonReader` instead of parsing it into a
+  `JsonDocument` first, which makes reading about a third faster.
 - The ASP.NET Core adapter copies request headers directly, skips a request body declared empty,
   reads a body into a pooled buffer that grows as bytes arrive, and writes a unary response in one
   call, which makes small requests 4–11% faster and allocate up to 2 KB less.

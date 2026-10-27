@@ -286,25 +286,41 @@ lower on the server.
 `OBSERVED` from source unless a measurement is listed. The microbenchmark suite
 now covers JSON, CBOR, XML and proto serialization.
 
-**JSON read path, materializes a DOM, and the DOM costs time, not allocations.**
+**JSON read path, now forward-only, reads faster than STJ source-gen.**
 
-```csharp
-using var document = JsonDocument.Parse(payload);
-return valueReader.Read(document.RootElement);
-```
+`MEASURED`. The codec used to parse every payload into a `JsonDocument` and read
+values from `JsonElement`s; `JsonDocument.Parse` alone took 0.44–0.46× of STJ
+source-gen's whole deserialization. It now reads forward-only off a
+`Utf8JsonReader`. The deserializer is a `ref struct`, which is what the
+`allows ref struct` constraint on the schema methods exists for: one instance
+owns the reader for the whole payload, since a `ref` field cannot refer to a
+`ref struct`, and nested values are read through it by `ref`.
 
-Every reader in the compiled chain takes a `JsonElement`, so the whole payload is
-parsed into a document before any value is produced, where `System.Text.Json`'s
-source generator reads forward-only with `Utf8JsonReader`. `MEASURED`
-(`DeserializationBenchmarks`, report under `results/codec/json/`):
-`JsonDocument.Parse` alone takes 0.44–0.46× of STJ source-gen's whole
-deserialization of the order bodies and allocates 72–81 bytes, because it rents
-its buffers from a pool. NSmithy's codec runs at 1.03× (large) and 1.09× (small)
-of STJ and allocates 0.94× and 0.88× of it; on list bodies
-(`ListItemsAttributionBenchmarks`) it is 1.13–1.14× in time and 0.89–0.90× in
-allocations. A forward-only reader is therefore a time target only, with no
-allocation win to pair with it. The CBOR codec already reads forward-only via
-`CborReader`.
+| `DeserializationBenchmarks` | Before | After |
+| --- | --- | --- |
+| create-order-small | 4.17 µs, 1.14× STJ | **2.82 µs, 0.77×** |
+| create-order-large | 3.52 ms, 1.05× STJ | **2.61 ms, 0.79×** |
+
+Allocations did not change, because `JsonDocument` already rented its buffers.
+A client reads every response through it, so the client suite gains most:
+against NSwag, an unchanged control that moved at most 8% between the runs,
+list-items-100 went from 1.33× to 0.89×, list-items-10000 from 1.16× to 0.85×,
+and search-items from 1.22× to 0.93×. Only the smallest calls, get-item (1.35×)
+and list-items-1 (1.17×), stay behind it, on the fixed per-call cost of item 2.
+In the server suite the gain shows on JSON request bodies: create-order-small
+went from 1.31× to 1.02× of the hand-written minimal API, and the validation
+scenarios moved 7–15%.
+
+create-order-large is the exception in that suite, at parity, and the reason is
+the harness rather than the reader. Both versions allocate the same 2.87 MB on
+the large object heap per request (request and response buffers), and every
+Gen2 collection is triggered by it. With the DOM gone the heap after a
+collection shrinks from 29–46 MB to 5–8 MB, so the GC's large-object budget
+shrinks too and it collects about 3× as often, each collection on a much
+smaller heap. Over 1,000 steady-state requests the forward-only reader is 10%
+faster (5.02 → 4.51 ms, three alternating runs each). BenchmarkDotNet forces a
+collection before every iteration, which resets that steady state; that is the
+likely reason its numbers show no gain.
 
 **CBOR write path, now close to its allocation floor.**
 
