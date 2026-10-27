@@ -44,7 +44,7 @@ subprojects {
     }
 
     dependencies {
-        "errorprone"("com.google.errorprone:error_prone_core:2.50.0")
+        "errorprone"("com.google.errorprone:error_prone_core:2.51.0")
     }
 
     tasks.withType<JavaCompile>().configureEach {
