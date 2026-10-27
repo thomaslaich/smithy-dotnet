@@ -27,6 +27,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- The JSON codec reads a payload forward-only with `Utf8JsonReader` instead of parsing it into a
+  `JsonDocument` first, which makes reading about a third faster.
 - The published packages require the lowest dependency versions they work with:
   `System.Formats.Cbor` and `System.IO.Hashing` 10.0.0 and `Scalar.AspNetCore` 2.11.3.
 
