@@ -156,11 +156,15 @@ public static class SmithyWaiter
         var max = maxDelay.TotalSeconds;
         var ceiling = Math.Log(max / min) / Math.Log(2) + 1;
         var cap = attempt > ceiling ? max : min * Math.Pow(2, attempt - 1);
-        var delay = min + Random.Shared.NextDouble() * (cap - min);
-        if (remaining.TotalSeconds - delay <= min)
+        var delay = TimeSpan.FromSeconds(min + Random.Shared.NextDouble() * (cap - min));
+        if (remaining - delay <= minDelay)
         {
-            delay = remaining.TotalSeconds - min;
+            delay = remaining - minDelay;
         }
-        return TimeSpan.FromSeconds(delay);
+
+        // Task.Delay waits whole milliseconds, and takes anything under one as no delay, which
+        // completes without consulting the clock: on a test clock the waiter would never stop. So
+        // the delay is rounded up to a whole millisecond, and is what Task.Delay then waits.
+        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Ceiling(delay.TotalMilliseconds)));
     }
 }

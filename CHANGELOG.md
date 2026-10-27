@@ -34,6 +34,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   reads a body into a pooled buffer that grows as bytes arrive, and writes a unary response in one
   call, which makes small requests 4–11% faster and allocate up to 2 KB less.
 
+### Fixed
+
+- A waiter whose last delay came to under a millisecond never stopped on a test clock such as
+  `FakeTimeProvider`: `Task.Delay` takes such a delay as none and completes without consulting the
+  clock. Delays are now rounded up to whole milliseconds.
+
 ### Removed
 
 - **BREAKING:** `AwsSigV4Interceptor`, a leftover from before auth schemes. Use
