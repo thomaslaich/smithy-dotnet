@@ -89,7 +89,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
             $"Request body is not valid JSON: {exception.Message}"
         );
 
-    public bool TryReadNull() => reader.TokenType == JsonTokenType.Null;
+    public readonly bool TryReadNull() => reader.TokenType == JsonTokenType.Null;
 
     public bool ReadBoolean()
     {
