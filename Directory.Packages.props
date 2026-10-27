@@ -8,12 +8,16 @@
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.13" />
     <PackageVersion Include="NSwag.ApiDescription.Client" Version="14.7.1" />
     <PackageVersion Include="Microsoft.Extensions.ApiDescription.Client" Version="10.0.0" />
-    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.0" />
     <PackageVersion Include="System.CommandLine" Version="2.0.13" />
-    <PackageVersion Include="System.Formats.Cbor" Version="10.0.13" />
-    <PackageVersion Include="System.IO.Hashing" Version="10.0.13" />
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <!--
+      Dependencies of the published packages. Each version is the minimum every consumer resolves,
+      so it is the lowest that works and rises only for a feature, a fix or a security advisory.
+    -->
+    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.11.3" />
+    <PackageVersion Include="System.Formats.Cbor" Version="10.0.0" />
+    <PackageVersion Include="System.IO.Hashing" Version="10.0.0" />
     <!-- Compile the MSBuild tasks against the MSBuild of the oldest supported SDK (.NET 10.0.100). -->
     <PackageVersion Include="Microsoft.Build.Framework" Version="18.0.2" />
     <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.0.2" />
