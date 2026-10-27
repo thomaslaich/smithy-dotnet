@@ -33,4 +33,41 @@ public sealed class SmithyHttpServerResponse
     /// connection can carry trailers at all is the host's decision, not the protocol's.
     /// </summary>
     public Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>>? Trailers { get; init; }
+
+    /// <summary>
+    /// A body of one chunk holding the whole response, which a host can recognize with
+    /// <see cref="TryGetSingleChunk"/> and write in one call.
+    /// </summary>
+    public static IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
+        ReadOnlyMemory<byte> content
+    ) => new SingleChunkBody(content);
+
+    /// <summary>The whole body, when it was made with <see cref="SingleChunk"/>.</summary>
+    public bool TryGetSingleChunk(out ReadOnlyMemory<byte> content)
+    {
+        if (Body is SingleChunkBody single)
+        {
+            content = single.Content;
+            return true;
+        }
+
+        content = default;
+        return false;
+    }
+
+    private sealed class SingleChunkBody(ReadOnlyMemory<byte> content)
+        : IAsyncEnumerable<ReadOnlyMemory<byte>>
+    {
+        public ReadOnlyMemory<byte> Content { get; } = content;
+
+        public IAsyncEnumerator<ReadOnlyMemory<byte>> GetAsyncEnumerator(
+            CancellationToken cancellationToken = default
+        ) => Enumerate().GetAsyncEnumerator(cancellationToken);
+
+        private async IAsyncEnumerable<ReadOnlyMemory<byte>> Enumerate()
+        {
+            await Task.CompletedTask.ConfigureAwait(false);
+            yield return Content;
+        }
+    }
 }

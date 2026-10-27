@@ -403,7 +403,7 @@ public sealed class GrpcProtocol : IProtocol
         var response = new SmithyHttpServerResponse
         {
             StatusCode = (int)HttpStatusCode.OK,
-            Body = SingleChunk(framedBody),
+            Body = SmithyHttpServerResponse.SingleChunk(framedBody),
             ContentLength = framedBody.Length,
             Trailers = trailers,
         };
@@ -512,12 +512,6 @@ public sealed class GrpcProtocol : IProtocol
 
     private static string MethodPath(ServiceSchema service, string operationName) =>
         $"/{service.Id.Namespace}.{service.Id.Name}/{operationName}";
-
-    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(byte[] framed)
-    {
-        await Task.CompletedTask.ConfigureAwait(false);
-        yield return framed;
-    }
 
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<T>(
         IAsyncEnumerable<T> events,

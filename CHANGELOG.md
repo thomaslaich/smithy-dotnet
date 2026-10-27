@@ -24,11 +24,17 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - `AwsRegion.Resolve()` reads `AWS_REGION`, `AWS_DEFAULT_REGION`, and the profile's `region`.
   Generated configurations of AWS services whose endpoint rules read `AWS::Region` default
   `Region` to it.
+- `SmithyHttpServerResponse.SingleChunk` and `TryGetSingleChunk`: a body of one buffered chunk,
+  which a host can recognize and write in one call. The built-in protocols use it for unary
+  responses.
 
 ### Changed
 
 - The JSON codec reads a payload forward-only with `Utf8JsonReader` instead of parsing it into a
   `JsonDocument` first, which makes reading about a third faster.
+- The ASP.NET Core adapter copies request headers directly, skips a request body declared empty,
+  reads a body into a pooled buffer that grows as bytes arrive, and writes a unary response in one
+  call, which makes small requests 4–11% faster and allocate up to 2 KB less.
 - The server reads a modeled error an `async` handler raises off the handler's task instead of
   awaiting the task, which threw the error a second time. Such an error response is about 20%
   faster.

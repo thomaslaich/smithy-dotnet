@@ -486,19 +486,11 @@ public abstract class RpcV2Protocol : IProtocol
         var response = new SmithyHttpServerResponse
         {
             StatusCode = statusCode,
-            Body = SingleChunk(body),
+            Body = SmithyHttpServerResponse.SingleChunk(body),
             ContentLength = body.Length,
         };
         headers?.Invoke(response.Headers);
         return response;
-    }
-
-    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
-        ReadOnlyMemory<byte> chunk
-    )
-    {
-        await Task.CompletedTask.ConfigureAwait(false);
-        yield return chunk;
     }
 
     private SmithyHttpRequest BaseRequest(string requestUri, string accept)
