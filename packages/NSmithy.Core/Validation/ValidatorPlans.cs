@@ -52,6 +52,31 @@ internal sealed class ValidatorPlans
     public ValidatorMemberPlan ForRoot(Schema schema) =>
         Edge(schema.Id.Name, isRequired: false, schema, memberConstraints: null);
 
+    /// <summary>
+    /// A map key is a string whatever it targets: its own traits constrain the string, while an
+    /// enum target closes the set of strings allowed.
+    /// </summary>
+    private static ValidatorMemberPlan MapKey(MemberSchema key)
+    {
+        var target = Unwrap(key.Target);
+        var plan = new ValidatorMemberPlan
+        {
+            Name = key.Name,
+            IsRequired = false,
+            TargetId = key.Target.Id,
+            Member = EdgeConstraints.From(key.MemberTraits, key.Id, Schemas.String),
+            StringEnum = target is IStringEnumSchema @enum && @enum.Values.Count > 0 ? @enum : null,
+        };
+        plan.Needs = plan.Member is not null || plan.StringEnum is not null;
+        return plan;
+    }
+
+    private static Schema Unwrap(Schema schema)
+    {
+        var resolved = schema.Resolved;
+        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
+    }
+
     private ValidatorMemberPlan Edge(
         string name,
         bool isRequired,
@@ -156,25 +181,6 @@ internal sealed class ValidatorPlans
         return plan;
     }
 
-    /// <summary>
-    /// A map key is a string whatever it targets: its own traits constrain the string, while an
-    /// enum target closes the set of strings allowed.
-    /// </summary>
-    private static ValidatorMemberPlan MapKey(MemberSchema key)
-    {
-        var target = Unwrap(key.Target);
-        var plan = new ValidatorMemberPlan
-        {
-            Name = key.Name,
-            IsRequired = false,
-            TargetId = key.Target.Id,
-            Member = EdgeConstraints.From(key.MemberTraits, key.Id, Schemas.String),
-            StringEnum = target is IStringEnumSchema @enum && @enum.Values.Count > 0 ? @enum : null,
-        };
-        plan.Needs = plan.Member is not null || plan.StringEnum is not null;
-        return plan;
-    }
-
     private ValidatorMemberPlan MapValue(MemberSchema value) =>
         Edge(
             value.Name,
@@ -182,10 +188,4 @@ internal sealed class ValidatorPlans
             value.Target,
             EdgeConstraints.From(value.MemberTraits, value.Id, value.Target)
         );
-
-    private static Schema Unwrap(Schema schema)
-    {
-        var resolved = schema.Resolved;
-        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
-    }
 }

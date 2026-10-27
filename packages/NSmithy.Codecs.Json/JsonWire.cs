@@ -40,9 +40,6 @@ internal static class JsonWire
         return false;
     }
 
-    private static MemberSchema? GetJsonUnknownCase(IUnionSchema schema) =>
-        schema.Cases.FirstOrDefault(IsJsonUnknownCase);
-
     internal static bool IsJsonUnknownCase(MemberSchema @case) =>
         @case.MemberTraits.ContainsKey(AlloyJsonUnknownTrait);
 
@@ -85,4 +82,7 @@ internal static class JsonWire
             writer.WriteNumberValue(value);
         }
     }
+
+    private static MemberSchema? GetJsonUnknownCase(IUnionSchema schema) =>
+        schema.Cases.FirstOrDefault(IsJsonUnknownCase);
 }

@@ -124,6 +124,21 @@ internal sealed class QueryPlans(QueryProtocolKind kind)
         }
     }
 
+    private static string? CheckTimestampFormat(string? format) =>
+        format is null or "date-time" or "epoch-seconds" or "http-date"
+            ? format
+            : throw new NotSupportedException(
+                $"Timestamp format '{format}' is not supported by AWS Query."
+            );
+
+    private static string? StringTrait(IReadOnlyDictionary<ShapeId, Trait>? traits, ShapeId id) =>
+        traits is not null && traits.TryGetValue(id, out var trait) && trait.HasValue
+            ? trait.Value.AsString()
+            : null;
+
+    private static string UppercaseFirst(string value) =>
+        value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value[1..];
+
     private QueryMemberPlan[] Members(Schema resolved, IStructSchema structure)
     {
         if (structures.TryGetValue(resolved, out var existing))
@@ -152,19 +167,4 @@ internal sealed class QueryPlans(QueryProtocolKind kind)
         return StringTrait(member.MemberTraits, Ec2QueryName)
             ?? UppercaseFirst(StringTrait(member.MemberTraits, XmlName) ?? member.Name);
     }
-
-    private static string? CheckTimestampFormat(string? format) =>
-        format is null or "date-time" or "epoch-seconds" or "http-date"
-            ? format
-            : throw new NotSupportedException(
-                $"Timestamp format '{format}' is not supported by AWS Query."
-            );
-
-    private static string? StringTrait(IReadOnlyDictionary<ShapeId, Trait>? traits, ShapeId id) =>
-        traits is not null && traits.TryGetValue(id, out var trait) && trait.HasValue
-            ? trait.Value.AsString()
-            : null;
-
-    private static string UppercaseFirst(string value) =>
-        value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value[1..];
 }

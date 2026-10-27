@@ -10,32 +10,6 @@ public interface ICodec<TValue>
     TValue Deserialize(byte[] payload);
 }
 
-/// <summary>
-/// Options that affect how a codec is created from a schema, targeted member, or projection.
-/// </summary>
-public sealed record CodecFactoryOptions
-{
-    public static CodecFactoryOptions Default { get; } = new();
-
-    /// <summary>
-    /// Whether modelled defaults on the top-level structure are written when their runtime value is
-    /// null. Nested structures always materialize their defaults.
-    /// </summary>
-    public bool MaterializeTopLevelDefaults { get; init; } = true;
-
-    /// <summary>
-    /// Fallback document root name for a structure projection whose source schema does not declare
-    /// one. Ignored by formats that do not represent named document roots.
-    /// </summary>
-    public string? DefaultRootName { get; init; }
-
-    /// <summary>
-    /// A string-valued entry, such as an error's <c>__type</c>, written ahead of the members of a
-    /// top-level structure. Ignored by formats that do not support it.
-    /// </summary>
-    public KeyValuePair<string, string>? Discriminator { get; init; }
-}
-
 /// <summary>Creates complete codecs from Smithy schemas.</summary>
 public interface ICodecFactory
 {
@@ -70,4 +44,30 @@ public interface IProjectionCodec<TValue, in TBuilder>
     byte[] Serialize(TValue value);
 
     void ReadInto(byte[] payload, TBuilder builder);
+}
+
+/// <summary>
+/// Options that affect how a codec is created from a schema, targeted member, or projection.
+/// </summary>
+public sealed record CodecFactoryOptions
+{
+    public static CodecFactoryOptions Default { get; } = new();
+
+    /// <summary>
+    /// Whether modelled defaults on the top-level structure are written when their runtime value is
+    /// null. Nested structures always materialize their defaults.
+    /// </summary>
+    public bool MaterializeTopLevelDefaults { get; init; } = true;
+
+    /// <summary>
+    /// Fallback document root name for a structure projection whose source schema does not declare
+    /// one. Ignored by formats that do not represent named document roots.
+    /// </summary>
+    public string? DefaultRootName { get; init; }
+
+    /// <summary>
+    /// A string-valued entry, such as an error's <c>__type</c>, written ahead of the members of a
+    /// top-level structure. Ignored by formats that do not support it.
+    /// </summary>
+    public KeyValuePair<string, string>? Discriminator { get; init; }
 }

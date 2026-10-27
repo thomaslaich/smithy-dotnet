@@ -3,15 +3,6 @@ using System.Numerics;
 
 namespace NSmithy.Core.Serde;
 
-public static class MemberIndex
-{
-    /// <summary>
-    /// The position of a value that is not a member of anything: the value a codec serializes or
-    /// deserializes at the top level.
-    /// </summary>
-    public const int Root = -1;
-}
-
 /// <summary>
 /// Receives values from a schema's serialization code. Every call names the member being written
 /// by its index in the shape being serialized (<see cref="MemberIndex.Root"/> for the top-level
@@ -139,4 +130,13 @@ public interface IShapeDeserializer
     );
 
     T ReadUnion<T>(UnionSchema<T> schema);
+}
+
+public static class MemberIndex
+{
+    /// <summary>
+    /// The position of a value that is not a member of anything: the value a codec serializes or
+    /// deserializes at the top level.
+    /// </summary>
+    public const int Root = -1;
 }

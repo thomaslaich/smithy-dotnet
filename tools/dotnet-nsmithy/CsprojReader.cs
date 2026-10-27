@@ -34,8 +34,6 @@ internal sealed class CsprojReader
         }
     }
 
-    private string? Get(string name) => _props.TryGetValue(name, out var value) ? value : null;
-
     /// <summary>
     /// Locates and parses a .csproj. Returns null if no project file is found.
     /// </summary>
@@ -66,4 +64,6 @@ internal sealed class CsprojReader
         var files = dir.GetFiles("*.csproj");
         return files.Length == 1 ? files[0] : null;
     }
+
+    private string? Get(string name) => _props.TryGetValue(name, out var value) ? value : null;
 }

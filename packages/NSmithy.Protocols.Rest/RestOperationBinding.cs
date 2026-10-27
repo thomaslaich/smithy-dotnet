@@ -4,6 +4,36 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Protocols.Rest;
 
+public static class RestOperationBinding
+{
+    /// <summary>
+    /// Builds the binding for an operation. Callers build this once per operation (the generated
+    /// protocols hold one per operation in a static field), and the body/payload codecs are compiled
+    /// here, so the per-call path never recompiles a codec.
+    /// </summary>
+    public static RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> From<
+        TInput,
+        TOutput,
+        TInputBuilder,
+        TOutputBuilder
+    >(
+        OperationSchema<TInput, TOutput> operation,
+        StructSchema<TInput, TInputBuilder> inputSchema,
+        StructSchema<TOutput, TOutputBuilder> outputSchema,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        bool requiresDeclaredContentType = true
+    ) =>
+        RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>.CreateFrom(
+            operation,
+            inputSchema,
+            outputSchema,
+            codecFactory,
+            rawStringPayloads,
+            requiresDeclaredContentType
+        );
+}
+
 /// <summary>
 /// Everything <see cref="RestProtocol"/> needs to (de)serialize one operation, derived once from
 /// the operation's <c>@http</c> trait. Every binding plan and body codec is <em>compiled here</em>
@@ -201,34 +231,4 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
             "OPTIONS" => HttpMethod.Options,
             _ => new HttpMethod(method),
         };
-}
-
-public static class RestOperationBinding
-{
-    /// <summary>
-    /// Builds the binding for an operation. Callers build this once per operation (the generated
-    /// protocols hold one per operation in a static field), and the body/payload codecs are compiled
-    /// here, so the per-call path never recompiles a codec.
-    /// </summary>
-    public static RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> From<
-        TInput,
-        TOutput,
-        TInputBuilder,
-        TOutputBuilder
-    >(
-        OperationSchema<TInput, TOutput> operation,
-        StructSchema<TInput, TInputBuilder> inputSchema,
-        StructSchema<TOutput, TOutputBuilder> outputSchema,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads,
-        bool requiresDeclaredContentType = true
-    ) =>
-        RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>.CreateFrom(
-            operation,
-            inputSchema,
-            outputSchema,
-            codecFactory,
-            rawStringPayloads,
-            requiresDeclaredContentType
-        );
 }

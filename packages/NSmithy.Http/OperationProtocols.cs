@@ -11,14 +11,14 @@ namespace NSmithy.Http;
 /// </summary>
 public interface IProtocol
 {
-    IServiceProtocol ForService(ServiceSchema service);
-
     /// <summary>
     /// The protocol's default HTTP version preference. Generated clients replace this default
     /// with modeled <c>http</c> or <c>eventStreamHttp</c> preferences when present. A
     /// caller-supplied <see cref="System.Net.Http.HttpClient"/> is used as-is.
     /// </summary>
     SmithyHttpVersionPreference HttpVersionPreference => SmithyHttpVersionPreference.Http11;
+
+    IServiceProtocol ForService(ServiceSchema service);
 }
 
 /// <summary>

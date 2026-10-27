@@ -16,6 +16,9 @@ public sealed class SmithyClientRuntime(
     string? userAgent = null
 )
 {
+    // Service/operation ids and names, resolved endpoint/URI, auth scheme, and attempt.
+    private const int ContextKeyCount = 8;
+
     private static readonly IReadOnlyDictionary<string, ISmithyAuthScheme> NoAuthSchemes =
         new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal);
     private static readonly string DefaultUserAgent =
@@ -65,6 +68,53 @@ public sealed class SmithyClientRuntime(
         }
 
         return InvokeCoreAsync(binding, input, cancellationToken);
+    }
+
+    private static ValueTask DisposeBodyAsync(SmithyHttpClientResponse response) =>
+        response.Body is SmithyHttpBody.Streaming streaming
+            ? streaming.Content.DisposeAsync()
+            : ValueTask.CompletedTask;
+
+    private static Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
+        delay > TimeSpan.Zero ? Task.Delay(delay, cancellationToken) : Task.CompletedTask;
+
+    private static bool IsReplayable(SmithyHttpBody body) =>
+        body is not SmithyHttpBody.Streaming and not SmithyHttpBody.EventStreaming;
+
+    private static SmithyHttpRequest CloneRequest(SmithyHttpRequest request, string requestUri)
+    {
+        var clone = new SmithyHttpRequest(request.Method, requestUri)
+        {
+            Body = request.Body,
+            ExpectStreamingResponse = request.ExpectStreamingResponse,
+            ContentType = request.ContentType,
+        };
+
+        foreach (var header in request.Headers)
+        {
+            clone.Headers[header.Key] = header.Value;
+        }
+
+        foreach (var header in request.ContentHeaders)
+        {
+            clone.ContentHeaders[header.Key] = header.Value;
+        }
+
+        return clone;
+    }
+
+    private static string ResolveRequestUri(Uri endpoint, string requestUri)
+    {
+        var endpointText = endpoint.ToString().TrimEnd('/');
+        var requestText = requestUri.TrimStart('/');
+        return $"{endpointText}/{requestText}";
+    }
+
+    private static bool IsHttpAbsoluteUri(string requestUri)
+    {
+        return Uri.TryCreate(requestUri, UriKind.Absolute, out var uri)
+            && uri.IsAbsoluteUri
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
     private bool CanInvokeDirect<TInput, TOutput>(
@@ -441,17 +491,6 @@ public sealed class SmithyClientRuntime(
         }
     }
 
-    private static ValueTask DisposeBodyAsync(SmithyHttpClientResponse response) =>
-        response.Body is SmithyHttpBody.Streaming streaming
-            ? streaming.Content.DisposeAsync()
-            : ValueTask.CompletedTask;
-
-    private static Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
-        delay > TimeSpan.Zero ? Task.Delay(delay, cancellationToken) : Task.CompletedTask;
-
-    private static bool IsReplayable(SmithyHttpBody body) =>
-        body is not SmithyHttpBody.Streaming and not SmithyHttpBody.EventStreaming;
-
     private async Task<SmithyHttpRequest> ApplyRequestInterceptorsAsync(
         SmithyContext context,
         SmithyHttpRequest request,
@@ -532,42 +571,6 @@ public sealed class SmithyClientRuntime(
         return resolved;
     }
 
-    private static SmithyHttpRequest CloneRequest(SmithyHttpRequest request, string requestUri)
-    {
-        var clone = new SmithyHttpRequest(request.Method, requestUri)
-        {
-            Body = request.Body,
-            ExpectStreamingResponse = request.ExpectStreamingResponse,
-            ContentType = request.ContentType,
-        };
-
-        foreach (var header in request.Headers)
-        {
-            clone.Headers[header.Key] = header.Value;
-        }
-
-        foreach (var header in request.ContentHeaders)
-        {
-            clone.ContentHeaders[header.Key] = header.Value;
-        }
-
-        return clone;
-    }
-
-    private static string ResolveRequestUri(Uri endpoint, string requestUri)
-    {
-        var endpointText = endpoint.ToString().TrimEnd('/');
-        var requestText = requestUri.TrimStart('/');
-        return $"{endpointText}/{requestText}";
-    }
-
-    private static bool IsHttpAbsoluteUri(string requestUri)
-    {
-        return Uri.TryCreate(requestUri, UriKind.Absolute, out var uri)
-            && uri.IsAbsoluteUri
-            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
-    }
-
     private SmithyEndpoint? ApplyHostPrefix<TInput, TOutput>(
         SmithyOperationBinding<TInput, TOutput> binding,
         TInput input,
@@ -588,9 +591,6 @@ public sealed class SmithyClientRuntime(
 
         return SmithyHostPrefix.Apply(resolvedEndpoint, binding.HostPrefix(input));
     }
-
-    // Service/operation ids and names, resolved endpoint/URI, auth scheme, and attempt.
-    private const int ContextKeyCount = 8;
 
     private SmithyContext CreateContext<TInput, TOutput>(
         SmithyOperationBinding<TInput, TOutput> binding

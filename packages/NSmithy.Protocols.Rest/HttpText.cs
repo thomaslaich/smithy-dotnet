@@ -33,8 +33,6 @@ internal readonly struct HttpTextSerializer : IShapeSerializer
         this.keys = keys;
     }
 
-    private void Add(string text) => (keys ? entries![^1].Value : texts).Add(text);
-
     public bool WritesDefault(int member) => false;
 
     public void WriteNull(int member) { }
@@ -128,6 +126,8 @@ internal readonly struct HttpTextSerializer : IShapeSerializer
 
     private static NotSupportedException Unsupported(string kind) =>
         new($"HTTP bindings do not support schema kind '{kind}'.");
+
+    private void Add(string text) => (keys ? entries![^1].Value : texts).Add(text);
 }
 
 /// <summary>
@@ -288,6 +288,9 @@ internal readonly struct HttpTextDeserializer : IShapeDeserializer
 
     public T ReadUnion<T>(UnionSchema<T> schema) => throw Unsupported("union");
 
+    private static NotSupportedException Unsupported(string kind) =>
+        new($"HTTP bindings do not support schema kind '{kind}'.");
+
     private T Parse<T>(ShapeKind kind, Func<string, T> parse)
     {
         try
@@ -302,7 +305,4 @@ internal readonly struct HttpTextDeserializer : IShapeDeserializer
             );
         }
     }
-
-    private static NotSupportedException Unsupported(string kind) =>
-        new($"HTTP bindings do not support schema kind '{kind}'.");
 }

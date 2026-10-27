@@ -29,6 +29,12 @@ public sealed record WireCapture(
     [property: JsonPropertyName("body")] string? Body
 )
 {
+    public static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     /// <summary>Bodies at or below this size are stored inline for readable diffs.</summary>
     private const int InlineBodyLimit = 8 * 1024;
 
@@ -40,12 +46,6 @@ public sealed record WireCapture(
         "Transfer-Encoding",
         "Connection",
         "Keep-Alive",
-    };
-
-    public static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     /// <summary>Sends one scenario at one stack and reduces the response to a capture.</summary>

@@ -15,17 +15,6 @@ public sealed class SimpleRestJsonProtocol : IProtocol
 {
     private const string ErrorTypeHeader = "X-Error-Type";
 
-    public IServiceProtocol ForService(ServiceSchema service) =>
-        new RestServiceProtocol(
-            JsonRestBodyCodecFactory.For,
-            DeserializeErrorType,
-            rawStringPayloads: false,
-            errorTypeHeader: ErrorTypeHeader,
-            // alloy's own protocol tests send JSON bodies with no Content-Type, so simpleRestJson
-            // reads a body whose media type the caller did not declare.
-            requiresDeclaredContentType: false
-        );
-
     public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
@@ -62,6 +51,17 @@ public sealed class SimpleRestJsonProtocol : IProtocol
 
         return null;
     }
+
+    public IServiceProtocol ForService(ServiceSchema service) =>
+        new RestServiceProtocol(
+            JsonRestBodyCodecFactory.For,
+            DeserializeErrorType,
+            rawStringPayloads: false,
+            errorTypeHeader: ErrorTypeHeader,
+            // alloy's own protocol tests send JSON bodies with no Content-Type, so simpleRestJson
+            // reads a body whose media type the caller did not declare.
+            requiresDeclaredContentType: false
+        );
 
     private static string? TryGetFirstHeaderValue(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,

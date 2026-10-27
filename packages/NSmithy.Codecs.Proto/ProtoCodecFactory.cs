@@ -5,9 +5,9 @@ namespace NSmithy.Codecs.Proto;
 /// <summary>Creates complete Protocol Buffer codecs from Smithy schemas.</summary>
 public sealed class ProtoCodecFactory : ICodecFactory
 {
-    public static ProtoCodecFactory Default { get; } = new();
-
     private ProtoCodecFactory() { }
+
+    public static ProtoCodecFactory Default { get; } = new();
 
     public ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null)
     {

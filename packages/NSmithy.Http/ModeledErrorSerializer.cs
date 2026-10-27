@@ -3,6 +3,17 @@ using NSmithy.Core.Serde;
 namespace NSmithy.Http;
 
 /// <summary>
+/// Compiles one modeled error into the function that writes it as an error response, with the
+/// error's CLR type in scope. Compilation runs once per operation; the returned function runs per
+/// response.
+/// </summary>
+public interface IErrorWriterCompiler
+{
+    Func<TError, SmithyHttpServerResponse> Compile<TError>(OperationErrorSchema<TError> schema)
+        where TError : Exception;
+}
+
+/// <summary>
 /// Matches a thrown exception against an operation's modeled errors and serializes it to a
 /// <see cref="SmithyHttpServerResponse"/>. Built once per operation from the operation schema, so a
 /// protocol's <c>TrySerializeError</c> is entirely schema-driven — the shape id and status code
@@ -66,15 +77,4 @@ public sealed class ModeledErrorSerializer
             return (typeof(TError), exception => write((TError)exception));
         }
     }
-}
-
-/// <summary>
-/// Compiles one modeled error into the function that writes it as an error response, with the
-/// error's CLR type in scope. Compilation runs once per operation; the returned function runs per
-/// response.
-/// </summary>
-public interface IErrorWriterCompiler
-{
-    Func<TError, SmithyHttpServerResponse> Compile<TError>(OperationErrorSchema<TError> schema)
-        where TError : Exception;
 }

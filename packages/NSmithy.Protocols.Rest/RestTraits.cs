@@ -30,6 +30,14 @@ public static class RestTraits
 
     public static ShapeId Streaming { get; } = new(SmithyApi, "streaming");
 
+    public static Trait HttpLabelTrait { get; } = new(HttpLabel);
+
+    public static Trait HttpQueryParamsTrait { get; } = new(HttpQueryParams);
+
+    public static Trait HttpPayloadTrait { get; } = new(HttpPayload);
+
+    public static Trait HttpResponseCodeTrait { get; } = new(HttpResponseCode);
+
     public static Trait HttpTrait(string method, string uri)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(method);
@@ -45,8 +53,6 @@ public static class RestTraits
             )
         );
     }
-
-    public static Trait HttpLabelTrait { get; } = new(HttpLabel);
 
     public static Trait HttpHeaderTrait(string name)
     {
@@ -65,12 +71,6 @@ public static class RestTraits
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         return new Trait(HttpQuery, Document.From(name));
     }
-
-    public static Trait HttpQueryParamsTrait { get; } = new(HttpQueryParams);
-
-    public static Trait HttpPayloadTrait { get; } = new(HttpPayload);
-
-    public static Trait HttpResponseCodeTrait { get; } = new(HttpResponseCode);
 
     public static Trait TimestampFormatTrait(string format)
     {

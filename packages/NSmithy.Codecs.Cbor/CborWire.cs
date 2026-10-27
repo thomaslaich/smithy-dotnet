@@ -208,16 +208,6 @@ internal static class CborWire
             ? ReadUnsignedInteger(ref reader)
             : reader.ReadInt64();
 
-    private static BigInteger ReadIntegerAsBigInteger(CborReader reader) =>
-        reader.PeekState() switch
-        {
-            CborReaderState.UnsignedInteger => new BigInteger(reader.ReadUInt64()),
-            CborReaderState.NegativeInteger => new BigInteger(reader.ReadInt64()),
-            _ => throw new InvalidOperationException(
-                $"Cannot convert CBOR {reader.PeekState()} to BigInteger."
-            ),
-        };
-
     internal static string ReadNullableTextString(CborReader reader)
     {
         if (reader.PeekState() != CborReaderState.Null)
@@ -239,9 +229,6 @@ internal static class CborWire
         reader.ReadNull();
         return null!;
     }
-
-    private static DateTimeOffset MaterializeTimestamp(double seconds) =>
-        new(DateTime.UnixEpoch.AddTicks((long)(seconds * TimeSpan.TicksPerSecond)), TimeSpan.Zero);
 
     internal static decimal MaterializeDecimalFraction(int exponent, BigInteger significand)
     {
@@ -276,4 +263,17 @@ internal static class CborWire
     {
         return schema.Resolved is INullableSchema nullable ? nullable.Target : schema;
     }
+
+    private static BigInteger ReadIntegerAsBigInteger(CborReader reader) =>
+        reader.PeekState() switch
+        {
+            CborReaderState.UnsignedInteger => new BigInteger(reader.ReadUInt64()),
+            CborReaderState.NegativeInteger => new BigInteger(reader.ReadInt64()),
+            _ => throw new InvalidOperationException(
+                $"Cannot convert CBOR {reader.PeekState()} to BigInteger."
+            ),
+        };
+
+    private static DateTimeOffset MaterializeTimestamp(double seconds) =>
+        new(DateTime.UnixEpoch.AddTicks((long)(seconds * TimeSpan.TicksPerSecond)), TimeSpan.Zero);
 }

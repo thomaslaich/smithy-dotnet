@@ -61,14 +61,14 @@ public sealed record ValidationExceptionField(string Path, string Message);
 
 public static class ValidationExceptionFieldSchema
 {
+    public static Schema<ValidationExceptionField> Schema { get; } = new StructureSchema();
+
     public sealed class Builder
     {
         public string? Path { get; set; }
 
         public string? Message { get; set; }
     }
-
-    public static Schema<ValidationExceptionField> Schema { get; } = new StructureSchema();
 
     private sealed class StructureSchema()
         : StructSchema<ValidationExceptionField, Builder>(
@@ -119,14 +119,21 @@ public static class ValidationExceptionSchema
 {
     public static readonly ShapeId Id = ShapeId.Parse("smithy.framework#ValidationException");
 
+    public static Schema<ValidationException> Schema { get; } = new StructureSchema();
+
+    /// <summary>
+    /// The operation-error registration appended to every <see cref="OperationSchema{TInput,
+    /// TOutput}"/> that does not model <c>smithy.framework#ValidationException</c> itself.
+    /// </summary>
+    public static IOperationErrorSchema OperationError { get; } =
+        new OperationErrorSchema<ValidationException>(Id, Schema, 400);
+
     public sealed class Builder
     {
         public string? Message { get; set; }
 
         public IReadOnlyList<ValidationExceptionField>? FieldList { get; set; }
     }
-
-    public static Schema<ValidationException> Schema { get; } = new StructureSchema();
 
     private sealed class StructureSchema()
         : StructSchema<ValidationException, Builder>(
@@ -175,11 +182,4 @@ public static class ValidationExceptionSchema
             }
         }
     }
-
-    /// <summary>
-    /// The operation-error registration appended to every <see cref="OperationSchema{TInput,
-    /// TOutput}"/> that does not model <c>smithy.framework#ValidationException</c> itself.
-    /// </summary>
-    public static IOperationErrorSchema OperationError { get; } =
-        new OperationErrorSchema<ValidationException>(Id, Schema, 400);
 }

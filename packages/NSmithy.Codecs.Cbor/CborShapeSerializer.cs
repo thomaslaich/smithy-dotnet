@@ -34,49 +34,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         this.materializeDefaults = materializeDefaults;
     }
 
-    /// <summary>
-    /// Writes the members of <paramref name="value"/> that <paramref name="plan"/> includes, with no
-    /// enclosing map, for a caller that adds entries of its own (such as an error's <c>__type</c>).
-    /// </summary>
-    internal static void WriteMembers<T>(
-        CborWriter writer,
-        CborShapePlan plan,
-        bool materializeDefaults,
-        IStructSchema<T> schema,
-        T value
-    )
-    {
-        var serializer = new CborShapeSerializer(writer, plan, materializeDefaults);
-        schema.SerializeMembers(value, ref serializer);
-    }
-
-    private CborMemberPlan Entry(int member) =>
-        member == MemberIndex.Root ? root! : container!.Members[member];
-
-    /// <summary>
-    /// Positions the writer for a value of <paramref name="member"/>: its key inside a structure,
-    /// its single-entry map inside a union. False means the member is not written.
-    /// </summary>
-    private bool Begin(int member)
-    {
-        switch (container?.Kind)
-        {
-            case ShapeKind.Structure:
-                if (!container.IsIncluded(member))
-                {
-                    return false;
-                }
-
-                writer.WriteTextString(container.Members[member].Name);
-                return true;
-            case ShapeKind.Union:
-                writer.WriteTextString(container.Members[member].Name);
-                return true;
-            default:
-                return true;
-        }
-    }
-
     public bool WritesDefault(int member) =>
         materializeDefaults
         && container?.Kind == ShapeKind.Structure
@@ -213,9 +170,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         }
     }
 
-    private bool IsExcluded(int member) =>
-        container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
-
     public void WriteStruct<T>(int member, T value, IStructSchema<T> schema)
     {
         var entry = Entry(member);
@@ -293,4 +247,50 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         schema.SerializeCase(value, ref nested);
         writer.WriteEndMap();
     }
+
+    /// <summary>
+    /// Writes the members of <paramref name="value"/> that <paramref name="plan"/> includes, with no
+    /// enclosing map, for a caller that adds entries of its own (such as an error's <c>__type</c>).
+    /// </summary>
+    internal static void WriteMembers<T>(
+        CborWriter writer,
+        CborShapePlan plan,
+        bool materializeDefaults,
+        IStructSchema<T> schema,
+        T value
+    )
+    {
+        var serializer = new CborShapeSerializer(writer, plan, materializeDefaults);
+        schema.SerializeMembers(value, ref serializer);
+    }
+
+    private CborMemberPlan Entry(int member) =>
+        member == MemberIndex.Root ? root! : container!.Members[member];
+
+    /// <summary>
+    /// Positions the writer for a value of <paramref name="member"/>: its key inside a structure,
+    /// its single-entry map inside a union. False means the member is not written.
+    /// </summary>
+    private bool Begin(int member)
+    {
+        switch (container?.Kind)
+        {
+            case ShapeKind.Structure:
+                if (!container.IsIncluded(member))
+                {
+                    return false;
+                }
+
+                writer.WriteTextString(container.Members[member].Name);
+                return true;
+            case ShapeKind.Union:
+                writer.WriteTextString(container.Members[member].Name);
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private bool IsExcluded(int member) =>
+        container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
 }

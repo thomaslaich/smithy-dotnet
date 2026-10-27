@@ -1,35 +1,6 @@
 namespace Bench.Clients;
 
 /// <summary>
-/// Records every request that passes through, then forwards it unchanged.
-/// </summary>
-/// <remarks>
-/// Used for the parity gate, where each client runs against the shared reference
-/// server: forwarding proves the client can actually round-trip against a real
-/// server, and recording captures what it put on the wire. Never used while
-/// benchmarking, the recording allocates.
-/// </remarks>
-public sealed class RecordingHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
-{
-    private readonly List<CapturedRequest> captures = [];
-
-    public IReadOnlyList<CapturedRequest> Captures => captures;
-
-    protected override async Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request,
-        CancellationToken cancellationToken
-    )
-    {
-        var body = request.Content is null
-            ? []
-            : await request.Content.ReadAsByteArrayAsync(cancellationToken);
-
-        captures.Add(CapturedRequest.From(request, body));
-        return await base.SendAsync(request, cancellationToken);
-    }
-}
-
-/// <summary>
 /// The client-side scenario set: one call per operation, with inputs that mirror
 /// the corresponding server corpus scenario.
 /// </summary>
@@ -118,6 +89,35 @@ public static class BenchClientScenarios
         }
 
         return new BenchOrderInput("cust-000042", lines, Shipping, Billing, Metadata);
+    }
+}
+
+/// <summary>
+/// Records every request that passes through, then forwards it unchanged.
+/// </summary>
+/// <remarks>
+/// Used for the parity gate, where each client runs against the shared reference
+/// server: forwarding proves the client can actually round-trip against a real
+/// server, and recording captures what it put on the wire. Never used while
+/// benchmarking, the recording allocates.
+/// </remarks>
+public sealed class RecordingHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
+{
+    private readonly List<CapturedRequest> captures = [];
+
+    public IReadOnlyList<CapturedRequest> Captures => captures;
+
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    )
+    {
+        var body = request.Content is null
+            ? []
+            : await request.Content.ReadAsByteArrayAsync(cancellationToken);
+
+        captures.Add(CapturedRequest.From(request, body));
+        return await base.SendAsync(request, cancellationToken);
     }
 }
 

@@ -66,29 +66,6 @@ public sealed class RestServiceProtocol(
         return new ServerRoute(operation.Id, http["method"].AsString(), path, requiredQuery);
     }
 
-    private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        bool server
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        ArgumentNullException.ThrowIfNull(codecFactoryFor);
-
-        // Each side gets its own binding, so each side's codecs read by its own rules and only the
-        // server compiles a validator.
-        return CreateOperation(
-            operation,
-            operation.Errors,
-            codecFactoryFor(server ? WireReadMode.Strict : WireReadMode.Lenient),
-            errorDiscriminator,
-            rawStringPayloads,
-            errorTypeHeader,
-            SmithyRequestModifiers.Compile(operation),
-            server ? SmithyValidator.FromSchema(operation.Input) : null,
-            requiresDeclaredContentType
-        );
-    }
-
     private static IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation,
         IReadOnlyList<IOperationErrorSchema> modeledErrors,
@@ -125,6 +102,65 @@ public sealed class RestServiceProtocol(
                 inputValidator,
                 requiresDeclaredContentType
             )
+        );
+    }
+
+    private static RestOperationProtocol<
+        TInput,
+        TOutput,
+        TInputBuilder,
+        TOutputBuilder
+    > CreateOperation<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+        OperationSchema<TInput, TOutput> operation,
+        StructSchema<TInput, TInputBuilder> inputSchema,
+        StructSchema<TOutput, TOutputBuilder> outputSchema,
+        IReadOnlyList<IOperationErrorSchema> modeledErrors,
+        IRestBodyCodecFactory codecFactory,
+        Func<SmithyHttpClientResponse, string?> errorDiscriminator,
+        bool rawStringPayloads,
+        string? errorTypeHeader,
+        Action<SmithyHttpRequest>? requestTransform,
+        ISmithyValidator<TInput>? inputValidator,
+        bool requiresDeclaredContentType
+    ) =>
+        new RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+            RestOperationBinding.From(
+                operation,
+                inputSchema,
+                outputSchema,
+                codecFactory,
+                rawStringPayloads,
+                requiresDeclaredContentType
+            ),
+            modeledErrors,
+            codecFactory,
+            errorDiscriminator,
+            rawStringPayloads,
+            errorTypeHeader,
+            requestTransform,
+            inputValidator
+        );
+
+    private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        bool server
+    )
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(codecFactoryFor);
+
+        // Each side gets its own binding, so each side's codecs read by its own rules and only the
+        // server compiles a validator.
+        return CreateOperation(
+            operation,
+            operation.Errors,
+            codecFactoryFor(server ? WireReadMode.Strict : WireReadMode.Lenient),
+            errorDiscriminator,
+            rawStringPayloads,
+            errorTypeHeader,
+            SmithyRequestModifiers.Compile(operation),
+            server ? SmithyValidator.FromSchema(operation.Input) : null,
+            requiresDeclaredContentType
         );
     }
 
@@ -190,42 +226,6 @@ public sealed class RestServiceProtocol(
                 requiresDeclaredContentType
             );
     }
-
-    private static RestOperationProtocol<
-        TInput,
-        TOutput,
-        TInputBuilder,
-        TOutputBuilder
-    > CreateOperation<TInput, TOutput, TInputBuilder, TOutputBuilder>(
-        OperationSchema<TInput, TOutput> operation,
-        StructSchema<TInput, TInputBuilder> inputSchema,
-        StructSchema<TOutput, TOutputBuilder> outputSchema,
-        IReadOnlyList<IOperationErrorSchema> modeledErrors,
-        IRestBodyCodecFactory codecFactory,
-        Func<SmithyHttpClientResponse, string?> errorDiscriminator,
-        bool rawStringPayloads,
-        string? errorTypeHeader,
-        Action<SmithyHttpRequest>? requestTransform,
-        ISmithyValidator<TInput>? inputValidator,
-        bool requiresDeclaredContentType
-    ) =>
-        new RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutputBuilder>(
-            RestOperationBinding.From(
-                operation,
-                inputSchema,
-                outputSchema,
-                codecFactory,
-                rawStringPayloads,
-                requiresDeclaredContentType
-            ),
-            modeledErrors,
-            codecFactory,
-            errorDiscriminator,
-            rawStringPayloads,
-            errorTypeHeader,
-            requestTransform,
-            inputValidator
-        );
 }
 
 /// <summary>
@@ -244,11 +244,6 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
     ISmithyValidator<TInput>? inputValidator = null
 ) : IOperationProtocol<TInput, TOutput>
 {
-    public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
-
-    public bool StreamsRequestBody { get; } =
-        binding.Input.Payload?.PayloadKind is PayloadKind.StreamingBlob or PayloadKind.EventStream;
-
     private readonly IReadOnlyList<HttpOperationError> httpErrors =
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);
 
@@ -261,28 +256,23 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
             new ErrorWriter(codecFactory, rawStringPayloads, errorTypeHeader)
         );
 
-    private sealed class ErrorWriter(
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads,
-        string errorTypeHeader
-    ) : IErrorWriterCompiler
-    {
-        public Func<TError, SmithyHttpServerResponse> Compile<TError>(
-            OperationErrorSchema<TError> schema
-        )
-            where TError : Exception
-        {
-            var serialize = RestProtocol.CompileErrorSerializer(
-                schema.Schema,
+    // One shape serves every malformed-request kind, differing only in shape id and status code, so
+    // a single compiled writer covers them all. Compiled eagerly with the rest of the operation:
+    // this is the validation-failure path, which for many services is ordinary traffic.
+    private readonly RestErrorSerializer<MalformedRequestException>? malformedRequestSerializer =
+        errorTypeHeader is null
+            ? null
+            : RestProtocol.CompileErrorSerializer(
+                MalformedRequestSchema.Schema,
                 codecFactory,
                 rawStringPayloads,
                 errorTypeHeader
             );
-            var errorShapeId = schema.Id.ToString();
-            var statusCode = schema.HttpStatusCode;
-            return value => serialize(value, errorShapeId, statusCode);
-        }
-    }
+
+    public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
+
+    public bool StreamsRequestBody { get; } =
+        binding.Input.Payload?.PayloadKind is PayloadKind.StreamingBlob or PayloadKind.EventStream;
 
     public SmithyHttpRequest SerializeRequest(
         TInput input,
@@ -331,19 +321,6 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
     public string? ReadErrorCode(SmithyHttpClientResponse response) =>
         OperationProtocolErrors.ReadErrorName(response, errorDiscriminator);
 
-    // One shape serves every malformed-request kind, differing only in shape id and status code, so
-    // a single compiled writer covers them all. Compiled eagerly with the rest of the operation:
-    // this is the validation-failure path, which for many services is ordinary traffic.
-    private readonly RestErrorSerializer<MalformedRequestException>? malformedRequestSerializer =
-        errorTypeHeader is null
-            ? null
-            : RestProtocol.CompileErrorSerializer(
-                MalformedRequestSchema.Schema,
-                codecFactory,
-                rawStringPayloads,
-                errorTypeHeader
-            );
-
     public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response)
     {
         // A framework fault is not one of the operation's modeled errors — no model declares it —
@@ -359,5 +336,28 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
         }
 
         return serverErrors.TrySerialize(exception, out response);
+    }
+
+    private sealed class ErrorWriter(
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    ) : IErrorWriterCompiler
+    {
+        public Func<TError, SmithyHttpServerResponse> Compile<TError>(
+            OperationErrorSchema<TError> schema
+        )
+            where TError : Exception
+        {
+            var serialize = RestProtocol.CompileErrorSerializer(
+                schema.Schema,
+                codecFactory,
+                rawStringPayloads,
+                errorTypeHeader
+            );
+            var errorShapeId = schema.Id.ToString();
+            var statusCode = schema.HttpStatusCode;
+            return value => serialize(value, errorShapeId, statusCode);
+        }
     }
 }

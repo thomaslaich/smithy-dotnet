@@ -23,66 +23,6 @@ public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
         return SendCoreAsync(request, responseMode, cancellationToken);
     }
 
-    private async Task<SmithyHttpClientResponse> SendCoreAsync(
-        SmithyHttpRequest request,
-        SmithyHttpClientResponseMode responseMode,
-        CancellationToken cancellationToken
-    )
-    {
-        using var message = CreateMessage(request);
-        var response = await httpClient
-            .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-            .ConfigureAwait(false);
-        if (responseMode == SmithyHttpClientResponseMode.Stream)
-        {
-            var contentHeaders = response.Content is null
-                ? NoHeaders
-                : ToHeaderDictionary(response.Content.Headers);
-            return new SmithyHttpClientResponse(
-                response.StatusCode,
-                response.ReasonPhrase,
-                new SmithyHttpBody.Streaming(
-                    new ResponseOwningStream(
-                        response,
-                        response.Content is null
-                            ? Stream.Null
-                            : await response
-                                .Content.ReadAsStreamAsync(cancellationToken)
-                                .ConfigureAwait(false)
-                    ),
-                    response.Content?.Headers.ContentLength
-                ),
-                ToHeaderDictionary(response.Headers),
-                contentHeaders,
-                name => GetTrailer(response, name)
-            );
-        }
-
-        using var bufferedResponse = response;
-        var content = response.Content is null
-            ? []
-            : await ReadBodyAsync(response.Content, cancellationToken).ConfigureAwait(false);
-
-        // The body is fully read, so any HTTP/2 trailers have arrived. Capture the leading and
-        // trailing headers now: the returned Trailer closure must not read them off `response`,
-        // which is disposed the moment this method returns.
-        var headers = ToHeaderDictionary(response.Headers);
-        var trailers = ToHeaderDictionary(response.TrailingHeaders);
-        Func<string, string?>? getTrailer =
-            trailers.Count == 0 && headers.Count == 0
-                ? null
-                : name => GetCapturedTrailer(trailers, headers, name);
-
-        return new SmithyHttpClientResponse(
-            response.StatusCode,
-            response.ReasonPhrase,
-            content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),
-            headers,
-            response.Content is null ? NoHeaders : ToHeaderDictionary(response.Content.Headers),
-            getTrailer
-        );
-    }
-
     /// <summary>
     /// Reads a buffered body. With a declared length the body is read straight into one array of
     /// that size; <see cref="HttpContent.ReadAsByteArrayAsync()"/> would buffer it in a growing
@@ -144,39 +84,6 @@ public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
         : headers.TryGetValue(name, out var headerValues) && headerValues.Count > 0
             ? headerValues[0]
         : null;
-
-    private HttpRequestMessage CreateMessage(SmithyHttpRequest request)
-    {
-        var requestUri = HasDotPathSegment(request.RequestUri)
-            ? new Uri(
-                request.RequestUri,
-                new UriCreationOptions { DangerousDisablePathAndQueryCanonicalization = true }
-            )
-            : new Uri(request.RequestUri, UriKind.RelativeOrAbsolute);
-        var message = new HttpRequestMessage(request.Method, requestUri)
-        {
-            // Honor the HttpClient's configured HTTP version/policy. A new HttpRequestMessage
-            // defaults to HTTP/1.1, which would silently downgrade gRPC (HTTP/2) requests even when
-            // the caller configured the client for HTTP/2.
-            Version = httpClient.DefaultRequestVersion,
-            VersionPolicy = httpClient.DefaultVersionPolicy,
-            Content = CreateContent(request.Body, request.ContentType),
-        };
-        foreach (var header in request.Headers)
-        {
-            message.Headers.TryAddWithoutValidation(header.Key, header.Value);
-        }
-
-        if (message.Content is not null && request.ExistingContentHeaders is { } contentHeaders)
-        {
-            foreach (var header in contentHeaders)
-            {
-                message.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
-            }
-        }
-
-        return message;
-    }
 
     private static bool HasDotPathSegment(string uri)
     {
@@ -251,6 +158,99 @@ public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
         }
 
         return result ?? NoHeaders;
+    }
+
+    private async Task<SmithyHttpClientResponse> SendCoreAsync(
+        SmithyHttpRequest request,
+        SmithyHttpClientResponseMode responseMode,
+        CancellationToken cancellationToken
+    )
+    {
+        using var message = CreateMessage(request);
+        var response = await httpClient
+            .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+        if (responseMode == SmithyHttpClientResponseMode.Stream)
+        {
+            var contentHeaders = response.Content is null
+                ? NoHeaders
+                : ToHeaderDictionary(response.Content.Headers);
+            return new SmithyHttpClientResponse(
+                response.StatusCode,
+                response.ReasonPhrase,
+                new SmithyHttpBody.Streaming(
+                    new ResponseOwningStream(
+                        response,
+                        response.Content is null
+                            ? Stream.Null
+                            : await response
+                                .Content.ReadAsStreamAsync(cancellationToken)
+                                .ConfigureAwait(false)
+                    ),
+                    response.Content?.Headers.ContentLength
+                ),
+                ToHeaderDictionary(response.Headers),
+                contentHeaders,
+                name => GetTrailer(response, name)
+            );
+        }
+
+        using var bufferedResponse = response;
+        var content = response.Content is null
+            ? []
+            : await ReadBodyAsync(response.Content, cancellationToken).ConfigureAwait(false);
+
+        // The body is fully read, so any HTTP/2 trailers have arrived. Capture the leading and
+        // trailing headers now: the returned Trailer closure must not read them off `response`,
+        // which is disposed the moment this method returns.
+        var headers = ToHeaderDictionary(response.Headers);
+        var trailers = ToHeaderDictionary(response.TrailingHeaders);
+        Func<string, string?>? getTrailer =
+            trailers.Count == 0 && headers.Count == 0
+                ? null
+                : name => GetCapturedTrailer(trailers, headers, name);
+
+        return new SmithyHttpClientResponse(
+            response.StatusCode,
+            response.ReasonPhrase,
+            content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),
+            headers,
+            response.Content is null ? NoHeaders : ToHeaderDictionary(response.Content.Headers),
+            getTrailer
+        );
+    }
+
+    private HttpRequestMessage CreateMessage(SmithyHttpRequest request)
+    {
+        var requestUri = HasDotPathSegment(request.RequestUri)
+            ? new Uri(
+                request.RequestUri,
+                new UriCreationOptions { DangerousDisablePathAndQueryCanonicalization = true }
+            )
+            : new Uri(request.RequestUri, UriKind.RelativeOrAbsolute);
+        var message = new HttpRequestMessage(request.Method, requestUri)
+        {
+            // Honor the HttpClient's configured HTTP version/policy. A new HttpRequestMessage
+            // defaults to HTTP/1.1, which would silently downgrade gRPC (HTTP/2) requests even when
+            // the caller configured the client for HTTP/2.
+            Version = httpClient.DefaultRequestVersion,
+            VersionPolicy = httpClient.DefaultVersionPolicy,
+            Content = CreateContent(request.Body, request.ContentType),
+        };
+        foreach (var header in request.Headers)
+        {
+            message.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        if (message.Content is not null && request.ExistingContentHeaders is { } contentHeaders)
+        {
+            foreach (var header in contentHeaders)
+            {
+                message.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+        }
+
+        return message;
     }
 
     private sealed class ChunkedBodyContent : HttpContent
@@ -377,6 +377,13 @@ public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
         public override void Write(byte[] buffer, int offset, int count) =>
             throw new NotSupportedException();
 
+        public override async ValueTask DisposeAsync()
+        {
+            await inner.DisposeAsync().ConfigureAwait(false);
+            response.Dispose();
+            await base.DisposeAsync().ConfigureAwait(false);
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -386,13 +393,6 @@ public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
             }
 
             base.Dispose(disposing);
-        }
-
-        public override async ValueTask DisposeAsync()
-        {
-            await inner.DisposeAsync().ConfigureAwait(false);
-            response.Dispose();
-            await base.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

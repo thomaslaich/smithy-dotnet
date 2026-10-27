@@ -10,21 +10,6 @@ namespace NSmithy.Protocols.RestXml;
 
 public sealed class RestXmlProtocol : IProtocol
 {
-    /// <summary>
-    /// Binds the protocol to a service, yielding per-operation protocols. REST derives each
-    /// operation's binding from its <c>@http</c> trait, so the service schema is accepted for a
-    /// uniform factory signature but not otherwise consulted. restXml uses raw string payloads and
-    /// encodes errors in the XML body (no error-type header); server-side error serialization isn't
-    /// wired up yet, so no error-type header is supplied.
-    /// </summary>
-    public IServiceProtocol ForService(ServiceSchema service) =>
-        new RestServiceProtocol(
-            _ => new XmlRestBodyCodecFactory(service),
-            DeserializeErrorType,
-            rawStringPayloads: true,
-            errorTypeHeader: null
-        );
-
     public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
@@ -51,6 +36,21 @@ public sealed class RestXmlProtocol : IProtocol
             .FirstOrDefault(element => element.Name.LocalName == "Code")
             ?.Value;
     }
+
+    /// <summary>
+    /// Binds the protocol to a service, yielding per-operation protocols. REST derives each
+    /// operation's binding from its <c>@http</c> trait, so the service schema is accepted for a
+    /// uniform factory signature but not otherwise consulted. restXml uses raw string payloads and
+    /// encodes errors in the XML body (no error-type header); server-side error serialization isn't
+    /// wired up yet, so no error-type header is supplied.
+    /// </summary>
+    public IServiceProtocol ForService(ServiceSchema service) =>
+        new RestServiceProtocol(
+            _ => new XmlRestBodyCodecFactory(service),
+            DeserializeErrorType,
+            rawStringPayloads: true,
+            errorTypeHeader: null
+        );
 
     private sealed class XmlRestBodyCodecFactory : IRestBodyCodecFactory
     {

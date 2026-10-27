@@ -15,10 +15,10 @@ public class GrpcClientBenchmarks
     private GrpcBenchClient grpcNet = null!;
     private GrpcBenchClient nsmithy = null!;
 
+    public static IEnumerable<string> ScenarioNames => GrpcBenchScenarios.All.Select(s => s.Name);
+
     [ParamsSource(nameof(ScenarioNames))]
     public string Scenario { get; set; } = "";
-
-    public static IEnumerable<string> ScenarioNames => GrpcBenchScenarios.All.Select(s => s.Name);
 
     [GlobalSetup]
     public async Task SetupAsync()
@@ -68,10 +68,10 @@ public class GrpcServerBenchmarks
     private GrpcBenchServer nsmithy = null!;
     private GrpcBenchScenario scenario = null!;
 
+    public static IEnumerable<string> ScenarioNames => GrpcBenchScenarios.All.Select(s => s.Name);
+
     [ParamsSource(nameof(ScenarioNames))]
     public string Scenario { get; set; } = "";
-
-    public static IEnumerable<string> ScenarioNames => GrpcBenchScenarios.All.Select(s => s.Name);
 
     [GlobalSetup]
     public async Task SetupAsync()
@@ -125,10 +125,10 @@ public class GrpcSerializationBenchmarks
 {
     private GrpcCodecCase codecCase = null!;
 
+    public static IEnumerable<string> ScenarioNames => GrpcBenchScenarios.All.Select(s => s.Name);
+
     [ParamsSource(nameof(ScenarioNames))]
     public string Scenario { get; set; } = "";
-
-    public static IEnumerable<string> ScenarioNames => GrpcBenchScenarios.All.Select(s => s.Name);
 
     [GlobalSetup]
     public void Setup() => codecCase = GrpcCodecCases.Create(Scenario);
@@ -146,10 +146,10 @@ public class GrpcDeserializationBenchmarks
 {
     private GrpcCodecCase codecCase = null!;
 
+    public static IEnumerable<string> ScenarioNames => GrpcBenchScenarios.All.Select(s => s.Name);
+
     [ParamsSource(nameof(ScenarioNames))]
     public string Scenario { get; set; } = "";
-
-    public static IEnumerable<string> ScenarioNames => GrpcBenchScenarios.All.Select(s => s.Name);
 
     [GlobalSetup]
     public void Setup() => codecCase = GrpcCodecCases.Create(Scenario);

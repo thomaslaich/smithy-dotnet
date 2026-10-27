@@ -73,6 +73,73 @@ internal readonly struct XmlShapeDeserializer(
         return schema.Build(builder);
     }
 
+    public TCollection ReadList<TCollection, TElement, TBuilder>(
+        ListSchema<TCollection, TElement, TBuilder> schema
+    )
+    {
+        var plan = entry.Shape!;
+        var item = plan.Members[0];
+        var builder = schema.CreateTypedBuilder();
+        var items =
+            container is not null ? ChildElements(container, itemName!)
+            : element is not null ? ChildElements(element, item.ElementName)
+            : [];
+        foreach (var child in items)
+        {
+            var nested = new XmlShapeDeserializer(child, null, item);
+            schema.DeserializeElement(builder, ref nested);
+        }
+
+        return schema.Build(builder);
+    }
+
+    public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
+        MapSchema<TDictionary, TValue, TBuilder> schema
+    )
+    {
+        var plan = entry.Shape!;
+        var keyName = plan.Members[0].ElementName;
+        var value = plan.Members[1];
+        var builder = schema.CreateTypedBuilder();
+        var entries =
+            container is not null ? ChildElements(container, itemName!)
+            : element is not null ? element.Elements()
+            : [];
+        foreach (var mapEntry in entries)
+        {
+            var key = ChildElement(mapEntry, keyName)?.Value;
+            if (key is null)
+            {
+                continue;
+            }
+
+            var nested = new XmlShapeDeserializer(
+                ChildElement(mapEntry, value.ElementName),
+                null,
+                value
+            );
+            schema.DeserializeEntry(builder, key, ref nested);
+        }
+
+        return schema.Build(builder);
+    }
+
+    public T ReadUnion<T>(UnionSchema<T> schema)
+    {
+        var child =
+            element?.Elements().FirstOrDefault()
+            ?? throw new InvalidOperationException("Union payload was empty.");
+        var plan = entry.Shape!;
+        var index = plan.IndexOfElement(child.Name.LocalName);
+        if (index < 0)
+        {
+            throw new InvalidOperationException($"Unknown union member '{child.Name.LocalName}'.");
+        }
+
+        var nested = new XmlShapeDeserializer(child, null, plan.Members[index]);
+        return schema.DeserializeCase(index, ref nested);
+    }
+
     /// <summary>
     /// Reads each member the plan includes from its attribute or child element. An absent member
     /// is left unset, or rejected when it is required.
@@ -149,72 +216,5 @@ internal readonly struct XmlShapeDeserializer(
                 throw new MissingRequiredMemberException(member.Name);
             }
         }
-    }
-
-    public TCollection ReadList<TCollection, TElement, TBuilder>(
-        ListSchema<TCollection, TElement, TBuilder> schema
-    )
-    {
-        var plan = entry.Shape!;
-        var item = plan.Members[0];
-        var builder = schema.CreateTypedBuilder();
-        var items =
-            container is not null ? ChildElements(container, itemName!)
-            : element is not null ? ChildElements(element, item.ElementName)
-            : [];
-        foreach (var child in items)
-        {
-            var nested = new XmlShapeDeserializer(child, null, item);
-            schema.DeserializeElement(builder, ref nested);
-        }
-
-        return schema.Build(builder);
-    }
-
-    public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        MapSchema<TDictionary, TValue, TBuilder> schema
-    )
-    {
-        var plan = entry.Shape!;
-        var keyName = plan.Members[0].ElementName;
-        var value = plan.Members[1];
-        var builder = schema.CreateTypedBuilder();
-        var entries =
-            container is not null ? ChildElements(container, itemName!)
-            : element is not null ? element.Elements()
-            : [];
-        foreach (var mapEntry in entries)
-        {
-            var key = ChildElement(mapEntry, keyName)?.Value;
-            if (key is null)
-            {
-                continue;
-            }
-
-            var nested = new XmlShapeDeserializer(
-                ChildElement(mapEntry, value.ElementName),
-                null,
-                value
-            );
-            schema.DeserializeEntry(builder, key, ref nested);
-        }
-
-        return schema.Build(builder);
-    }
-
-    public T ReadUnion<T>(UnionSchema<T> schema)
-    {
-        var child =
-            element?.Elements().FirstOrDefault()
-            ?? throw new InvalidOperationException("Union payload was empty.");
-        var plan = entry.Shape!;
-        var index = plan.IndexOfElement(child.Name.LocalName);
-        if (index < 0)
-        {
-            throw new InvalidOperationException($"Unknown union member '{child.Name.LocalName}'.");
-        }
-
-        var nested = new XmlShapeDeserializer(child, null, plan.Members[index]);
-        return schema.DeserializeCase(index, ref nested);
     }
 }

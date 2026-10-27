@@ -101,6 +101,21 @@ public sealed class CreateSmithyJar : MsBuildTask
         stream.Write(content);
     }
 
+    // MD5 and SHA1 are Maven's required checksum algorithms — not used for security.
+#pragma warning disable CA5351, CA5350
+    private static void WriteChecksums(string filePath)
+    {
+        var content = File.ReadAllBytes(filePath);
+        File.WriteAllText(
+            filePath + ".md5",
+            Convert.ToHexString(MD5.HashData(content)).ToLowerInvariant()
+        );
+        File.WriteAllText(
+            filePath + ".sha1",
+            Convert.ToHexString(SHA1.HashData(content)).ToLowerInvariant()
+        );
+    }
+
     private string GeneratePom() =>
         new XDocument(
             new XDeclaration("1.0", "UTF-8", null),
@@ -117,20 +132,5 @@ public sealed class CreateSmithyJar : MsBuildTask
                 new XElement("packaging", "jar")
             )
         ).ToString();
-
-    // MD5 and SHA1 are Maven's required checksum algorithms — not used for security.
-#pragma warning disable CA5351, CA5350
-    private static void WriteChecksums(string filePath)
-    {
-        var content = File.ReadAllBytes(filePath);
-        File.WriteAllText(
-            filePath + ".md5",
-            Convert.ToHexString(MD5.HashData(content)).ToLowerInvariant()
-        );
-        File.WriteAllText(
-            filePath + ".sha1",
-            Convert.ToHexString(SHA1.HashData(content)).ToLowerInvariant()
-        );
-    }
 #pragma warning restore CA5351, CA5350
 }

@@ -46,94 +46,36 @@ internal struct XmlShapeSerializer : IShapeSerializer
         this.itemName = itemName;
     }
 
-    private readonly XmlMemberPlan Entry(int member) =>
-        member == MemberIndex.Root ? root! : container!.Members[member];
-
-    /// <summary>
-    /// Creates the element a value of <paramref name="member"/> is written into. Null means the
-    /// member is not written as an element: a projection excludes it.
-    /// </summary>
-    private XElement? Begin(int member)
-    {
-        if (container is null)
-        {
-            // A top-level structure's namespace is the document root's, applied by the codec; any
-            // other top-level value carries its own.
-            if (root!.Shape?.Kind != ShapeKind.Structure)
-            {
-                ApplyNamespace(element, root.Namespace);
-            }
-
-            return element;
-        }
-
-        if (container.Kind == ShapeKind.Structure && !container.IsIncluded(member))
-        {
-            return null;
-        }
-
-        var plan = container.Members[member];
-        if (container.Kind == ShapeKind.Map)
-        {
-            // Member 0 is the key, which opened the entry; this is its value.
-            var valueElement = new XElement(ChildElementName(entry!, plan.ElementName));
-            ApplyNamespace(valueElement, plan.Namespace);
-            return valueElement;
-        }
-
-        var name = itemName ?? plan.ElementName;
-        var child = new XElement(ChildElementName(element, name));
-        ApplyNamespace(child, plan.Namespace);
-        return child;
-    }
-
-    /// <summary>Adds a completed value element to the aggregate's element.</summary>
-    private void End(XElement written)
-    {
-        if (container is null)
-        {
-            return;
-        }
-
-        if (container.Kind == ShapeKind.Map)
-        {
-            entry!.Add(written);
-            element.Add(entry);
-            entry = null;
-            return;
-        }
-
-        element.Add(written);
-    }
-
-    private void WriteText(int member, string text)
-    {
-        if (container?.Kind == ShapeKind.Structure)
-        {
-            var plan = container.Members[member];
-            if (plan.IsAttribute)
-            {
-                if (container.IsIncluded(member))
-                {
-                    element.SetAttributeValue(AttributeName(element, plan.ElementName), text);
-                }
-
-                return;
-            }
-        }
-
-        if (Begin(member) is { } target)
-        {
-            target.Value = text;
-            End(target);
-        }
-    }
-
     public readonly bool WritesDefault(int member) =>
         materializeDefaults
         && container?.Kind == ShapeKind.Structure
         && container.IsIncluded(member)
         && !container.Members[member].IsRequired;
+
+    public readonly void WriteDocument(int member, Document value) =>
+        throw new NotSupportedException("Smithy Document values are not supported in XML.");
+
+    // A member a projection excludes is skipped like any other; only one that would be written is
+    // a stream this codec cannot encode.
+    public readonly void WriteStream(int member, Stream value)
+    {
+        if (!IsExcluded(member))
+        {
+            throw new NotSupportedException("XML codec does not support streaming blob schemas.");
+        }
+    }
+
+    public readonly void WriteEventStream<TEvent>(
+        int member,
+        IAsyncEnumerable<TEvent> events,
+        Schema<TEvent> eventSchema
+    )
+    {
+        if (!IsExcluded(member))
+        {
+            throw new NotSupportedException("XML codec does not support event stream schemas.");
+        }
+    }
 
     public void WriteNull(int member)
     {
@@ -203,38 +145,10 @@ internal struct XmlShapeSerializer : IShapeSerializer
     public void WriteTimestamp(int member, DateTimeOffset value) =>
         WriteText(member, XmlTimestamps.Format(value, Entry(member).TimestampFormat));
 
-    public readonly void WriteDocument(int member, Document value) =>
-        throw new NotSupportedException("Smithy Document values are not supported in XML.");
-
     public void WriteStringEnum(int member, string value) => WriteString(member, value);
 
     public void WriteIntEnum(int member, int value) =>
         WriteText(member, value.ToString(CultureInfo.InvariantCulture));
-
-    // A member a projection excludes is skipped like any other; only one that would be written is
-    // a stream this codec cannot encode.
-    public readonly void WriteStream(int member, Stream value)
-    {
-        if (!IsExcluded(member))
-        {
-            throw new NotSupportedException("XML codec does not support streaming blob schemas.");
-        }
-    }
-
-    public readonly void WriteEventStream<TEvent>(
-        int member,
-        IAsyncEnumerable<TEvent> events,
-        Schema<TEvent> eventSchema
-    )
-    {
-        if (!IsExcluded(member))
-        {
-            throw new NotSupportedException("XML codec does not support event stream schemas.");
-        }
-    }
-
-    private readonly bool IsExcluded(int member) =>
-        container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
 
     public void WriteStruct<T>(int member, T value, IStructSchema<T> schema)
     {
@@ -333,6 +247,92 @@ internal struct XmlShapeSerializer : IShapeSerializer
         schema.SerializeCase(value, ref nested);
         End(target);
     }
+
+    private readonly XmlMemberPlan Entry(int member) =>
+        member == MemberIndex.Root ? root! : container!.Members[member];
+
+    /// <summary>
+    /// Creates the element a value of <paramref name="member"/> is written into. Null means the
+    /// member is not written as an element: a projection excludes it.
+    /// </summary>
+    private XElement? Begin(int member)
+    {
+        if (container is null)
+        {
+            // A top-level structure's namespace is the document root's, applied by the codec; any
+            // other top-level value carries its own.
+            if (root!.Shape?.Kind != ShapeKind.Structure)
+            {
+                ApplyNamespace(element, root.Namespace);
+            }
+
+            return element;
+        }
+
+        if (container.Kind == ShapeKind.Structure && !container.IsIncluded(member))
+        {
+            return null;
+        }
+
+        var plan = container.Members[member];
+        if (container.Kind == ShapeKind.Map)
+        {
+            // Member 0 is the key, which opened the entry; this is its value.
+            var valueElement = new XElement(ChildElementName(entry!, plan.ElementName));
+            ApplyNamespace(valueElement, plan.Namespace);
+            return valueElement;
+        }
+
+        var name = itemName ?? plan.ElementName;
+        var child = new XElement(ChildElementName(element, name));
+        ApplyNamespace(child, plan.Namespace);
+        return child;
+    }
+
+    /// <summary>Adds a completed value element to the aggregate's element.</summary>
+    private void End(XElement written)
+    {
+        if (container is null)
+        {
+            return;
+        }
+
+        if (container.Kind == ShapeKind.Map)
+        {
+            entry!.Add(written);
+            element.Add(entry);
+            entry = null;
+            return;
+        }
+
+        element.Add(written);
+    }
+
+    private void WriteText(int member, string text)
+    {
+        if (container?.Kind == ShapeKind.Structure)
+        {
+            var plan = container.Members[member];
+            if (plan.IsAttribute)
+            {
+                if (container.IsIncluded(member))
+                {
+                    element.SetAttributeValue(AttributeName(element, plan.ElementName), text);
+                }
+
+                return;
+            }
+        }
+
+        if (Begin(member) is { } target)
+        {
+            target.Value = text;
+            End(target);
+        }
+    }
+
+    private readonly bool IsExcluded(int member) =>
+        container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
 }
 
 /// <summary>The text forms of a timestamp under each <c>@timestampFormat</c>.</summary>

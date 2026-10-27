@@ -24,15 +24,15 @@ public class ServerBenchmarks
     private BenchServer server = null!;
     private BenchRequest request = null!;
 
+    public static IEnumerable<string> StackNames => BenchStacks.All.Select(s => s.Name);
+
+    public static IEnumerable<string> ScenarioNames => BenchCorpus.All.Select(r => r.Name);
+
     [ParamsSource(nameof(StackNames))]
     public string Stack { get; set; } = BenchStacks.NSmithy;
 
     [ParamsSource(nameof(ScenarioNames))]
     public string Scenario { get; set; } = "";
-
-    public static IEnumerable<string> StackNames => BenchStacks.All.Select(s => s.Name);
-
-    public static IEnumerable<string> ScenarioNames => BenchCorpus.All.Select(r => r.Name);
 
     [GlobalSetup]
     public async Task SetupAsync()

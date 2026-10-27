@@ -22,207 +22,6 @@ internal enum WireType : byte
 }
 
 /// <summary>
-/// A minimal append-only protobuf encoder backed by a pooled buffer. Nested messages reserve their
-/// length prefix in this buffer and backpatch it when complete.
-/// </summary>
-internal sealed class ProtoWriter(int initialCapacity = 64) : IDisposable
-{
-    private byte[] buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
-    private int length;
-
-    public int Length => length;
-
-    public byte[] ToArray() => buffer.AsSpan(0, length).ToArray();
-
-    public void WriteTag(int fieldNumber, WireType wireType) =>
-        WriteVarint(((ulong)fieldNumber << 3) | (ulong)wireType);
-
-    public void WriteVarint(ulong value)
-    {
-        while (value >= 0x80)
-        {
-            Append((byte)(value | 0x80));
-            value >>= 7;
-        }
-
-        Append((byte)value);
-    }
-
-    public void WriteFixed32(uint value)
-    {
-        Span<byte> tmp = stackalloc byte[4];
-        BinaryPrimitives.WriteUInt32LittleEndian(tmp, value);
-        Append(tmp);
-    }
-
-    public void WriteFixed64(ulong value)
-    {
-        Span<byte> tmp = stackalloc byte[8];
-        BinaryPrimitives.WriteUInt64LittleEndian(tmp, value);
-        Append(tmp);
-    }
-
-    public void WriteLengthDelimited(ReadOnlySpan<byte> value)
-    {
-        WriteVarint((ulong)value.Length);
-        Append(value);
-    }
-
-    public void WriteLengthDelimitedUtf8(string value)
-    {
-        var byteCount = Encoding.UTF8.GetByteCount(value);
-        WriteVarint((ulong)byteCount);
-        EnsureCapacity(byteCount);
-        length += Encoding.UTF8.GetBytes(value, buffer.AsSpan(length, byteCount));
-    }
-
-    public int BeginLengthDelimited()
-    {
-        var prefixOffset = length;
-        Append(0);
-        return prefixOffset;
-    }
-
-    public void EndLengthDelimited(int prefixOffset)
-    {
-        if ((uint)prefixOffset >= (uint)length)
-        {
-            throw new ArgumentOutOfRangeException(nameof(prefixOffset));
-        }
-
-        var valueLength = length - prefixOffset - 1;
-        var prefixLength = VarintLength((ulong)valueLength);
-        if (prefixLength > 1)
-        {
-            var shift = prefixLength - 1;
-            EnsureCapacity(shift);
-            buffer
-                .AsSpan(prefixOffset + 1, valueLength)
-                .CopyTo(buffer.AsSpan(prefixOffset + prefixLength));
-            length += shift;
-        }
-
-        WriteVarintAt(prefixOffset, (ulong)valueLength);
-    }
-
-    public void Rewind(int position)
-    {
-        if ((uint)position > (uint)length)
-        {
-            throw new ArgumentOutOfRangeException(nameof(position));
-        }
-
-        length = position;
-    }
-
-    public void Dispose()
-    {
-        var rented = buffer;
-        buffer = [];
-        length = 0;
-        if (rented.Length != 0)
-        {
-            ArrayPool<byte>.Shared.Return(rented);
-        }
-    }
-
-    public void Reset(int initialCapacity)
-    {
-        if (buffer.Length != 0)
-        {
-            throw new InvalidOperationException("Proto writer is already in use.");
-        }
-
-        buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
-    }
-
-    /// <summary>ZigZag-encodes a signed value for <c>sint32</c>/<c>sint64</c> fields.</summary>
-    public static ulong ZigZag(long value) => (ulong)((value << 1) ^ (value >> 63));
-
-    private void Append(byte value)
-    {
-        EnsureCapacity(1);
-        buffer[length++] = value;
-    }
-
-    private void Append(ReadOnlySpan<byte> value)
-    {
-        EnsureCapacity(value.Length);
-        value.CopyTo(buffer.AsSpan(length));
-        length += value.Length;
-    }
-
-    private void EnsureCapacity(int extra)
-    {
-        ObjectDisposedException.ThrowIf(buffer.Length == 0, this);
-
-        if (length + extra <= buffer.Length)
-        {
-            return;
-        }
-
-        var capacity = buffer.Length * 2;
-        while (capacity < length + extra)
-        {
-            capacity *= 2;
-        }
-
-        var replacement = ArrayPool<byte>.Shared.Rent(capacity);
-        buffer.AsSpan(0, length).CopyTo(replacement);
-        ArrayPool<byte>.Shared.Return(buffer);
-        buffer = replacement;
-    }
-
-    private static int VarintLength(ulong value)
-    {
-        var result = 1;
-        while (value >= 0x80)
-        {
-            result++;
-            value >>= 7;
-        }
-
-        return result;
-    }
-
-    private void WriteVarintAt(int offset, ulong value)
-    {
-        while (value >= 0x80)
-        {
-            buffer[offset++] = (byte)(value | 0x80);
-            value >>= 7;
-        }
-
-        buffer[offset] = (byte)value;
-    }
-}
-
-internal static class ProtoWriterCache
-{
-    [ThreadStatic]
-    private static ProtoWriter? cached;
-
-    public static ProtoWriter Rent(int initialCapacity)
-    {
-        var writer = cached;
-        cached = null;
-        if (writer is null)
-        {
-            return new ProtoWriter(initialCapacity);
-        }
-
-        writer.Reset(initialCapacity);
-        return writer;
-    }
-
-    public static void Return(ProtoWriter writer)
-    {
-        writer.Dispose();
-        cached ??= writer;
-    }
-}
-
-/// <summary>
 /// A forward-only protobuf decoder over a byte span. Protobuf is not self-describing, so the codec
 /// drives reads with the schema; this reader only exposes the primitive wire operations plus a
 /// <see cref="SkipField"/> for unknown fields.
@@ -340,6 +139,31 @@ internal ref struct ProtoReader(ReadOnlySpan<byte> buffer)
     }
 }
 
+internal static class ProtoWriterCache
+{
+    [ThreadStatic]
+    private static ProtoWriter? cached;
+
+    public static ProtoWriter Rent(int initialCapacity)
+    {
+        var writer = cached;
+        cached = null;
+        if (writer is null)
+        {
+            return new ProtoWriter(initialCapacity);
+        }
+
+        writer.Reset(initialCapacity);
+        return writer;
+    }
+
+    public static void Return(ProtoWriter writer)
+    {
+        writer.Dispose();
+        cached ??= writer;
+    }
+}
+
 internal static class ProtoWire
 {
     private static readonly ShapeId ProtoIndexTrait = new("alloy.proto", "protoIndex");
@@ -352,6 +176,15 @@ internal static class ProtoWire
 
     /// <summary>The namespace of the shapes the runtime owns rather than reads from a model.</summary>
     private const string FrameworkNamespace = "smithy.framework";
+
+    // ---- google.protobuf.Value (for @sparse map values and Document) -------
+
+    private const int ValueNullField = 1;
+    private const int ValueNumberField = 2;
+    private const int ValueStringField = 3;
+    private const int ValueBoolField = 4;
+    private const int ValueStructField = 5;
+    private const int ValueListField = 6;
 
     // String enums map to proto enums; the declared values (in declaration order) come from the
     // synthetic trait the codegen attaches, matching ProtoGenerator's UNSPECIFIED=0, then 1,2,3…
@@ -584,42 +417,6 @@ internal static class ProtoWire
     /// <summary>The declared values by ordinal minus one.</summary>
     internal static string[] EnumValues(Schema enumSchema) => [.. EnumMembers(enumSchema)];
 
-    private static List<string> EnumMembers(Schema enumSchema)
-    {
-        var trait = enumSchema.GetTrait(SyntheticEnumTrait);
-        if (trait is not { Value.Kind: DocumentKind.Array })
-        {
-            throw new NotSupportedException(
-                "String enum schema is missing the smithy.synthetic#enum trait required to map "
-                    + "values to proto enum field numbers."
-            );
-        }
-
-        var members = new List<string>();
-        foreach (var entry in trait.Value.Value.AsArray())
-        {
-            if (
-                entry.Kind == DocumentKind.Object
-                && entry.AsObject().TryGetValue("value", out var v)
-                && v.Kind == DocumentKind.String
-            )
-            {
-                members.Add(v.AsString());
-            }
-        }
-
-        return members;
-    }
-
-    // ---- google.protobuf.Value (for @sparse map values and Document) -------
-
-    private const int ValueNullField = 1;
-    private const int ValueNumberField = 2;
-    private const int ValueStringField = 3;
-    private const int ValueBoolField = 4;
-    private const int ValueStructField = 5;
-    private const int ValueListField = 6;
-
     /// <summary>Encodes a sparse-map value (a declared scalar, or null) as a google.protobuf.Value.</summary>
     internal static void EncodeScalarValueMessage<T>(
         ProtoWriter writer,
@@ -700,17 +497,6 @@ internal static class ProtoWire
 
         return result;
     }
-
-    private static T CoerceNumber<T>(double number, ShapeKind kind) =>
-        kind switch
-        {
-            ShapeKind.Byte => (T)(object)(sbyte)number,
-            ShapeKind.Short => (T)(object)(short)number,
-            ShapeKind.Integer => (T)(object)(int)number,
-            ShapeKind.Long => (T)(object)(long)number,
-            ShapeKind.Float => (T)(object)(float)number,
-            _ => (T)(object)number,
-        };
 
     internal static void EncodeDocumentValue(ProtoWriter writer, Document document)
     {
@@ -811,6 +597,85 @@ internal static class ProtoWire
         return result;
     }
 
+    /// <summary>
+    /// The proto field number for a member: its <c>@protoIndex</c>, which a model has to state
+    /// because proto's compatibility rules hang on it — reordering members must not move a field.
+    /// </summary>
+    /// <remarks>
+    /// A framework shape is the one exception. The server runtime can return
+    /// <c>smithy.framework#ValidationException</c> from any operation, so every codec has to be able
+    /// to put it on the wire, but it comes from the runtime rather than a model file and so has no
+    /// trait to carry. Its numbers come from declaration order instead, which is this codec's rule
+    /// to make: nothing outside it should have to know that proto wants a number per member.
+    /// </remarks>
+    internal static int FieldNumber(
+        ShapeId memberId,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        int ordinal
+    )
+    {
+        if (
+            traits.TryGetValue(ProtoIndexTrait, out var trait)
+            && trait.Value.Kind == DocumentKind.Number
+        )
+        {
+            return (int)trait.Value.AsNumber();
+        }
+
+        if (memberId.Namespace == FrameworkNamespace)
+        {
+            return ordinal + 1;
+        }
+
+        throw new InvalidOperationException(
+            $"Proto codec requires every member to carry an @protoIndex trait; '{memberId}' has none."
+        );
+    }
+
+    internal static Schema Unwrap(Schema schema)
+    {
+        var resolved = schema.Resolved;
+        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
+    }
+
+    private static List<string> EnumMembers(Schema enumSchema)
+    {
+        var trait = enumSchema.GetTrait(SyntheticEnumTrait);
+        if (trait is not { Value.Kind: DocumentKind.Array })
+        {
+            throw new NotSupportedException(
+                "String enum schema is missing the smithy.synthetic#enum trait required to map "
+                    + "values to proto enum field numbers."
+            );
+        }
+
+        var members = new List<string>();
+        foreach (var entry in trait.Value.Value.AsArray())
+        {
+            if (
+                entry.Kind == DocumentKind.Object
+                && entry.AsObject().TryGetValue("value", out var v)
+                && v.Kind == DocumentKind.String
+            )
+            {
+                members.Add(v.AsString());
+            }
+        }
+
+        return members;
+    }
+
+    private static T CoerceNumber<T>(double number, ShapeKind kind) =>
+        kind switch
+        {
+            ShapeKind.Byte => (T)(object)(sbyte)number,
+            ShapeKind.Short => (T)(object)(short)number,
+            ShapeKind.Integer => (T)(object)(int)number,
+            ShapeKind.Long => (T)(object)(long)number,
+            ShapeKind.Float => (T)(object)(float)number,
+            _ => (T)(object)number,
+        };
+
     private static Document DecodeDocumentStruct(ReadOnlySpan<byte> bytes)
     {
         var fields = new Dictionary<string, Document>(StringComparer.Ordinal);
@@ -877,46 +742,181 @@ internal static class ProtoWire
         return Document.From(items);
     }
 
-    /// <summary>
-    /// The proto field number for a member: its <c>@protoIndex</c>, which a model has to state
-    /// because proto's compatibility rules hang on it — reordering members must not move a field.
-    /// </summary>
-    /// <remarks>
-    /// A framework shape is the one exception. The server runtime can return
-    /// <c>smithy.framework#ValidationException</c> from any operation, so every codec has to be able
-    /// to put it on the wire, but it comes from the runtime rather than a model file and so has no
-    /// trait to carry. Its numbers come from declaration order instead, which is this codec's rule
-    /// to make: nothing outside it should have to know that proto wants a number per member.
-    /// </remarks>
-    internal static int FieldNumber(
-        ShapeId memberId,
-        IReadOnlyDictionary<ShapeId, Trait> traits,
-        int ordinal
-    )
+    private static long DecodeZigZag(ulong value) => (long)(value >> 1) ^ -(long)(value & 1);
+}
+
+/// <summary>
+/// A minimal append-only protobuf encoder backed by a pooled buffer. Nested messages reserve their
+/// length prefix in this buffer and backpatch it when complete.
+/// </summary>
+internal sealed class ProtoWriter(int initialCapacity = 64) : IDisposable
+{
+    private byte[] buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
+    private int length;
+
+    public int Length => length;
+
+    /// <summary>ZigZag-encodes a signed value for <c>sint32</c>/<c>sint64</c> fields.</summary>
+    public static ulong ZigZag(long value) => (ulong)((value << 1) ^ (value >> 63));
+
+    public byte[] ToArray() => buffer.AsSpan(0, length).ToArray();
+
+    public void WriteTag(int fieldNumber, WireType wireType) =>
+        WriteVarint(((ulong)fieldNumber << 3) | (ulong)wireType);
+
+    public void WriteVarint(ulong value)
     {
-        if (
-            traits.TryGetValue(ProtoIndexTrait, out var trait)
-            && trait.Value.Kind == DocumentKind.Number
-        )
+        while (value >= 0x80)
         {
-            return (int)trait.Value.AsNumber();
+            Append((byte)(value | 0x80));
+            value >>= 7;
         }
 
-        if (memberId.Namespace == FrameworkNamespace)
-        {
-            return ordinal + 1;
-        }
-
-        throw new InvalidOperationException(
-            $"Proto codec requires every member to carry an @protoIndex trait; '{memberId}' has none."
-        );
+        Append((byte)value);
     }
 
-    private static long DecodeZigZag(ulong value) => (long)(value >> 1) ^ -(long)(value & 1);
-
-    internal static Schema Unwrap(Schema schema)
+    public void WriteFixed32(uint value)
     {
-        var resolved = schema.Resolved;
-        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
+        Span<byte> tmp = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(tmp, value);
+        Append(tmp);
+    }
+
+    public void WriteFixed64(ulong value)
+    {
+        Span<byte> tmp = stackalloc byte[8];
+        BinaryPrimitives.WriteUInt64LittleEndian(tmp, value);
+        Append(tmp);
+    }
+
+    public void WriteLengthDelimited(ReadOnlySpan<byte> value)
+    {
+        WriteVarint((ulong)value.Length);
+        Append(value);
+    }
+
+    public void WriteLengthDelimitedUtf8(string value)
+    {
+        var byteCount = Encoding.UTF8.GetByteCount(value);
+        WriteVarint((ulong)byteCount);
+        EnsureCapacity(byteCount);
+        length += Encoding.UTF8.GetBytes(value, buffer.AsSpan(length, byteCount));
+    }
+
+    public int BeginLengthDelimited()
+    {
+        var prefixOffset = length;
+        Append(0);
+        return prefixOffset;
+    }
+
+    public void EndLengthDelimited(int prefixOffset)
+    {
+        if ((uint)prefixOffset >= (uint)length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(prefixOffset));
+        }
+
+        var valueLength = length - prefixOffset - 1;
+        var prefixLength = VarintLength((ulong)valueLength);
+        if (prefixLength > 1)
+        {
+            var shift = prefixLength - 1;
+            EnsureCapacity(shift);
+            buffer
+                .AsSpan(prefixOffset + 1, valueLength)
+                .CopyTo(buffer.AsSpan(prefixOffset + prefixLength));
+            length += shift;
+        }
+
+        WriteVarintAt(prefixOffset, (ulong)valueLength);
+    }
+
+    public void Rewind(int position)
+    {
+        if ((uint)position > (uint)length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(position));
+        }
+
+        length = position;
+    }
+
+    public void Dispose()
+    {
+        var rented = buffer;
+        buffer = [];
+        length = 0;
+        if (rented.Length != 0)
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    public void Reset(int initialCapacity)
+    {
+        if (buffer.Length != 0)
+        {
+            throw new InvalidOperationException("Proto writer is already in use.");
+        }
+
+        buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
+    }
+
+    private static int VarintLength(ulong value)
+    {
+        var result = 1;
+        while (value >= 0x80)
+        {
+            result++;
+            value >>= 7;
+        }
+
+        return result;
+    }
+
+    private void Append(byte value)
+    {
+        EnsureCapacity(1);
+        buffer[length++] = value;
+    }
+
+    private void Append(ReadOnlySpan<byte> value)
+    {
+        EnsureCapacity(value.Length);
+        value.CopyTo(buffer.AsSpan(length));
+        length += value.Length;
+    }
+
+    private void EnsureCapacity(int extra)
+    {
+        ObjectDisposedException.ThrowIf(buffer.Length == 0, this);
+
+        if (length + extra <= buffer.Length)
+        {
+            return;
+        }
+
+        var capacity = buffer.Length * 2;
+        while (capacity < length + extra)
+        {
+            capacity *= 2;
+        }
+
+        var replacement = ArrayPool<byte>.Shared.Rent(capacity);
+        buffer.AsSpan(0, length).CopyTo(replacement);
+        ArrayPool<byte>.Shared.Return(buffer);
+        buffer = replacement;
+    }
+
+    private void WriteVarintAt(int offset, ulong value)
+    {
+        while (value >= 0x80)
+        {
+            buffer[offset++] = (byte)(value | 0x80);
+            value >>= 7;
+        }
+
+        buffer[offset] = (byte)value;
     }
 }

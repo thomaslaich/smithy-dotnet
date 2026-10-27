@@ -76,13 +76,6 @@ public sealed partial class ReportSmithyCliDiagnostics : MsBuildTask
         return false;
     }
 
-    private IReadOnlyList<SmithyValidationEvent> ReadValidationEvents()
-    {
-        if (string.IsNullOrEmpty(ValidationEventsFile) || !File.Exists(ValidationEventsFile))
-            return [];
-        return SmithyValidationEvents.ParseCsv(File.ReadAllText(ValidationEventsFile));
-    }
-
     private static string FormatMessage(SmithyValidationEvent error)
     {
         var message = error.Message;
@@ -93,6 +86,16 @@ public sealed partial class ReportSmithyCliDiagnostics : MsBuildTask
         return message;
     }
 
+    [GeneratedRegex(@"\x1B\[[0-9;?]*[A-Za-z]")]
+    private static partial Regex AnsiPattern();
+
+    private IReadOnlyList<SmithyValidationEvent> ReadValidationEvents()
+    {
+        if (string.IsNullOrEmpty(ValidationEventsFile) || !File.Exists(ValidationEventsFile))
+            return [];
+        return SmithyValidationEvents.ParseCsv(File.ReadAllText(ValidationEventsFile));
+    }
+
     private string? ResolvePath(string? path)
     {
         // Models loaded from JARs are reported as jar:file:...!/... URLs; keep those verbatim.
@@ -100,7 +103,4 @@ public sealed partial class ReportSmithyCliDiagnostics : MsBuildTask
             return path;
         return Path.GetFullPath(Path.Combine(WorkingDirectory, path));
     }
-
-    [GeneratedRegex(@"\x1B\[[0-9;?]*[A-Za-z]")]
-    private static partial Regex AnsiPattern();
 }

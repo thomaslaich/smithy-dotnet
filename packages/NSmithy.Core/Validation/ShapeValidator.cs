@@ -42,20 +42,6 @@ internal struct ShapeValidator : IShapeSerializer
         this.errors = errors;
     }
 
-    // A list's elements are its member 0, so they index like any other member.
-    private readonly ValidatorMemberPlan Entry(int member) =>
-        member == MemberIndex.Root ? root! : container!.Members[member];
-
-    /// <summary>The path of the value <paramref name="member"/> is written as, advancing a list's index.</summary>
-    private ValuePath PathOf(int member) =>
-        container?.Kind switch
-        {
-            null => new ValuePath(node),
-            ShapeKind.List or ShapeKind.Set => new ValuePath(node, index: index++),
-            ShapeKind.Map => new ValuePath(node, key!),
-            _ => new ValuePath(node, container.Members[member].Name),
-        };
-
     public readonly bool WritesDefault(int member) => false;
 
     public void WriteNull(int member)
@@ -111,14 +97,6 @@ internal struct ShapeValidator : IShapeSerializer
         );
 
     public void WriteBigDecimal(int member, decimal value) => WriteNumber(member, value);
-
-    private void WriteNumber(int member, decimal? value)
-    {
-        var entry = Entry(member);
-        var valuePath = PathOf(member);
-        entry.Member?.CheckRange(value, valuePath, errors);
-        entry.Target?.CheckRange(value, valuePath, errors);
-    }
 
     public void WriteString(int member, string value)
     {
@@ -289,15 +267,6 @@ internal struct ShapeValidator : IShapeSerializer
         }
     }
 
-    // A value with nothing to check still occupies its position in a list.
-    private void Skip(int member)
-    {
-        if (container?.Kind is ShapeKind.List or ShapeKind.Set)
-        {
-            index++;
-        }
-    }
-
     private static int Count<TItem>(IEnumerable<TItem> items) =>
         items is ICollection<TItem> collection ? collection.Count : items.Count();
 
@@ -306,4 +275,35 @@ internal struct ShapeValidator : IShapeSerializer
         : number >= DecimalUpperBound ? decimal.MaxValue
         : number <= DecimalLowerBound ? decimal.MinValue
         : (decimal)number;
+
+    // A list's elements are its member 0, so they index like any other member.
+    private readonly ValidatorMemberPlan Entry(int member) =>
+        member == MemberIndex.Root ? root! : container!.Members[member];
+
+    /// <summary>The path of the value <paramref name="member"/> is written as, advancing a list's index.</summary>
+    private ValuePath PathOf(int member) =>
+        container?.Kind switch
+        {
+            null => new ValuePath(node),
+            ShapeKind.List or ShapeKind.Set => new ValuePath(node, index: index++),
+            ShapeKind.Map => new ValuePath(node, key!),
+            _ => new ValuePath(node, container.Members[member].Name),
+        };
+
+    private void WriteNumber(int member, decimal? value)
+    {
+        var entry = Entry(member);
+        var valuePath = PathOf(member);
+        entry.Member?.CheckRange(value, valuePath, errors);
+        entry.Target?.CheckRange(value, valuePath, errors);
+    }
+
+    // A value with nothing to check still occupies its position in a list.
+    private void Skip(int member)
+    {
+        if (container?.Kind is ShapeKind.List or ShapeKind.Set)
+        {
+            index++;
+        }
+    }
 }

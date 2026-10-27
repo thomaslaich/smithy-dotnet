@@ -193,17 +193,6 @@ public sealed class BenchmarkController : ControllerBase
         };
     }
 
-    /// <summary>Renders the ValidationException exactly as restJson1 puts it on the wire.</summary>
-    private JsonResult Invalid(List<ValidationExceptionField> failures)
-    {
-        Response.Headers["X-Amzn-Errortype"] = "ValidationException";
-        return new JsonResult(BenchValidation.Build(failures))
-        {
-            StatusCode = StatusCodes.Status400BadRequest,
-            ContentType = Json,
-        };
-    }
-
     private static ItemSummaryDto[] ToSummaries(ArraySegment<BenchItem> items)
     {
         var summaries = new ItemSummaryDto[items.Count];
@@ -222,5 +211,16 @@ public sealed class BenchmarkController : ControllerBase
         }
 
         return summaries;
+    }
+
+    /// <summary>Renders the ValidationException exactly as restJson1 puts it on the wire.</summary>
+    private JsonResult Invalid(List<ValidationExceptionField> failures)
+    {
+        Response.Headers["X-Amzn-Errortype"] = "ValidationException";
+        return new JsonResult(BenchValidation.Build(failures))
+        {
+            StatusCode = StatusCodes.Status400BadRequest,
+            ContentType = Json,
+        };
     }
 }

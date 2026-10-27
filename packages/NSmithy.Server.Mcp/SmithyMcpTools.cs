@@ -11,6 +11,13 @@ using NSmithy.Server;
 
 namespace NSmithy.Server.Mcp;
 
+internal interface IBoxedJsonCodec
+{
+    object Deserialize(byte[] payload);
+
+    byte[] Serialize(object? value);
+}
+
 /// <summary>Creates MCP tools from a generated service operation catalog.</summary>
 public static class SmithyMcpTools
 {
@@ -48,6 +55,40 @@ public static class SmithyMcpTools
         }
 
         return new ReadOnlyCollection<McpServerTool>(tools);
+    }
+}
+
+internal static class BoxedJsonCodec
+{
+    /// <summary>Compiles the codecs for an operation's input and output.</summary>
+    public sealed class Compiler
+        : IOperationSchemaVisitor<(IBoxedJsonCodec Input, IBoxedJsonCodec Output)>
+    {
+        public static Compiler Instance { get; } = new();
+
+        public (IBoxedJsonCodec Input, IBoxedJsonCodec Output) Visit<TInput, TOutput>(
+            OperationSchema<TInput, TOutput> schema
+        ) => (new JsonCodec<TInput>(schema.Input), new JsonCodec<TOutput>(schema.Output));
+    }
+
+    private sealed class JsonCodec<T>(Schema<T> schema) : IBoxedJsonCodec
+    {
+        private readonly ICodec<T> codec = JsonCodecFactory.Strict.FromSchema(schema);
+
+        public object Deserialize(byte[] payload) => codec.Deserialize(payload)!;
+
+        public byte[] Serialize(object? value)
+        {
+            if (value is not T && (value is not null || default(T) is not null))
+            {
+                throw new ArgumentException(
+                    $"Expected a value assignable to '{typeof(T).FullName}'.",
+                    nameof(value)
+                );
+            }
+
+            return codec.Serialize((T)value!);
+        }
     }
 }
 
@@ -97,23 +138,6 @@ internal sealed class SmithyMcpTool : McpServerTool
     public override Tool ProtocolTool { get; }
 
     public override IReadOnlyList<object> Metadata { get; } = [];
-
-    private static JsonElement ParseSchema(string json, ShapeId operationId, bool requireObject)
-    {
-        using var document = JsonDocument.Parse(json);
-        var schema = document.RootElement;
-        if (
-            requireObject
-            && (!schema.TryGetProperty("type", out var type) || type.GetString() != "object")
-        )
-        {
-            throw new NotSupportedException(
-                $"MCP tool input for operation '{operationId}' must be a JSON object schema."
-            );
-        }
-
-        return schema.Clone();
-    }
 
     public override async ValueTask<CallToolResult> InvokeAsync(
         RequestContext<CallToolRequestParams> request,
@@ -168,10 +192,21 @@ internal sealed class SmithyMcpTool : McpServerTool
         };
     }
 
-    private bool IsModeledError(Exception exception)
+    private static JsonElement ParseSchema(string json, ShapeId operationId, bool requireObject)
     {
-        var matcher = new OperationErrorMatcher(exception);
-        return operation.Schema.Errors.Any(error => error.Accept(matcher));
+        using var document = JsonDocument.Parse(json);
+        var schema = document.RootElement;
+        if (
+            requireObject
+            && (!schema.TryGetProperty("type", out var type) || type.GetString() != "object")
+        )
+        {
+            throw new NotSupportedException(
+                $"MCP tool input for operation '{operationId}' must be a JSON object schema."
+            );
+        }
+
+        return schema.Clone();
     }
 
     private static byte[] WriteArguments(IDictionary<string, JsonElement>? arguments)
@@ -198,52 +233,17 @@ internal sealed class SmithyMcpTool : McpServerTool
     private static CallToolResult Error(string message) =>
         new() { Content = [new TextContentBlock { Text = message }], IsError = true };
 
+    private bool IsModeledError(Exception exception)
+    {
+        var matcher = new OperationErrorMatcher(exception);
+        return operation.Schema.Errors.Any(error => error.Accept(matcher));
+    }
+
     private sealed class OperationErrorMatcher(Exception exception)
         : IOperationErrorSchemaVisitor<bool>
     {
         public bool Visit<TError>(OperationErrorSchema<TError> schema)
             where TError : Exception => exception is TError;
-    }
-}
-
-internal interface IBoxedJsonCodec
-{
-    object Deserialize(byte[] payload);
-
-    byte[] Serialize(object? value);
-}
-
-internal static class BoxedJsonCodec
-{
-    /// <summary>Compiles the codecs for an operation's input and output.</summary>
-    public sealed class Compiler
-        : IOperationSchemaVisitor<(IBoxedJsonCodec Input, IBoxedJsonCodec Output)>
-    {
-        public static Compiler Instance { get; } = new();
-
-        public (IBoxedJsonCodec Input, IBoxedJsonCodec Output) Visit<TInput, TOutput>(
-            OperationSchema<TInput, TOutput> schema
-        ) => (new JsonCodec<TInput>(schema.Input), new JsonCodec<TOutput>(schema.Output));
-    }
-
-    private sealed class JsonCodec<T>(Schema<T> schema) : IBoxedJsonCodec
-    {
-        private readonly ICodec<T> codec = JsonCodecFactory.Strict.FromSchema(schema);
-
-        public object Deserialize(byte[] payload) => codec.Deserialize(payload)!;
-
-        public byte[] Serialize(object? value)
-        {
-            if (value is not T && (value is not null || default(T) is not null))
-            {
-                throw new ArgumentException(
-                    $"Expected a value assignable to '{typeof(T).FullName}'.",
-                    nameof(value)
-                );
-            }
-
-            return codec.Serialize((T)value!);
-        }
     }
 }
 

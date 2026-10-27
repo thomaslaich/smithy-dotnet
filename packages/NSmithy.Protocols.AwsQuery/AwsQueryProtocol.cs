@@ -41,6 +41,48 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         );
     }
 
+    private static byte[] ExtractResultPayload(
+        byte[] content,
+        string operationName,
+        QueryProtocolKind kind
+    )
+    {
+        var root = XElement.Parse(Encoding.UTF8.GetString(content));
+        if (kind == QueryProtocolKind.Ec2Query)
+        {
+            return ElementBytes(root);
+        }
+
+        var result = Child(root, operationName + "Result");
+        return result is null ? [] : ElementBytes(result);
+    }
+
+    private static XElement ExtractErrorElement(byte[] content, QueryProtocolKind kind)
+    {
+        var root = XElement.Parse(Encoding.UTF8.GetString(content));
+        var error =
+            kind == QueryProtocolKind.AwsQuery
+                ? Child(root, "Error")
+                : Child(Child(root, "Errors"), "Error");
+        return error
+            ?? throw new InvalidOperationException(
+                "Response body was missing its query error element."
+            );
+    }
+
+    private static XElement? Child(XElement? parent, string localName) =>
+        parent
+            ?.Elements()
+            .FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, localName, StringComparison.Ordinal)
+            );
+
+    private static byte[] ElementBytes(XElement element) =>
+        Encoding.UTF8.GetBytes(element.ToString(SaveOptions.DisableFormatting));
+
+    private static T CreateEmptyOutput<T>(Schema<T> schema) =>
+        schema.Resolved is IStructSchema<T> structure ? structure.BuildEmpty() : default!;
+
     private sealed class ServiceProtocol(ServiceSchema service, QueryProtocolKind kind)
         : IServiceProtocol
     {
@@ -180,14 +222,6 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         private static QueryError[] CompileErrors(IReadOnlyList<IOperationErrorSchema> schemas) =>
             schemas.Select(error => error.Accept(QueryErrorCompiler.Instance)).ToArray();
 
-        private sealed class QueryErrorCompiler : IOperationErrorSchemaVisitor<QueryError>
-        {
-            public static QueryErrorCompiler Instance { get; } = new();
-
-            public QueryError Visit<TError>(OperationErrorSchema<TError> error)
-                where TError : Exception => CompileError(error);
-        }
-
         private static QueryError CompileError<TError>(OperationErrorSchema<TError> error)
             where TError : Exception
         {
@@ -219,6 +253,14 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
             && status.Kind == DocumentKind.Number
                 ? (int)status.AsNumber()
                 : null;
+
+        private sealed class QueryErrorCompiler : IOperationErrorSchemaVisitor<QueryError>
+        {
+            public static QueryErrorCompiler Instance { get; } = new();
+
+            public QueryError Visit<TError>(OperationErrorSchema<TError> error)
+                where TError : Exception => CompileError(error);
+        }
     }
 
     private sealed record QueryError(
@@ -227,46 +269,4 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         int HttpStatusCode,
         Func<XElement, Exception> Deserialize
     );
-
-    private static byte[] ExtractResultPayload(
-        byte[] content,
-        string operationName,
-        QueryProtocolKind kind
-    )
-    {
-        var root = XElement.Parse(Encoding.UTF8.GetString(content));
-        if (kind == QueryProtocolKind.Ec2Query)
-        {
-            return ElementBytes(root);
-        }
-
-        var result = Child(root, operationName + "Result");
-        return result is null ? [] : ElementBytes(result);
-    }
-
-    private static XElement ExtractErrorElement(byte[] content, QueryProtocolKind kind)
-    {
-        var root = XElement.Parse(Encoding.UTF8.GetString(content));
-        var error =
-            kind == QueryProtocolKind.AwsQuery
-                ? Child(root, "Error")
-                : Child(Child(root, "Errors"), "Error");
-        return error
-            ?? throw new InvalidOperationException(
-                "Response body was missing its query error element."
-            );
-    }
-
-    private static XElement? Child(XElement? parent, string localName) =>
-        parent
-            ?.Elements()
-            .FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, localName, StringComparison.Ordinal)
-            );
-
-    private static byte[] ElementBytes(XElement element) =>
-        Encoding.UTF8.GetBytes(element.ToString(SaveOptions.DisableFormatting));
-
-    private static T CreateEmptyOutput<T>(Schema<T> schema) =>
-        schema.Resolved is IStructSchema<T> structure ? structure.BuildEmpty() : default!;
 }

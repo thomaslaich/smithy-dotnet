@@ -60,25 +60,6 @@ public static class SmithyRequestModifiers
         return operation.HasTrait(RequestCompressionTraitId);
     }
 
-    private static string? RequestCompressionEncoding(Trait? trait)
-    {
-        if (trait is not { } compression || compression.Value.Kind != DocumentKind.Object)
-        {
-            return null;
-        }
-
-        if (
-            !compression.Value.AsObject().TryGetValue("encodings", out var encodings)
-            || encodings.Kind != DocumentKind.Array
-        )
-        {
-            return null;
-        }
-
-        var values = encodings.AsArray();
-        return values.Count > 0 ? values[0].AsString() : null;
-    }
-
     public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -142,6 +123,25 @@ public static class SmithyRequestModifiers
         [
             Convert.ToBase64String(MD5.HashData(bytes.Content)),
         ];
+    }
+
+    private static string? RequestCompressionEncoding(Trait? trait)
+    {
+        if (trait is not { } compression || compression.Value.Kind != DocumentKind.Object)
+        {
+            return null;
+        }
+
+        if (
+            !compression.Value.AsObject().TryGetValue("encodings", out var encodings)
+            || encodings.Kind != DocumentKind.Array
+        )
+        {
+            return null;
+        }
+
+        var values = encodings.AsArray();
+        return values.Count > 0 ? values[0].AsString() : null;
     }
 #pragma warning restore CA5351
 

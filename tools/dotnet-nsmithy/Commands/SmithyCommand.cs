@@ -44,6 +44,46 @@ internal static class SmithyCommand
         return command;
     }
 
+    internal static string DiscoverProject(string directory)
+    {
+        var projects = Directory.GetFiles(directory, "*.csproj");
+        return projects.Length == 1
+            ? projects[0]
+            : throw new InvalidOperationException(
+                "Specify --project <project.csproj>; the current directory must otherwise contain exactly one .csproj."
+            );
+    }
+
+    internal static ResolvedCli ParseProperties(string json, string project)
+    {
+        // The JSON follows any restore output, which -verbosity:quiet keeps to errors.
+        var start = json.IndexOf('{', StringComparison.Ordinal);
+        if (start < 0)
+            throw new InvalidOperationException($"MSBuild returned no properties for {project}.");
+        using var document = JsonDocument.Parse(json[start..]);
+        var properties = document.RootElement.GetProperty("Properties");
+        string Get(string name) =>
+            properties.TryGetProperty(name, out var value) ? value.GetString() ?? "" : "";
+
+        var path = Get("SmithyCliPath");
+        if (path.Length == 0)
+            throw new InvalidOperationException(
+                $"{project} does not use NSmithy: it defines no SmithyCliPath."
+            );
+
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (
+            var pair in Get("NSmithySmithyCliEnvironment")
+                .Split(';', StringSplitOptions.RemoveEmptyEntries)
+        )
+        {
+            var separator = pair.IndexOf('=', StringComparison.Ordinal);
+            if (separator > 0)
+                environment[pair[..separator]] = pair[(separator + 1)..];
+        }
+        return new ResolvedCli(path, Get("_SmithyCliFromPackage") == "true", environment);
+    }
+
     private static async Task<int> ExecuteAsync(
         FileInfo? projectFile,
         string[] smithyArguments,
@@ -82,22 +122,6 @@ internal static class SmithyCommand
             return 1;
         }
     }
-
-    internal static string DiscoverProject(string directory)
-    {
-        var projects = Directory.GetFiles(directory, "*.csproj");
-        return projects.Length == 1
-            ? projects[0]
-            : throw new InvalidOperationException(
-                "Specify --project <project.csproj>; the current directory must otherwise contain exactly one .csproj."
-            );
-    }
-
-    internal sealed record ResolvedCli(
-        string Path,
-        bool FromPackage,
-        IReadOnlyDictionary<string, string> Environment
-    );
 
     // -restore first, so a referenced NSmithy.SmithyCli package is in place before the project
     // resolves the CLI's path from it.
@@ -139,36 +163,6 @@ internal static class SmithyCommand
         return ParseProperties(await output, project);
     }
 
-    internal static ResolvedCli ParseProperties(string json, string project)
-    {
-        // The JSON follows any restore output, which -verbosity:quiet keeps to errors.
-        var start = json.IndexOf('{', StringComparison.Ordinal);
-        if (start < 0)
-            throw new InvalidOperationException($"MSBuild returned no properties for {project}.");
-        using var document = JsonDocument.Parse(json[start..]);
-        var properties = document.RootElement.GetProperty("Properties");
-        string Get(string name) =>
-            properties.TryGetProperty(name, out var value) ? value.GetString() ?? "" : "";
-
-        var path = Get("SmithyCliPath");
-        if (path.Length == 0)
-            throw new InvalidOperationException(
-                $"{project} does not use NSmithy: it defines no SmithyCliPath."
-            );
-
-        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (
-            var pair in Get("NSmithySmithyCliEnvironment")
-                .Split(';', StringSplitOptions.RemoveEmptyEntries)
-        )
-        {
-            var separator = pair.IndexOf('=', StringComparison.Ordinal);
-            if (separator > 0)
-                environment[pair[..separator]] = pair[(separator + 1)..];
-        }
-        return new ResolvedCli(path, Get("_SmithyCliFromPackage") == "true", environment);
-    }
-
     private static ProcessStartInfo CreateStartInfo(ResolvedCli cli, string[] arguments)
     {
         // NuGet does not keep the executable bit; the build sets it the same way.
@@ -192,4 +186,10 @@ internal static class SmithyCommand
             start.Environment[name] = value;
         return start;
     }
+
+    internal sealed record ResolvedCli(
+        string Path,
+        bool FromPackage,
+        IReadOnlyDictionary<string, string> Environment
+    );
 }

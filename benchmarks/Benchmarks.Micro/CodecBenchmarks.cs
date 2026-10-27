@@ -321,12 +321,6 @@ public class SerializationExecutionBenchmarks : IDisposable
         return destination.WrittenCount;
     }
 
-    private void ResetWriter()
-    {
-        destination.Clear();
-        writer.Reset(destination);
-    }
-
     private static void WriteHandwritten(Utf8JsonWriter writer, ListItemsOutput value)
     {
         writer.WriteStartObject();
@@ -359,6 +353,12 @@ public class SerializationExecutionBenchmarks : IDisposable
         }
         writer.WriteEndArray();
         writer.WriteEndObject();
+    }
+
+    private void ResetWriter()
+    {
+        destination.Clear();
+        writer.Reset(destination);
     }
 }
 

@@ -30,22 +30,6 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
         CancellationToken cancellationToken = default
     ) => Task.FromResult(new WatchRoomOutput(WatchRoomEventsAsync(input, cancellationToken)));
 
-    private static async IAsyncEnumerable<ChatEvent> WatchRoomEventsAsync(
-        WatchRoomInput input,
-        [System.Runtime.CompilerServices.EnumeratorCancellation]
-            CancellationToken cancellationToken = default
-    )
-    {
-        for (var i = 1; i <= 3; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await Task.Delay(25, cancellationToken);
-            yield return ChatEvent.FromMessage(
-                new MessageEvent(User: "server", Text: $"{input.Room}: update {i}")
-            );
-        }
-    }
-
     public async Task<UploadTranscriptOutput> UploadTranscriptAsync(
         UploadTranscriptInput input,
         CancellationToken cancellationToken = default
@@ -80,6 +64,22 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
             )
         );
 
+    private static async IAsyncEnumerable<ChatEvent> WatchRoomEventsAsync(
+        WatchRoomInput input,
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+            CancellationToken cancellationToken = default
+    )
+    {
+        for (var i = 1; i <= 3; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(25, cancellationToken);
+            yield return ChatEvent.FromMessage(
+                new MessageEvent(User: "server", Text: $"{input.Room}: update {i}")
+            );
+        }
+    }
+
     private static async IAsyncEnumerable<ChatEvent> EmptyEvents(
         [System.Runtime.CompilerServices.EnumeratorCancellation]
             CancellationToken cancellationToken = default
@@ -87,36 +87,6 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
     {
         await Task.CompletedTask.ConfigureAwait(false);
         yield break;
-    }
-
-    private async IAsyncEnumerable<ChatEvent> ChatEventsAsync(
-        string roomName,
-        IAsyncEnumerable<ChatEvent> events,
-        [System.Runtime.CompilerServices.EnumeratorCancellation]
-            CancellationToken cancellationToken = default
-    )
-    {
-        var fallbackUser = $"user-{Guid.NewGuid():N}"[..13];
-        var room = rooms.Join(roomName);
-        var inbound = Task.Run(
-            () => PublishIncomingMessagesAsync(events, room, fallbackUser, cancellationToken),
-            cancellationToken
-        );
-
-        try
-        {
-            room.Publish(new MessageEvent(User: "server", Text: $"{fallbackUser} joined"));
-            await foreach (var message in room.ReadAllAsync(cancellationToken))
-            {
-                yield return ChatEvent.FromMessage(message);
-            }
-        }
-        finally
-        {
-            room.Publish(new MessageEvent(User: "server", Text: $"{fallbackUser} left"));
-            room.Leave();
-            await WaitForInboundAsync(inbound).ConfigureAwait(false);
-        }
     }
 
     private static async Task PublishIncomingMessagesAsync(
@@ -150,6 +120,36 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
         }
         catch (OperationCanceledException) { }
         catch (IOException) { }
+    }
+
+    private async IAsyncEnumerable<ChatEvent> ChatEventsAsync(
+        string roomName,
+        IAsyncEnumerable<ChatEvent> events,
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+            CancellationToken cancellationToken = default
+    )
+    {
+        var fallbackUser = $"user-{Guid.NewGuid():N}"[..13];
+        var room = rooms.Join(roomName);
+        var inbound = Task.Run(
+            () => PublishIncomingMessagesAsync(events, room, fallbackUser, cancellationToken),
+            cancellationToken
+        );
+
+        try
+        {
+            room.Publish(new MessageEvent(User: "server", Text: $"{fallbackUser} joined"));
+            await foreach (var message in room.ReadAllAsync(cancellationToken))
+            {
+                yield return ChatEvent.FromMessage(message);
+            }
+        }
+        finally
+        {
+            room.Publish(new MessageEvent(User: "server", Text: $"{fallbackUser} left"));
+            room.Leave();
+            await WaitForInboundAsync(inbound).ConfigureAwait(false);
+        }
     }
 }
 

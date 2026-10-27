@@ -16,10 +16,6 @@ public static class SmithyClientTelemetry
 
     public const string MeterName = "NSmithy.Client";
 
-    private static readonly string? Version = typeof(SmithyClientTelemetry)
-        .Assembly.GetName()
-        .Version?.ToString();
-
     internal static readonly ActivitySource ActivitySource = new(ActivitySourceName, Version);
 
     internal static readonly Meter Meter = new(MeterName, Version);
@@ -44,4 +40,8 @@ public static class SmithyClientTelemetry
         unit: "s",
         description: "End-to-end operation duration, spanning all attempts and backoff."
     );
+
+    private static readonly string? Version = typeof(SmithyClientTelemetry)
+        .Assembly.GetName()
+        .Version?.ToString();
 }

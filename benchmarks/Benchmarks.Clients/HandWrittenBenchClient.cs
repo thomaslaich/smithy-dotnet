@@ -207,6 +207,12 @@ public sealed class HandWrittenBenchClient : IBenchClient
             : new BenchOrderResult(payload.OrderId, payload.TotalCents, payload.LineCount);
     }
 
+    public ValueTask DisposeAsync()
+    {
+        httpClient.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
     private static AddressDto? ToAddress(BenchAddress? address) =>
         address is null
             ? null
@@ -260,11 +266,5 @@ public sealed class HandWrittenBenchClient : IBenchClient
         query.Append(first ? '?' : '&').Append(name).Append('=');
         query.Append(v.ToString(CultureInfo.InvariantCulture));
         first = false;
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        httpClient.Dispose();
-        return ValueTask.CompletedTask;
     }
 }
