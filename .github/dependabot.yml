@@ -25,6 +25,12 @@ updates:
       # Pinned to the MSBuild of the oldest supported SDK; newer versions target newer .NET.
       - dependency-name: Microsoft.Build.*
         update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      # Dependencies of the published packages: their version is every consumer's minimum, so it
+      # rises by hand, for a feature, a fix or a security advisory.
+      - dependency-name: ModelContextProtocol
+      - dependency-name: Scalar.AspNetCore
+      - dependency-name: System.Formats.Cbor
+      - dependency-name: System.IO.Hashing
     groups:
       nuget:
         patterns: ['*']

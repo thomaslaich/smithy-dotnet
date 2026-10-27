@@ -25,6 +25,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Generated configurations of AWS services whose endpoint rules read `AWS::Region` default
   `Region` to it.
 
+### Changed
+
+- The published packages require the lowest dependency versions they work with:
+  `System.Formats.Cbor` and `System.IO.Hashing` 10.0.0 and `Scalar.AspNetCore` 2.11.3.
+
 ### Removed
 
 - **BREAKING:** `AwsSigV4Interceptor`, a leftover from before auth schemes. Use
