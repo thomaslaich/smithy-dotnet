@@ -342,6 +342,12 @@ They may also be `ref struct`s, so an implementation can hold a span or a
 `Utf8JsonReader` directly; they are always passed by `ref`, never copied or
 boxed.
 
+The JSON deserializer is one. It reads forward-only off a `Utf8JsonReader`
+without building a document first. A `ref` field cannot refer to a `ref struct`,
+so one deserializer owns the reader for the whole payload, and a nested value is
+read through the same instance (`ref this`) with the plan of its member swapped
+in. A union looks ahead on a copy of the reader, which is a cheap value copy.
+
 Collections and unions use the same calls. A list element is member 0 of the
 list, a map key and value are members 0 and 1, and a union writes its one case
 under the case's index:
