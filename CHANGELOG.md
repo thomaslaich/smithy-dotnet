@@ -30,6 +30,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - The JSON codec reads a payload forward-only with `Utf8JsonReader` instead of parsing it into a
   `JsonDocument` first, which makes reading about a third faster.
 
+### Fixed
+
+- A waiter whose last delay came to under a millisecond never stopped on a test clock such as
+  `FakeTimeProvider`: `Task.Delay` takes such a delay as none and completes without consulting the
+  clock. Delays are now rounded up to whole milliseconds.
+
 ### Removed
 
 - **BREAKING:** `AwsSigV4Interceptor`, a leftover from before auth schemes. Use

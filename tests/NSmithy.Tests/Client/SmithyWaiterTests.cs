@@ -96,7 +96,9 @@ public sealed class SmithyWaiterTests
         );
 
         Assert.Equal(MinDelay, time.Delays[0]);
-        Assert.All(time.Delays, delay => Assert.InRange(delay, MinDelay, MaxDelay));
+        // The last delay is cut short so the minimum delay remains, and may be shorter than it.
+        Assert.All(time.Delays[..^1], delay => Assert.InRange(delay, MinDelay, MaxDelay));
+        Assert.InRange(time.Delays[^1], TimeSpan.FromTicks(1), MaxDelay);
         // Attempt n waits at most minDelay * 2^(n-1), until that passes maxDelay.
         for (var i = 0; i < 6; i++)
         {
@@ -120,6 +122,32 @@ public sealed class SmithyWaiterTests
         // No delay runs past the point where less than the minimum delay remains.
         Assert.True(time.Elapsed <= TimeSpan.FromSeconds(30) - MinDelay, $"{time.Elapsed}");
         Assert.Equal(time.Delays.Count + 1, error.Attempts);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(999)]
+    [InlineData(9_999)]
+    [InlineData(10_000)]
+    [InlineData(25_000)]
+    public async Task AFractionalLastDelayStillWaitsOnTheClock(long ticks)
+    {
+        // A wait time just over the minimum delay leaves a final delay of a few ticks, which
+        // Task.Delay alone would take as no delay and so never advance a test clock. Started on
+        // the thread pool so a wait that never yields fails instead of hanging.
+        var time = new RecordingTimeProvider();
+        var wait = Task.Run(() =>
+            Wait(Forever("creating"), time, MinDelay + TimeSpan.FromTicks(ticks))
+        );
+
+        await Assert.ThrowsAsync<SmithyWaiterTimeoutException>(() =>
+            wait.WaitAsync(TimeSpan.FromSeconds(5))
+        );
+        // Rounded up to a whole millisecond, which leaves less than the minimum delay.
+        var expected = TimeSpan.FromMilliseconds(
+            Math.Ceiling((double)ticks / TimeSpan.TicksPerMillisecond)
+        );
+        Assert.Equal(expected, Assert.Single(time.Delays));
     }
 
     [Fact]
