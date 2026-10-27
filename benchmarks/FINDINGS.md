@@ -23,36 +23,32 @@ conclusion.
 
 ## Open performance problems
 
-### 1. Full JSON serialization is 1.08–1.33× slower than System.Text.Json with PGO
+### 1. Full JSON serialization is 1.10–1.19× slower than System.Text.Json
 
-`MEASURED`, codec suite. Generated structures now supply statically typed values
-through `IStructValueSerializer<T>` while `JsonCodec.FromSchema(schema)` remains
-the public entry point. This removes `member.GetValue(container)` and the
-per-structure member-writer loop from generated shapes without generating any
-JSON-specific code. The JSON writer also indexes `IReadOnlyList<T>` values
-directly instead of allocating an `IEnumerator<T>` for every generated list, and
-reuses the pooled-buffer wrapper between calls.
+`MEASURED`, codec suite, PGO enabled. The serializer is typed by what it writes
+into (the top-level value, a structure's members, a union's case, a list's
+elements, or a map's entries), so every check on its container compiles away,
+and a structure member writes its name and value in one `Utf8JsonWriter` call.
+Generated structures supply statically typed values, and lists are indexed
+rather than enumerated.
 
-| Items | PGO disabled | PGO enabled | Execution only, PGO enabled |
+| Items | Full codec | Execution only | Hand-written, execution only |
 | --- | --- | --- | --- |
-| 1 | 1.42× | 1.33× | 1.15× |
-| 100 | 1.45× | 1.25× | 1.16× |
-| 10,000 | 1.23× | **1.08×** | **1.14×** |
+| 1 | 1.19× | **0.99×** | 0.97× |
+| 100 | 1.14× | 1.06× | 1.01× |
+| 10,000 | **1.10×** | 1.06× | 1.01× |
 
-The execution-only column reuses the writer and destination buffer. The gap
-between it and the full-codec column is therefore setup and output handling, not
-member dispatch. A hand-written writer using the same reusable benchmark harness
-lands at 0.98×/0.99×/0.99×, establishing that the remaining execution gap is in
-the schema-driven writer stack rather than `Utf8JsonWriter` itself.
+The execution-only columns reuse the writer and destination buffer, so the gap
+between them and the full codec is setup and the copy into the returned array,
+not member dispatch. Of the 6% that remains in execution, about 0.75 µs per 100
+items is generic virtual dispatch: each item costs about four calls to
+`Schema<T>.Write<TSerializer>`, `SerializeMembers` and `SerializeElements`, each
+about 1.75 ns dearer than a plain virtual call on this machine. Removing it would
+take generated schemas that call each other directly rather than through the
+schema base types.
 
-The original 1.1× target is now reached end to end for the large payload. NSmithy
-also allocates less than the STJ baseline at every size: 0.87× for one item,
-0.82× for 100, and 0.70× for 10,000. The execution-only schema path no longer
-allocates for list traversal, while preserving the enumerable fallback for sets
-and custom collection schemas. Further improvement should be profiler-led;
-per-member codec dispatch is the likely remaining scalable cost and may require
-more specialized generated code, while startup expression compilation would be a
-poor NativeAOT trade.
+NSmithy allocates less than the STJ baseline at every size: 0.87× for one item
+and 0.82× for 100 and 10,000.
 
 ### 2. The client pays fixed per-call overhead that dominates small calls
 

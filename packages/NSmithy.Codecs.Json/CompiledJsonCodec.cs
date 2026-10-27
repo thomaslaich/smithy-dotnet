@@ -25,7 +25,7 @@ internal sealed class CompiledJsonCodec<T>(
         var writer = JsonWriterCache.Rent(buffer);
         try
         {
-            var serializer = new JsonShapeSerializer(writer, root, materializeTopLevelDefaults);
+            var serializer = JsonShapeSerializer.ForRoot(writer, root, materializeTopLevelDefaults);
             schema.Write(MemberIndex.Root, value, ref serializer);
             writer.Flush();
             sizeHint = buffer.WrittenCount;
