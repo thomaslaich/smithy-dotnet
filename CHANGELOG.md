@@ -29,6 +29,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - The JSON codec reads a payload forward-only with `Utf8JsonReader` instead of parsing it into a
   `JsonDocument` first, which makes reading about a third faster.
+- The server reads a modeled error an `async` handler raises off the handler's task instead of
+  awaiting the task, which threw the error a second time. Such an error response is about 20%
+  faster.
 - The published packages require the lowest dependency versions they work with:
   `System.Formats.Cbor` and `System.IO.Hashing` 10.0.0 and `Scalar.AspNetCore` 2.11.3.
 
