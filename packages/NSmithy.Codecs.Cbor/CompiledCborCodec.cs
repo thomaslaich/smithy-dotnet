@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Formats.Cbor;
 using NSmithy.Core.Serde;
 
@@ -16,14 +17,34 @@ internal sealed class CompiledCborCodec<T>(
         var writer = CborWriterCache.Rent();
         try
         {
-            var serializer = new CborShapeSerializer(writer, root, materializeTopLevelDefaults);
-            schema.Write(MemberIndex.Root, value, ref serializer);
+            Write(writer, value);
             return writer.Encode();
         }
         finally
         {
             CborWriterCache.Return(writer);
         }
+    }
+
+    public void Serialize(T value, IBufferWriter<byte> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        var writer = CborWriterCache.Rent();
+        try
+        {
+            Write(writer, value);
+            destination.Advance(writer.Encode(destination.GetSpan(writer.BytesWritten)));
+        }
+        finally
+        {
+            CborWriterCache.Return(writer);
+        }
+    }
+
+    private void Write(CborWriter writer, T value)
+    {
+        var serializer = new CborShapeSerializer(writer, root, materializeTopLevelDefaults);
+        schema.Write(MemberIndex.Root, value, ref serializer);
     }
 
     public T Deserialize(byte[] payload)

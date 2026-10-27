@@ -44,7 +44,10 @@ public static class SmithyAspNetCoreHost
         var response = await runtime
             .DispatchAsync(protocol, request, handler, cancellationToken)
             .ConfigureAwait(false);
-        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+        using (response)
+        {
+            await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -93,7 +96,10 @@ public static class SmithyAspNetCoreHost
                 cancellationToken
             )
             .ConfigureAwait(false);
-        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+        using (response)
+        {
+            await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     internal static Task WriteResponseAsync(
