@@ -51,6 +51,55 @@ public sealed class SmithyServerRuntimeTests
         Assert.Equal(200, response.StatusCode);
     }
 
+    public static TheoryData<string> ModeledErrorHandlers => ["throws", "async", "faulted"];
+
+    [Theory]
+    [MemberData(nameof(ModeledErrorHandlers))]
+    public async Task DispatchReturnsTheModeledErrorAHandlerRaises(string raising)
+    {
+        var response = await new SmithyServerRuntime().DispatchAsync(
+            Protocol(),
+            Request(new CreateUserInput("Ada")),
+            Raise<CreateUserOutput>(raising, new UserExists("Ada exists."))
+        );
+
+        Assert.Equal(409, response.StatusCode);
+        Assert.Equal("UserExists", response.Headers["X-Amzn-Errortype"].Single());
+        Assert.Contains("Ada exists.", await ReadBodyAsync(response), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(ModeledErrorHandlers))]
+    public async Task DispatchRethrowsAnUnmodeledExceptionAHandlerRaises(string raising)
+    {
+        var unmodeled = new InvalidOperationException("Broken.");
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new SmithyServerRuntime().DispatchAsync(
+                Protocol(),
+                Request(new CreateUserInput("Ada")),
+                Raise<CreateUserOutput>(raising, unmodeled)
+            )
+        );
+
+        Assert.Same(unmodeled, thrown);
+    }
+
+    [Fact]
+    public async Task DispatchRethrowsACanceledHandler()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new SmithyServerRuntime().DispatchAsync(
+                Protocol(),
+                Request(new CreateUserInput("Ada")),
+                (_, _) => Task.FromCanceled<CreateUserOutput>(cancellation.Token)
+            )
+        );
+    }
+
     [Fact]
     public void OperationSchemaCarriesImplicitValidationError()
     {
@@ -104,6 +153,23 @@ public sealed class SmithyServerRuntimeTests
         var body = await ReadBodyAsync(response);
         Assert.Contains("/name", body, StringComparison.Ordinal);
     }
+
+    // The three ways a handler raises: throwing before it returns a task, throwing inside an async
+    // method, and returning a faulted task.
+    private static Func<CreateUserInput, CancellationToken, Task<T>> Raise<T>(
+        string raising,
+        Exception exception
+    ) =>
+        raising switch
+        {
+            "throws" => (_, _) => throw exception,
+            "async" => async (_, _) =>
+            {
+                await Task.Yield();
+                throw exception;
+            },
+            _ => (_, _) => Task.FromException<T>(exception),
+        };
 
     private static IServiceProtocol Service() =>
         new RestJson1Protocol().ForService(FixturesSchema.Schema);

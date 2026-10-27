@@ -35,6 +35,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - The ASP.NET Core adapter copies request headers directly, skips a request body declared empty,
   reads a body into a pooled buffer that grows as bytes arrive, and writes a unary response in one
   call, which makes small requests 4–11% faster and allocate up to 2 KB less.
+- The server reads a modeled error an `async` handler raises off the handler's task instead of
+  awaiting the task, which threw the error a second time. Such an error response is about 20%
+  faster.
 - The published packages require the lowest dependency versions they work with:
   `System.Formats.Cbor` and `System.IO.Hashing` 10.0.0 and `Scalar.AspNetCore` 2.11.3.
 

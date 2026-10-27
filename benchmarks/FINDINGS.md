@@ -366,6 +366,28 @@ was neutral at 1.90 µs for one item and about 105 µs for 100 items.
 
 ---
 
+### 7. A modeled error costs an exception, and the server suite overstates it
+
+`MEASURED`. get-item-miss reports 3.3× the hand-written minimal API, which throws
+nothing and returns a 404. Most of that ratio is the harness. BenchmarkDotNet
+blocks on each benchmark's task, and a throw under a blocking caller costs about
+9 µs more than the same throw under an awaiting one; the success path barely
+moves. Measured in a plain loop over the same in-memory host:
+
+| get-item-miss | Awaited | Blocking, as BenchmarkDotNet calls it |
+| --- | --- | --- |
+| NSmithy | 10.5 µs | 19.5 µs |
+| minimal API | 5.6 µs | 6.4 µs |
+
+A server under Kestrel runs requests asynchronously, so the awaited column is
+the one that applies, and the real gap is about 2×. The rest splits into about
+1.9 µs every request paid in the ASP.NET host adapter, which get-item-hit (1.35×)
+showed as well and which is now mostly gone (see Fixed), and about 2 µs for the
+throw and catch. The message string and the
+exception object cost nothing measurable; stack depth above the catch adds about
+6 ns per frame. Removing the throw itself would need a way for a handler to
+return a modeled error rather than raise it.
+
 ## Fixed
 
 ### The ASP.NET Core adapter's work per request
@@ -395,6 +417,26 @@ writes a unary response, which protocols now mark with
 What remains of the gap on small requests is mostly the REST protocol's own
 per-request work: the strings and dictionaries it builds for labels, query
 parameters, and headers.
+
+### An async handler's modeled error was thrown twice
+
+`MEASURED`. An `async` handler's exception is caught into its task, and the
+dispatcher awaited that task, which threw it a second time before the protocol
+serialized it. The dispatcher now awaits with
+`ConfigureAwaitOptions.SuppressThrowing` and reads a modeled error off the task;
+anything else is still awaited, so unmodeled exceptions and cancellation
+propagate as before.
+
+| Handler raising a modeled error | Before | After |
+| --- | --- | --- |
+| `async`, before its first await | 4.32 µs | **2.07 µs** |
+| `async`, after a real await | 5.33 µs | **2.90 µs** |
+| returns `Task.FromException` | 2.49 µs | **0.18 µs** |
+| throws before returning a task | 2.04 µs | 2.09 µs |
+
+Through the in-memory host, get-item-miss with an `async` handler went from 14.0
+to 11.2 µs. The suite's own handler throws before returning a task, so its
+numbers do not move.
 
 ### Buffered responses were copied twice
 
