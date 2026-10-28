@@ -25,7 +25,6 @@ let private dish =
               Extras = []
               Blob = None
               MadeAt = None
-              Doc = None
               Big = None
               Dec = None
               Offset = 0L
@@ -37,7 +36,6 @@ let private dish =
       Extras = [ "x" ]
       Blob = Some [| 1uy; 2uy |]
       MadeAt = Some(DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero))
-      Doc = None
       Big = Some 12345678901234567890I
       Dec = Some 1.25M
       Offset = -3L
@@ -84,11 +82,10 @@ let ``Errors round-trip`` (factory: ICodecFactory) =
     Assert.Equal(5, error.RestockDays)
 
 [<Fact>]
-let ``Documents and timestamp formats reach the wire`` () =
+let ``Timestamp formats reach the wire`` () =
     let codec = JsonCodecFactory.Default.FromSchema(DishSchema.Schema)
-    let json = Encoding.UTF8.GetString(codec.Serialize { dish with Doc = Some(Document.From "doc") })
+    let json = Encoding.UTF8.GetString(codec.Serialize dish)
     Assert.Contains("\"madeAt\":\"2024-01-02T03:04:05Z\"", json)
-    Assert.Contains("\"doc\":\"doc\"", json)
     Assert.Contains("\"toString\":\"s\"", json)
 
 [<Fact>]

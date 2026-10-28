@@ -1,4 +1,4 @@
-package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
+package io.github.thomaslaich.nsmithy.codegen.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -10,7 +10,7 @@ import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.ShapeId;
 
-final class JsonSchemaGeneratorTest {
+final class JsonSchemasTest {
 
   @Test
   void generatesCanonicalDocumentSchema() {
@@ -55,7 +55,7 @@ final class JsonSchemaGeneratorTest {
             .unwrap();
 
     ObjectNode schema =
-        Node.parse(JsonSchemaGenerator.generate(model, ShapeId.from("example.weather#LookupInput")))
+        Node.parse(JsonSchemas.generate(model, ShapeId.from("example.weather#LookupInput")))
             .expectObjectNode();
 
     assertEquals(
@@ -85,5 +85,37 @@ final class JsonSchemaGeneratorTest {
     assertEquals(
         "place_name",
         schema.expectArrayMember("required").getElements().get(0).expectStringNode().getValue());
+  }
+
+  @Test
+  void aMemberNamedTypeIsAProperty() {
+    Model model =
+        Model.assembler()
+            .addUnparsedModel(
+                "kitchen.smithy",
+                """
+                $version: "2"
+                namespace example.kitchen
+
+                structure Dish {
+                    type: String
+                    properties: Integer
+                }
+                """)
+            .assemble()
+            .unwrap();
+
+    ObjectNode schema =
+        Node.parse(JsonSchemas.generate(model, ShapeId.from("example.kitchen#Dish")))
+            .expectObjectNode();
+
+    ObjectNode properties = schema.expectObjectMember("properties");
+    assertEquals(
+        "string", properties.expectObjectMember("type").expectStringMember("type").getValue());
+    assertEquals(
+        "integer",
+        properties.expectObjectMember("properties").expectStringMember("type").getValue());
+    assertFalse(properties.containsMember("additionalProperties"));
+    assertFalse(schema.expectBooleanMember("additionalProperties").getValue());
   }
 }

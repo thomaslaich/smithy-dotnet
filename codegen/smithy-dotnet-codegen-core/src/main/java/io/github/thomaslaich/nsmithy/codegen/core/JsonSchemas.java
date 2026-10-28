@@ -1,4 +1,4 @@
-package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
+package io.github.thomaslaich.nsmithy.codegen.core;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
@@ -25,11 +25,15 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 
 /** Generates the canonical JSON document representation used by NSmithy's JSON codecs. */
 @SmithyInternalApi
-final class JsonSchemaGenerator {
+public final class JsonSchemas {
 
-  private JsonSchemaGenerator() {}
+  private JsonSchemas() {}
 
-  static String generate(Model model, ShapeId rootShape) {
+  /**
+   * The JSON Schema of a shape, as NSmithy's JSON codecs read and write it, printed as a JSON
+   * document.
+   */
+  public static String generate(Model model, ShapeId rootShape) {
     Shape root = model.expectShape(rootShape);
     var closure = new Walker(model).walkShapes(root);
     ModelTransformer transformer = ModelTransformer.create();
@@ -123,8 +127,13 @@ final class JsonSchemaGenerator {
     public Node objectNode(ObjectNode node) {
       ObjectNode.Builder builder = ObjectNode.builder();
       node.getMembers().forEach((key, value) -> builder.withMember(key, value.accept(this)));
+      // A schema's "type" is a string. An object whose "type" is anything else is a properties
+      // map with a member named "type".
       boolean objectWithProperties =
-          node.getStringMember("type").map(value -> value.getValue().equals("object")).orElse(false)
+          node.getMember("type")
+                  .filter(Node::isStringNode)
+                  .map(value -> value.expectStringNode().getValue().equals("object"))
+                  .orElse(false)
               && node.containsMember("properties");
       if (objectWithProperties && !node.containsMember("additionalProperties")) {
         builder.withMember("additionalProperties", false);

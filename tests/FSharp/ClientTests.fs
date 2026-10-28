@@ -30,7 +30,10 @@ let private json (status: HttpStatusCode) (body: string) =
     response
 
 let private client (handler: StubHandler) =
-    new KitchenClient(new HttpClient(handler), KitchenClientConfig(Endpoint = Uri "http://kitchen.test"))
+    new KitchenClient(
+        new HttpClient(handler),
+        KitchenClientConfig(Endpoint = Uri "http://kitchen.test", Protocol = NSmithy.Protocols.RestJson.RestJson1Protocol())
+    )
 
 let private order =
     { Table = "7"
@@ -45,7 +48,6 @@ let private order =
           Extras = []
           Blob = None
           MadeAt = None
-          Doc = None
           Big = None
           Dec = None
           Offset = 0L
