@@ -42,8 +42,8 @@ public sealed class SmithyPooledBufferTests
     public void AdvancingPastTheSpanIsRejected()
     {
         using var buffer = new SmithyPooledBuffer();
-        var span = buffer.GetSpan();
+        var length = buffer.GetSpan().Length;
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => buffer.Advance(span.Length + 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => buffer.Advance(length + 1));
     }
 }
