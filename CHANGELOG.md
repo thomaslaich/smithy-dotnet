@@ -13,6 +13,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- `ICodec<T>` and `IProjectionCodec<T, TBuilder>` can serialize into an `IBufferWriter<byte>`.
+  The JSON, CBOR and proto codecs write into it directly; other codecs copy their array in.
+- `SmithyPooledBuffer`, a growable buffer of pooled memory, and
+  `SmithyHttpServerResponse.SingleChunk(SmithyPooledBuffer)`, a body that owns one.
+  `SmithyHttpServerResponse` is now `IDisposable` and returns that memory when disposed.
 - `DefaultAwsCredentialsProvider` covers the AWS SDKs' default chain: environment, web
   identity, shared profile, container credentials, then instance metadata. It sticks to the
   source that succeeds, and stops at a configured source that fails instead of falling through.
@@ -30,6 +35,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- The REST, RPCv2 and gRPC servers serialize a unary response body into pooled memory the
+  response owns rather than a new array, and gRPC frames it in place, which cuts what a large
+  response allocates by up to a third.
 - The JSON codec types its serializer by the container it writes into and writes a structure
   member's name and value in one call, which makes writing 5–7% faster.
 - The JSON codec reads a payload forward-only with `Utf8JsonReader` instead of parsing it into a

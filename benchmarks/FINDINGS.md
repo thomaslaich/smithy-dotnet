@@ -386,6 +386,27 @@ return a modeled error rather than raise it.
 
 ## Fixed
 
+### Every response body was serialized into an array of its own
+
+`MEASURED`, in-memory host. A server serialized each unary response body into a
+new array the size of the payload, and gRPC then copied that array again to put
+its frame header in front. Codecs now also write into an `IBufferWriter<byte>`,
+and the REST, RPCv2 and gRPC servers serialize into pooled memory that the
+response owns and the host returns after writing; gRPC reserves the frame header
+and fills it in once the payload's length is known.
+
+| Server, NSmithy | Before | After |
+| --- | --- | --- |
+| REST list-items-1 | 7.02 µs, 12.0 KB | **6.78 µs, 11.8 KB** |
+| REST list-items-100 | 35.1 µs, 60.7 KB | **34.7 µs, 46.5 KB** |
+| REST list-items-10000 | 2.61 ms, 5.02 MB | **2.58 ms, 3.58 MB** |
+| REST search-items | 17.7 µs, 20.8 KB | **16.9 µs, 19.7 KB** |
+| gRPC list-items-100 | 30.0–30.6 µs, 36.4 KB | **29.6–29.7 µs, 24.9 KB** |
+
+Time moves by 1–5%; allocation by up to 32%, and a body over 85 KB no longer
+lands on the large object heap. gRPC list-items-100 now allocates 1.04× what
+Grpc.AspNetCore does, down from 1.52×.
+
 ### The ASP.NET Core adapter's work per request
 
 `MEASURED`, steady state over the in-memory host, awaited as Kestrel runs

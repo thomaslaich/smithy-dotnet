@@ -55,6 +55,10 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
 
     internal RestStructBinding<TOutput, TOutputBuilder> Output { get; init; } = null!;
 
+    // The size of the last response body, so the next one usually fits its first buffer. Racy
+    // across concurrent requests, which only costs a buffer that has to grow.
+    internal int ResponseSizeHint { get; set; } = 256;
+
     internal static RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> CreateFrom(
         OperationSchema<TInput, TOutput> operation,
         StructSchema<TInput, TInputBuilder> inputSchema,

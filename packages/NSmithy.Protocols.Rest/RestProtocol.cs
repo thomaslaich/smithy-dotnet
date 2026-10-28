@@ -262,8 +262,19 @@ public static class RestProtocol
         }
         else if (bound.BodyCodec is { } codec)
         {
-            responseBody = ToHttpBody(codec.Serialize(output));
+            // Serialized into pooled memory the response hands to the host, rather than into an
+            // array of its own: a body is written once, so it need not outlive the response.
+            var buffer = new SmithyPooledBuffer(binding.ResponseSizeHint);
+            codec.Serialize(output, buffer);
+            binding.ResponseSizeHint = buffer.WrittenCount;
             contentHeaders["Content-Type"] = [binding.BodyContentType];
+            return ToServerResponse(
+                statusCode,
+                SmithyHttpServerResponse.SingleChunk(buffer),
+                buffer.WrittenCount,
+                headers,
+                contentHeaders
+            );
         }
 
         return ToServerResponse(statusCode, responseBody, headers, contentHeaders);
@@ -499,13 +510,21 @@ public static class RestProtocol
         SmithyHttpBody body,
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         IReadOnlyDictionary<string, IReadOnlyList<string>> contentHeaders
+    ) => ToServerResponse(statusCode, ToChunks(body), ContentLength(body), headers, contentHeaders);
+
+    private static SmithyHttpServerResponse ToServerResponse(
+        int statusCode,
+        IAsyncEnumerable<ReadOnlyMemory<byte>> body,
+        long? contentLength,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> contentHeaders
     )
     {
         var response = new SmithyHttpServerResponse
         {
             StatusCode = statusCode,
-            Body = ToChunks(body),
-            ContentLength = ContentLength(body),
+            Body = body,
+            ContentLength = contentLength,
         };
         foreach (var header in headers)
         {

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Formats.Cbor;
 using NSmithy.Core.Serde;
 
@@ -19,24 +20,23 @@ internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
         var writer = CborWriterCache.Rent();
         try
         {
-            if (value is null)
-            {
-                writer.WriteNull();
-            }
-            else
-            {
-                writer.WriteStartMap(null);
-                CborShapeSerializer.WriteMembers(
-                    writer,
-                    plan,
-                    materializeTopLevelDefaults,
-                    source,
-                    value
-                );
-                writer.WriteEndMap();
-            }
-
+            Write(writer, value);
             return writer.Encode();
+        }
+        finally
+        {
+            CborWriterCache.Return(writer);
+        }
+    }
+
+    public void Serialize(T value, IBufferWriter<byte> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        var writer = CborWriterCache.Rent();
+        try
+        {
+            Write(writer, value);
+            destination.Advance(writer.Encode(destination.GetSpan(writer.BytesWritten)));
         }
         finally
         {
@@ -60,5 +60,18 @@ internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
         }
 
         CborShapeDeserializer.ReadMembers(reader, plan, source, builder);
+    }
+
+    private void Write(CborWriter writer, T value)
+    {
+        if (value is null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteStartMap(null);
+        CborShapeSerializer.WriteMembers(writer, plan, materializeTopLevelDefaults, source, value);
+        writer.WriteEndMap();
     }
 }
