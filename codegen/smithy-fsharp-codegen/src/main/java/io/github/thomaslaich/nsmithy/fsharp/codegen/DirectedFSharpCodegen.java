@@ -114,6 +114,6 @@ final class DirectedFSharpCodegen
   @Override
   public void customizeAfterIntegrations(CustomizeDirective<FSharpContext, FSharpSettings> d) {
     FSharpContext context = d.context();
-    context.files().write(context.fileManifest(), context.settings(), new SchemaGenerator(context));
+    context.files().write(context.fileManifest(), context.settings());
   }
 }

@@ -1,6 +1,5 @@
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -160,14 +159,26 @@ class FSharpCodegenPluginTest {
   }
 
   @Test
-  void onlySparseCollectionsGetTheOptionAdapter() {
+  void schemasOverrideNoGenericMember() {
     MockManifest manifest = generate(settings("a.kitchen#Kitchen", null), KITCHEN, SHARED);
 
+    // F# cannot override a method whose type parameter allows a ref struct.
     String schemas = manifest.expectFileString(SCHEMAS);
-    assertEquals(1, schemas.split("type internal SchemaOptionAdapter<'T>", -1).length - 1, schemas);
-    assertTrue(
-        schemas.indexOf("SchemaOptionAdapter<'T>") > schemas.indexOf("namespace rec A.Kitchen"),
-        schemas);
+    for (String member :
+        List.of(
+            "SerializeMembers",
+            "DeserializeMember",
+            "SerializeCase",
+            "DeserializeCase",
+            "SerializeElements",
+            "DeserializeElement",
+            "SerializeEntries",
+            "DeserializeEntry",
+            "override _.Write",
+            "override _.Read")) {
+      assertFalse(schemas.contains(member), member);
+    }
+    assertTrue(schemas.contains("Schemas.Optional<"), schemas);
   }
 
   @Test

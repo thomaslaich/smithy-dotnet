@@ -53,11 +53,6 @@ public final class FSharpFiles {
     return section(shape).schemas;
   }
 
-  /** Declares the schema adapter for optional elements in the shape's schema section. */
-  public void useOptionAdapter(Shape shape) {
-    section(shape).usesOptionAdapter = true;
-  }
-
   private Section section(Shape shape) {
     Section section =
         sections.computeIfAbsent(shape.getId().getNamespace(), namespace -> new Section());
@@ -66,7 +61,7 @@ public final class FSharpFiles {
   }
 
   /** Writes the files. A project that generates nothing gets no files. */
-  void write(FileManifest manifest, FSharpSettings settings, SchemaGenerator schemas) {
+  void write(FileManifest manifest, FSharpSettings settings) {
     List<String> order = order();
     StringBuilder types = new StringBuilder();
     StringBuilder schemaFile = new StringBuilder();
@@ -78,16 +73,8 @@ public final class FSharpFiles {
         types.append("\nnamespace rec ").append(fsharpNamespace).append("\n\n");
         types.append(typeCode).append('\n');
       }
-      FSharpWriter schemaSection = new FSharpWriter();
-      if (section.usesOptionAdapter) {
-        schemas.writeOptionAdapter(schemaSection);
-      }
       String schemaCode =
-          (schemaSection.toString().strip()
-                  + "\n\n"
-                  + section.enumSchemas.toString().strip()
-                  + "\n\n"
-                  + section.schemas.toString().strip())
+          (section.enumSchemas.toString().strip() + "\n\n" + section.schemas.toString().strip())
               .strip();
       if (!schemaCode.isEmpty()) {
         schemaFile
@@ -154,6 +141,5 @@ public final class FSharpFiles {
     private final FSharpWriter types = new FSharpWriter();
     private final FSharpWriter enumSchemas = new FSharpWriter();
     private final FSharpWriter schemas = new FSharpWriter();
-    private boolean usesOptionAdapter;
   }
 }

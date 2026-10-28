@@ -266,9 +266,11 @@ expressions and literals, and the F# generator its own.
 `FSharpCodegenPlugin` (`fsharp-codegen`) generates the F# type and runtime
 schema of every shape in the generated set. It takes `service`, `closure`, and
 `baseNamespace`, with the same meaning as for `csharp-codegen`. The schemas
-derive from the same runtime classes as the C# ones (`StructSchema`,
-`UnionSchema`, `ListSchema`, `MapSchema`), so every codec and protocol reads and
-writes F# values unchanged.
+derive from the runtime's accessor bases (`AccessorStructSchema`,
+`AccessorUnionSchema`, `ElementListSchema`, `EntryMapSchema`; see
+[serialization.md](serialization.md)), which are `StructSchema`, `UnionSchema`,
+`ListSchema`, and `MapSchema` like the C# ones, so every codec and protocol reads
+and writes F# values unchanged.
 
 | Shape | F# type |
 | --- | --- |
@@ -297,8 +299,12 @@ another structure, union, list, or map through `Schemas.Lazy`, because F#
 initializes a file's static values in declaration order; enum schemas come first
 in their section and are referred to directly.
 
-The runtime's serializer and deserializer type parameters carry no `allows ref
-struct`: F# cannot override a method that declares it.
+F# cannot override a method whose type parameter allows a `ref struct`, as the
+runtime's serializer and deserializer type parameters do. The accessor bases
+therefore own the generic reading and writing: a schema class overrides only
+`Build`, `CaseOf`, and the collection accessors, and hands each member or case
+over as a pair of functions. A sparse collection's `option` elements go through
+`Schemas.Optional`.
 
 ## MSBuild Integration
 

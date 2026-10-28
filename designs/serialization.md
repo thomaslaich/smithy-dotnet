@@ -104,10 +104,10 @@ public abstract class Schema
 public abstract class Schema<T> : Schema
 {
     public abstract void Write<TSerializer>(int member, T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     public abstract T Read<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 ```
 
@@ -190,6 +190,18 @@ switching over the generated variant types. Lists, maps, and enums need no
 generated class; `Schemas.List`, `Schemas.Map`, `Schemas.StringEnum`, and
 `Schemas.IntEnum` build them from the element or value schema and the
 collection's own accessors.
+
+A language that cannot override these generic methods derives from accessor
+bases instead. `AccessorStructSchema<T, TBuilder>` takes one `StructMember` per
+member (the member's schema, a function that gets it from a value, and one that
+sets it on a builder) and implements `SerializeMembers` and `DeserializeMember`
+over them. `AccessorUnionSchema<T>` does the same with one `UnionCase` per case,
+and `ElementListSchema` and `EntryMapSchema` go through the element or value
+schema. The derived class overrides only non-generic members: `Build`, `CaseOf`,
+and the collection accessors. `Schemas.Optional` reads and writes a value held in
+a type that says whether it is present, such as F#'s `option`. Each member costs
+a delegate call and a generic virtual call more than generated straight-line
+code.
 
 `Build` is where a required member absent from the payload fails, throwing
 where the codec can turn it into a modeled error. A defaulted member's builder
@@ -338,10 +350,9 @@ The serializer and deserializer are `struct` type arguments, so the JIT
 compiles the generated methods once per implementation with every call bound
 directly: no interface dispatch and no casts per value.
 
-They are always passed by `ref`, never copied or boxed. They are not
-`ref struct`s: the type parameters carry no `allows ref struct`, because F#
-cannot override a method that declares it, and generated F# schemas override
-these methods.
+They may also be `ref struct`s, so an implementation can hold a span or a
+`Utf8JsonReader` directly; they are always passed by `ref`, never copied or
+boxed.
 
 The JSON deserializer is one. It reads forward-only off a `Utf8JsonReader`
 without building a document first. A `ref` field cannot refer to a `ref struct`,
