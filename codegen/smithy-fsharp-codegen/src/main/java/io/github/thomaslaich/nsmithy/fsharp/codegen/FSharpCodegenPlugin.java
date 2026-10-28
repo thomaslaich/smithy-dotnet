@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.GeneratedCodeFormatter;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeClosures;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +37,8 @@ public final class FSharpCodegenPlugin implements SmithyBuildPlugin {
         FSharpSettings.fromNode(context.getSettings()),
         context.getFileManifest(),
         integrations);
+
+    formatGeneratedCode(context.getFileManifest());
   }
 
   static void generate(
@@ -57,5 +60,18 @@ public final class FSharpCodegenPlugin implements SmithyBuildPlugin {
         settings.service().map(id -> model.expectShape(id, ServiceShape.class));
     ShapeClosures.configure(runner, model, service, settings.closure(), new TreeSet<>());
     runner.run();
+  }
+
+  // Fantomas skips files under obj/ when handed a directory, so it gets each file.
+  private static void formatGeneratedCode(FileManifest manifest) {
+    List<String> files =
+        manifest.getFiles().stream()
+            .filter(file -> file.toString().endsWith(".fs"))
+            .map(file -> file.toAbsolutePath().toString())
+            .sorted()
+            .toList();
+    if (!files.isEmpty()) {
+      GeneratedCodeFormatter.format("fantomas", files);
+    }
   }
 }

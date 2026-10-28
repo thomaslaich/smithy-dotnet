@@ -40,6 +40,7 @@ in
     config = {
       programs = {
         csharpier.enable = true;
+        fantomas.enable = true;
         google-java-format.enable = true;
         just.enable = true;
         nixfmt.enable = true;
@@ -66,6 +67,9 @@ in
           "Directory.Packages.props"
           "Directory.Build.props"
         ];
+
+        # treefmt-nix wraps fantomas with a .NET SDK that makes it abort on macOS; it needs none.
+        formatter.fantomas.command = lib.mkForce (lib.getExe pkgs.fantomas);
 
         formatter.csharpier.excludes = [
           "templates/NSmithy.Templates/content/**"

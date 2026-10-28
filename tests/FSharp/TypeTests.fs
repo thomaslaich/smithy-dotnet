@@ -27,10 +27,10 @@ let ``An error takes its optional members as optional arguments and applies defa
 [<Fact>]
 let ``A retryable error implements ISmithyRetryableError`` () =
     let error: exn = Throttled("slow down")
+
     match box error with
     | :? NSmithy.Core.ISmithyRetryableError as retryable -> Assert.True(retryable.IsThrottlingError)
     | _ -> Assert.Fail "Throttled is not retryable"
 
 [<Fact>]
-let ``A structure with no members is a value-equal class`` () =
-    Assert.Equal(PingInput(), PingInput())
+let ``A structure with no members is a value-equal class`` () = Assert.Equal(PingInput(), PingInput())
