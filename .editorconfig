@@ -28,6 +28,9 @@ dotnet_diagnostic.CA1307.severity = warning
 dotnet_diagnostic.CA1310.severity = warning
 dotnet_diagnostic.CA1311.severity = warning
 
+[*.{fs,fsi,fsx}]
+indent_size = 4
+
 [CSharpShapeGenerator.*.cs]
 max_line_length = 140
 

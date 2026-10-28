@@ -56,7 +56,8 @@ let private roundtrip (factory: ICodecFactory) (schema: Schema<'T>) (value: 'T) 
     codec.Deserialize(codec.Serialize value)
 
 let factories: obj[] list =
-    [ [| JsonCodecFactory.Default :> ICodecFactory |]; [| CborCodecFactory.Default :> ICodecFactory |] ]
+    [ [| JsonCodecFactory.Default :> ICodecFactory |]
+      [| CborCodecFactory.Default :> ICodecFactory |] ]
 
 [<Theory>]
 [<MemberData(nameof factories)>]
@@ -76,7 +77,9 @@ let ``Every union case round-trips, including a Unit case`` (factory: ICodecFact
 [<Theory>]
 [<MemberData(nameof factories)>]
 let ``Errors round-trip`` (factory: ICodecFactory) =
-    let error = roundtrip factory OutOfStockSchema.Schema (OutOfStock(Ingredient.CHEESE, errorMessage = "gone"))
+    let error =
+        roundtrip factory OutOfStockSchema.Schema (OutOfStock(Ingredient.CHEESE, errorMessage = "gone"))
+
     Assert.Equal(Ingredient.CHEESE, error.Item)
     Assert.Equal(Some "gone", error.ErrorMessage)
     Assert.Equal(5, error.RestockDays)
@@ -84,7 +87,14 @@ let ``Errors round-trip`` (factory: ICodecFactory) =
 [<Fact>]
 let ``Documents and timestamp formats reach the wire`` () =
     let codec = JsonCodecFactory.Default.FromSchema(DishSchema.Schema)
-    let json = Encoding.UTF8.GetString(codec.Serialize { dish with Doc = Some(Document.From "doc") })
+
+    let json =
+        Encoding.UTF8.GetString(
+            codec.Serialize
+                { dish with
+                    Doc = Some(Document.From "doc") }
+        )
+
     Assert.Contains("\"madeAt\":\"2024-01-02T03:04:05Z\"", json)
     Assert.Contains("\"doc\":\"doc\"", json)
     Assert.Contains("\"toString\":\"s\"", json)
@@ -92,8 +102,10 @@ let ``Documents and timestamp formats reach the wire`` () =
 [<Fact>]
 let ``Reading fills in modeled defaults`` () =
     let codec = JsonCodecFactory.Default.FromSchema(OrderInputSchema.Schema)
+
     let read =
         codec.Deserialize(Encoding.UTF8.GetBytes """{"dish":{"name":"x","ingredients":["cheese","secret"]}}""")
+
     Assert.Equal(Seating.TABLE, read.Seating)
     Assert.Equal(2, read.Guests)
     Assert.Equal(1.5f, read.Dish.Price)
@@ -105,6 +117,7 @@ let ``Reading fills in modeled defaults`` () =
 [<Fact>]
 let ``Reading a structure without a required member fails`` () =
     let codec = JsonCodecFactory.Default.FromSchema(OrderInputSchema.Schema)
+
     Assert.Throws<MissingRequiredMemberException>(fun () ->
         codec.Deserialize(Encoding.UTF8.GetBytes """{"dish":{"name":"x"}}""") |> ignore)
     |> ignore
