@@ -22,6 +22,8 @@ dependencies {
 
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
+    // Declares the aws.test vendor params shapes smoke tests name.
+    testRuntimeOnly("software.amazon.smithy:smithy-aws-smoke-test-model:$smithyVersion")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

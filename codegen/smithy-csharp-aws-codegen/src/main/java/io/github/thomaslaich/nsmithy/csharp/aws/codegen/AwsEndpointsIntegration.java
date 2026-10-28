@@ -5,31 +5,42 @@ package io.github.thomaslaich.nsmithy.csharp.aws.codegen;
 
 import static io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType.field;
 
+import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointBuiltIn;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointDefaultAuthScheme;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.sections.ClientConfigDefaultsSection;
+import io.github.thomaslaich.nsmithy.csharp.codegen.sections.SmokeTestConfigSection;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
+import software.amazon.smithy.model.node.Node;
+import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.pattern.UriPattern;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.traits.DefaultTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.model.transform.ModelTransformer;
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter;
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters;
 import software.amazon.smithy.rulesengine.traits.EndpointBddTrait;
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait;
+import software.amazon.smithy.smoketests.traits.SmokeTestCase;
 import software.amazon.smithy.utils.CodeInterceptor;
 import software.amazon.smithy.utils.CodeSection;
 import software.amazon.smithy.utils.SmithyInternalApi;
@@ -45,6 +56,7 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
 
   private static final ShapeId SIGV4 = ShapeId.from("aws.auth#sigv4");
   private static final ShapeId S3 = ShapeId.from("com.amazonaws.s3#AmazonS3");
+  private static final String VENDOR_PARAMS_NAMESPACE = "aws.test";
 
   /**
    * S3's endpoint rules place the bucket in the host or, for path-style addressing, in the
@@ -189,13 +201,108 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
         CodeInterceptor.appender(
             ClientConfigDefaultsSection.class,
             (writer, section) -> {
-              if (declaresRegion(section.service())) {
+              if (builtIns(section.service()).contains("AWS::Region")) {
                 writer.write("Region = $T.Resolve();", AwsRuntimeTypes.AWS_REGION);
               }
-            }));
+            }),
+        CodeInterceptor.appender(
+            SmokeTestConfigSection.class,
+            (writer, section) -> writeVendorParams(context.model(), writer, section)));
   }
 
-  private static boolean declaresRegion(ServiceShape service) {
+  /**
+   * Applies the {@code aws.test} vendor params of a smoke test, with the defaults their shape
+   * declares, to the configuration properties of the built-ins the service's endpoint rules read.
+   * {@code sigv4aRegionSet} has no effect, since NSmithy does not sign SigV4a.
+   */
+  private void writeVendorParams(Model model, CSharpWriter writer, SmokeTestConfigSection section) {
+    SmokeTestCase testCase = section.testCase();
+    Optional<ShapeId> shapeId = testCase.getVendorParamsShape();
+    if (shapeId.isEmpty() || !shapeId.get().getNamespace().equals(VENDOR_PARAMS_NAMESPACE)) {
+      return;
+    }
+    Map<String, Node> params = new LinkedHashMap<>();
+    model
+        .getShape(shapeId.get())
+        .ifPresent(
+            shape ->
+                shape
+                    .members()
+                    .forEach(
+                        member ->
+                            member
+                                .getTrait(DefaultTrait.class)
+                                .ifPresent(
+                                    value -> params.put(member.getMemberName(), value.toNode()))));
+    testCase.getVendorParams().map(ObjectNode::getStringMap).ifPresent(params::putAll);
+
+    Set<String> declared = builtIns(section.service());
+    Map<String, String> properties =
+        endpointBuiltIns().stream()
+            .collect(
+                Collectors.toMap(
+                    EndpointBuiltIn::id, EndpointBuiltIn::property, (first, second) -> first));
+    params.forEach(
+        (name, value) -> {
+          switch (name) {
+            case "region" -> set(writer, declared, properties, "AWS::Region", value);
+            case "useFips" -> set(writer, declared, properties, "AWS::UseFIPS", value);
+            case "useDualstack" -> set(writer, declared, properties, "AWS::UseDualStack", value);
+            case "useAccelerate" -> set(writer, declared, properties, "AWS::S3::Accelerate", value);
+            case "useGlobalEndpoint" ->
+                set(writer, declared, properties, "AWS::S3::UseGlobalEndpoint", value);
+            case "forcePathStyle" ->
+                set(writer, declared, properties, "AWS::S3::ForcePathStyle", value);
+            case "useArnRegion" -> {
+              set(writer, declared, properties, "AWS::S3::UseArnRegion", value);
+              set(writer, declared, properties, "AWS::S3Control::UseArnRegion", value);
+            }
+            case "useMultiRegionAccessPoints" ->
+                set(
+                    writer,
+                    declared,
+                    properties,
+                    "AWS::S3::DisableMultiRegionAccessPoints",
+                    Node.from(!value.expectBooleanNode().getValue()));
+            case "useAccountIdRouting" -> {
+              if (!value.expectBooleanNode().getValue()) {
+                set(
+                    writer,
+                    declared,
+                    properties,
+                    "AWS::Auth::AccountIdEndpointMode",
+                    Node.from("disabled"));
+              }
+            }
+            case "uri" ->
+                writer.write(
+                    "configured.Endpoint = new $T($L);",
+                    RuntimeTypes.URI,
+                    CSharpNaming.formatString(value.expectStringNode().getValue()));
+            default -> {}
+          }
+        });
+  }
+
+  private static void set(
+      CSharpWriter writer,
+      Set<String> declared,
+      Map<String, String> properties,
+      String builtIn,
+      Node value) {
+    if (!declared.contains(builtIn)) {
+      return;
+    }
+    writer.write(
+        "configured.$L = $L;",
+        properties.get(builtIn),
+        value.isBooleanNode()
+            ? Boolean.toString(value.expectBooleanNode().getValue())
+            : CSharpNaming.formatString(value.expectStringNode().getValue()));
+  }
+
+  /** The built-ins the service's endpoint rules read. */
+  private static Set<String> builtIns(ServiceShape service) {
     Optional<Parameters> parameters =
         service
             .getTrait(EndpointBddTrait.class)
@@ -205,11 +312,13 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
                     .getTrait(EndpointRuleSetTrait.class)
                     .map(trait -> trait.getEndpointRuleSet().getParameters()));
     return parameters
-        .map(declared ->
-            declared.toList().stream()
-                .anyMatch(
-                    parameter -> parameter.getBuiltIn().filter("AWS::Region"::equals).isPresent()))
-        .orElse(false);
+        .map(
+            declared ->
+                declared.toList().stream()
+                    .map(Parameter::getBuiltIn)
+                    .flatMap(Optional::stream)
+                    .collect(Collectors.toSet()))
+        .orElse(Set.of());
   }
 
   @Override

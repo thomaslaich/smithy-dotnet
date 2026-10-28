@@ -55,8 +55,8 @@ part of the AWS client stack:
   and IMDS credentials, with region resolution from the environment and profile
 - Standard retries with jitter, retry quotas, `Retry-After`, and modeled
   `@retryable` errors
-- Generated page and item paginators for modeled `@paginated` operations, and
-  waiters for `@waitable` operations
+- Generated page and item paginators for modeled `@paginated` operations,
+  waiters for `@waitable` operations, and smoke tests from `@smokeTests`
 - Clients for the supported AWS protocols when supplied with a Smithy model
 
 NSmithy does not yet provide:

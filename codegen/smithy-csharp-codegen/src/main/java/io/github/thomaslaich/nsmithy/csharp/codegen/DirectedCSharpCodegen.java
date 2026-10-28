@@ -16,6 +16,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.OperationSchemaGe
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServiceSchemaGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SmokeTestGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StringEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StructureGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
@@ -151,6 +152,14 @@ final class DirectedCSharpCodegen
                 dir + "/" + typeName + ".Waiters.Client.g.cs",
                 csNamespace,
                 writer -> new WaiterGenerator(ctx, writer, directive.shape()).run());
+      }
+      if (ctx.settings().generateSmokeTests()
+          && SmokeTestGenerator.hasSmokeTests(ctx, directive.shape())) {
+        ctx.writerDelegator()
+            .useFileWriter(
+                dir + "/" + typeName + ".SmokeTests.Client.g.cs",
+                csNamespace,
+                writer -> new SmokeTestGenerator(ctx, writer, directive.shape()).run());
       }
     }
 
