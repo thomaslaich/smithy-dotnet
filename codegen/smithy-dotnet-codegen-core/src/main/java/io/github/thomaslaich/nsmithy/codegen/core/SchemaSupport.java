@@ -13,11 +13,14 @@ import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
+import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.DeprecatedTrait;
 import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.model.traits.EnumValueTrait;
+import software.amazon.smithy.model.traits.ErrorTrait;
 import software.amazon.smithy.model.traits.ExamplesTrait;
 import software.amazon.smithy.model.traits.ExternalDocumentationTrait;
+import software.amazon.smithy.model.traits.HttpErrorTrait;
 import software.amazon.smithy.model.traits.InternalTrait;
 import software.amazon.smithy.model.traits.RecommendedTrait;
 import software.amazon.smithy.model.traits.SinceTrait;
@@ -129,6 +132,22 @@ public final class SchemaSupport {
   /** The int values an intEnum shape defines. See {@link #stringEnumValues}. */
   public static List<Integer> intEnumValues(IntEnumShape shape) {
     return List.copyOf(shape.getEnumValues().values());
+  }
+
+  /**
+   * The HTTP status code an operation error is sent with: its {@code @httpError}, or else 400 for a
+   * client error and 500 for a server error.
+   */
+  public static int errorStatusCode(StructureShape error) {
+    return error
+        .getTrait(HttpErrorTrait.class)
+        .map(HttpErrorTrait::getCode)
+        .orElseGet(
+            () ->
+                error
+                    .getTrait(ErrorTrait.class)
+                    .map(trait -> trait.isClientError() ? 400 : 500)
+                    .orElse(500));
   }
 
   /**

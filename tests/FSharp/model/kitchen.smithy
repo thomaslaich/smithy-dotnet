@@ -2,16 +2,28 @@ $version: "2"
 
 namespace example.kitchen
 
+use aws.protocols#restJson1
 use example.shared#Money
 
 /// A kitchen that serves dishes.
+@restJson1
 service Kitchen {
     version: "2024-01-01"
     operations: [Order, Ping]
 }
 
+/// Orders a dish for a table.
+@http(method: "POST", uri: "/tables/{table}/orders")
 operation Order {
     input := {
+        @required
+        @httpLabel
+        table: String
+
+        @httpHeader("x-client-token")
+        @idempotencyToken
+        clientToken: String
+
         @required
         dish: Dish
         notes: Notes
@@ -28,6 +40,8 @@ operation Order {
     errors: [OutOfStock, Throttled]
 }
 
+@readonly
+@http(method: "GET", uri: "/ping")
 operation Ping {}
 
 /// A dish on the menu.
@@ -115,6 +129,7 @@ union Receipt {
 
 /// Out of stock.
 @error("client")
+@httpError(409)
 structure OutOfStock {
     message: String
 

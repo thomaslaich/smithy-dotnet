@@ -49,7 +49,7 @@ ways fails the build. When no Maven repository is listed, Maven Central is.
 | --- | --- |
 | `SmithyService` | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Turns on code generation from properties and sets `service` for each plugin NSmithy adds. Without it, configure NSmithy's plugins in `smithy-build.json`, for example one `csharp-codegen` per projection. |
 | `SmithyGenerateServer` | Emit server stub types. Set to `false` in client-only projects; this sets `generateServer` to `false` and leaves generated server files out of compilation. Default: `true`. |
-| `SmithyGenerateClient` | Emit client types. Set to `false` in server-only projects; this sets `generateClient` to `false` and leaves generated client files out of compilation. Default: `true`. |
+| `SmithyGenerateClient` | Emit client types, in C# and F# projects. Set to `false` in server-only projects; this sets `generateClient` to `false` and leaves generated client files out of compilation. Default: `true`. |
 | `SmithyBuildFile` | Path to the project's own Smithy build file, which NSmithy merges into the effective one. Optional. Default: `$(MSBuildProjectDirectory)/smithy-build.json`. |
 | `SmithyProjection` | Projection that receives the plugin settings from properties, and whose docs and OpenAPI output is copied to `wwwroot/`. A projection other than `source` must exist in `smithy-build.json`. Default: `source`. |
 | `SmithyPlugin` | Smithy build plugin name. Default: `csharp-codegen`, or `fsharp-codegen` in an F# project. |

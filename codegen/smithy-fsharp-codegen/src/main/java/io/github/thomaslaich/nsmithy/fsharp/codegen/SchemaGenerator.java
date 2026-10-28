@@ -33,7 +33,10 @@ import software.amazon.smithy.model.shapes.IntEnumShape;
 import software.amazon.smithy.model.shapes.ListShape;
 import software.amazon.smithy.model.shapes.MapShape;
 import software.amazon.smithy.model.shapes.MemberShape;
+import software.amazon.smithy.model.shapes.OperationShape;
+import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.shapes.UnionShape;
@@ -324,6 +327,71 @@ final class SchemaGenerator {
         shape,
         SERDE + "MapSchema<" + type + ", " + value + ", " + builder + ">",
         impl + "()");
+  }
+
+  /**
+   * An operation's schema: its input, output, and errors, each with the HTTP status code it is sent
+   * with.
+   */
+  void operation(OperationShape shape) {
+    String input = operationType(shape.getInputShape());
+    String output = operationType(shape.getOutputShape());
+    List<String> errors = new ArrayList<>();
+    for (ShapeId errorId : shape.getErrors().stream().sorted().toList()) {
+      StructureShape error = model.expectShape(errorId, StructureShape.class);
+      errors.add(
+          SCHEMAS
+              + ".OperationError<"
+              + symbols.typeOf(error)
+              + ">("
+              + FSharpLiterals.shapeId(errorId)
+              + ", "
+              + lazy(error)
+              + ", "
+              + SchemaSupport.errorStatusCode(error)
+              + ") :> "
+              + SERDE
+              + "IOperationErrorSchema");
+    }
+    List<String> arguments = new ArrayList<>();
+    arguments.add(FSharpLiterals.shapeId(shape.getId()));
+    arguments.add(operationSchema(shape.getInputShape()));
+    arguments.add(operationSchema(shape.getOutputShape()));
+    arguments.add(array(errors, SERDE + "IOperationErrorSchema"));
+    namedTraits(arguments, "traits", FSharpLiterals.traits(shape.getAllTraits().values()));
+    if (ShapeSupport.isStreamingShape(model, shape.getInputShape())
+        || ShapeSupport.isStreamingShape(model, shape.getOutputShape())) {
+      arguments.add("isStreaming = true");
+    }
+    FSharpWriter writer = context.files().schemas(shape);
+    writer.write("[<AbstractClass; Sealed>]");
+    writer.write("type $L =", symbols.schemaSymbol(shape).getName()).indent();
+    writer.write("static member val Schema: $LOperationSchema<$L, $L> =", SERDE, input, output);
+    writer.indent().write("$L.Operation<$L, $L>(", SCHEMAS, input, output).indent();
+    writer.write("$L)", String.join(",\n", arguments)).dedent().dedent().dedent().write("");
+  }
+
+  void service(ServiceShape shape) {
+    List<String> arguments = new ArrayList<>();
+    arguments.add(FSharpLiterals.shapeId(shape.getId()));
+    arguments.add(FSharpNaming.stringLiteral(shape.getVersion()));
+    namedTraits(arguments, "traits", FSharpLiterals.traits(shape.getAllTraits().values()));
+    writeHolder(
+        context.files().schemas(shape),
+        shape,
+        SERDE + "ServiceSchema",
+        SCHEMAS + ".Service(" + String.join(", ", arguments) + ")");
+  }
+
+  /** The type an operation's input or output is: its structure, or {@code SmithyUnit}. */
+  String operationType(ShapeId shape) {
+    return ShapeSupport.isUnit(shape)
+        ? "global.NSmithy.Core.SmithyUnit"
+        : symbols.typeOf(model.expectShape(shape));
+  }
+
+  private String operationSchema(ShapeId shape) {
+    return ShapeSupport.isUnit(shape) ? SCHEMAS + ".Unit" : lazy(model.expectShape(shape));
   }
 
   private void writeHolder(FSharpWriter writer, Shape shape, String schemaType, String value) {

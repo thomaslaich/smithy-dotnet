@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.integrations;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ProtocolInfo;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -19,7 +20,8 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
  */
 @SmithyUnstableApi
 public record CSharpProtocol(
-    ShapeId trait, String name, Symbol runtimeType, boolean eventStreams, boolean server) {
+    ShapeId trait, String name, Symbol runtimeType, boolean eventStreams, boolean server)
+    implements ProtocolInfo {
 
   private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
@@ -31,6 +33,21 @@ public record CSharpProtocol(
       throw new IllegalArgumentException(
           "Protocol name '" + name + "' for " + trait + " is not a C# identifier.");
     }
+  }
+
+  /** A protocol registered in the shared core, with its runtime type as a C# symbol. */
+  public static CSharpProtocol of(ProtocolInfo protocol) {
+    return new CSharpProtocol(
+        protocol.trait(),
+        protocol.name(),
+        runtimeType(protocol.runtimeTypeName()),
+        protocol.eventStreams(),
+        protocol.server());
+  }
+
+  @Override
+  public String runtimeTypeName() {
+    return runtimeType.getFullName();
   }
 
   /** A runtime type from its full C# name, such as {@code "Acme.Protocols.MsgPackProtocol"}. */

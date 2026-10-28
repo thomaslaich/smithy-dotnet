@@ -203,7 +203,7 @@ class FSharpCodegenPluginTest {
   }
 
   @Test
-  void generatesNothingWhenNoShapeNeedsCode() {
+  void aServiceWithoutShapesGetsItsSchemaAndNoTypes() {
     String model =
         """
         $version: "2"
@@ -214,7 +214,7 @@ class FSharpCodegenPluginTest {
     MockManifest manifest = generate(settings("example.empty#Empty", null), model);
 
     assertFalse(manifest.hasFile(TYPES));
-    assertFalse(manifest.hasFile(SCHEMAS));
+    assertTrue(manifest.expectFileString(SCHEMAS).contains("type EmptySchema ="));
   }
 
   private static ObjectNode settings(String service, String closure) {

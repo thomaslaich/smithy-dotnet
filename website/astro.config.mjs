@@ -97,6 +97,7 @@ export default defineConfig({
 						{ label: 'Modeling contracts', slug: 'concepts/modeling' },
 						{ label: 'How NSmithy works', slug: 'concepts/how-it-works' },
 						{ label: 'Smithy and TypeSpec', slug: 'concepts/smithy-and-typespec' },
+						{ label: 'F#', slug: 'guides/fsharp', badge: { text: 'Experimental', variant: 'danger' } },
 					],
 				},
 				{
