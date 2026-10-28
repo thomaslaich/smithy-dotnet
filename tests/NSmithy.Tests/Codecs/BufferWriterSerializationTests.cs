@@ -35,7 +35,7 @@ public sealed class BufferWriterSerializationTests
     public void AProjectionWritesIntoABufferWhatTheArrayHolds(string format)
     {
         var codec = ((IProjectionCodecFactory)Factory(format)).FromProjection(
-            Schemas.Project(SimpleSchema.Schema, name => name == "name")
+            Schemas.Project(SimpleSchema.Schema, member => member.Name == "name")
         );
         var value = new Simple("hi", 300);
         using var buffer = new SmithyPooledBuffer();
