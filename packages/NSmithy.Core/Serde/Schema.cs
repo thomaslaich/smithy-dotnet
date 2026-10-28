@@ -55,11 +55,11 @@ public abstract class Schema<T> : Schema
     /// <see cref="MemberIndex.Root"/>.
     /// </summary>
     public abstract void Write<TSerializer>(int member, T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     /// <summary>Reads the value <paramref name="deserializer"/> is positioned on.</summary>
     public abstract T Read<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
 public sealed class LazySchema<T> : Schema<T>
@@ -337,7 +337,7 @@ public interface IStructSchema
 
     /// <summary>Writes a value of this structure with no member set, as member <paramref name="member"/>.</summary>
     void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 public interface IStructSchema<T> : IStructSchema
@@ -351,7 +351,7 @@ public interface IStructSchema<T> : IStructSchema
 
     /// <summary>Writes each member of <paramref name="value"/> under its index.</summary>
     void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 /// <summary>
@@ -412,14 +412,14 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
         deserializer.ReadStruct(this);
 
     public abstract void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     public abstract void DeserializeMember<TDeserializer>(
         TBuilder builder,
         int index,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 
     public abstract TBuilder CreateTypedBuilder();
 
@@ -428,7 +428,8 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     public T BuildEmpty() => Build(CreateTypedBuilder());
 
     public void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer => Write(member, BuildEmpty(), ref serializer);
+        where TSerializer : struct, IShapeSerializer, allows ref struct =>
+        Write(member, BuildEmpty(), ref serializer);
 
     public TResult Accept<TResult>(IStructSchemaVisitor<T, TResult> visitor)
     {
@@ -681,7 +682,7 @@ public interface IListSchema<TCollection, TElement> : IListSchema
 
     /// <summary>Writes each element of <paramref name="value"/> as member 0.</summary>
     void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 public interface IMapSchema
@@ -707,7 +708,7 @@ public interface IMapSchema<TDictionary, TValue> : IMapSchema
 
     /// <summary>Writes each entry of <paramref name="value"/>: its key as member 0, then its value as member 1.</summary>
     void SerializeEntries<TSerializer>(TDictionary value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 public interface IUnionSchema
@@ -786,13 +787,55 @@ public abstract class ListSchema<TCollection, TElement, TBuilder>
         TCollection value,
         ref TSerializer serializer
     )
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     public abstract void DeserializeElement<TDeserializer>(
         TBuilder builder,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
+}
+
+/// <summary>
+/// A list whose elements go through its element schema, which leaves a derived class only the
+/// non-generic members to override.
+/// </summary>
+public abstract class ElementListSchema<TCollection, TElement, TBuilder>(
+    ShapeId id,
+    ShapeKind kind,
+    Schema<TElement> element,
+    IEnumerable<Trait>? traits = null,
+    IEnumerable<Trait>? elementTraits = null
+) : ListSchema<TCollection, TElement, TBuilder>(id, kind, element, traits, elementTraits)
+{
+    public sealed override void SerializeElements<TSerializer>(
+        TCollection value,
+        ref TSerializer serializer
+    )
+    {
+        // Indexed when possible: foreach over an IEnumerable boxes the collection's enumerator,
+        // an allocation per list written.
+        var elements = GetElements(value);
+        if (elements is IReadOnlyList<TElement> list)
+        {
+            for (var index = 0; index < list.Count; index++)
+            {
+                ElementSchema.Write(0, list[index], ref serializer);
+            }
+
+            return;
+        }
+
+        foreach (var element in elements)
+        {
+            ElementSchema.Write(0, element, ref serializer);
+        }
+    }
+
+    public sealed override void DeserializeElement<TDeserializer>(
+        TBuilder builder,
+        ref TDeserializer deserializer
+    ) => Add(builder, ElementSchema.Read(ref deserializer));
 }
 
 /// <summary>
@@ -863,14 +906,46 @@ public abstract class MapSchema<TDictionary, TValue, TBuilder>
         TDictionary value,
         ref TSerializer serializer
     )
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     public abstract void DeserializeEntry<TDeserializer>(
         TBuilder builder,
         string key,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
+}
+
+/// <summary>
+/// A map whose values go through its value schema, which leaves a derived class only the non-generic
+/// members to override.
+/// </summary>
+public abstract class EntryMapSchema<TDictionary, TValue, TBuilder>(
+    ShapeId id,
+    Schema<TValue> value,
+    IEnumerable<Trait>? traits = null,
+    IEnumerable<Trait>? keyTraits = null,
+    IEnumerable<Trait>? valueTraits = null,
+    Schema? key = null
+) : MapSchema<TDictionary, TValue, TBuilder>(id, value, traits, keyTraits, valueTraits, key)
+{
+    public sealed override void SerializeEntries<TSerializer>(
+        TDictionary value,
+        ref TSerializer serializer
+    )
+    {
+        foreach (var (key, entry) in GetEntries(value))
+        {
+            serializer.WriteString(0, key);
+            ValueSchema.Write(1, entry, ref serializer);
+        }
+    }
+
+    public sealed override void DeserializeEntry<TDeserializer>(
+        TBuilder builder,
+        string key,
+        ref TDeserializer deserializer
+    ) => Add(builder, key, ValueSchema.Read(ref deserializer));
 }
 
 /// <summary>
@@ -943,10 +1018,10 @@ public abstract class UnionSchema<T> : Schema<T>, IUnionSchema
         deserializer.ReadUnion(this);
 
     public abstract void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     public abstract T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 
     /// <summary>The error for a value holding no modeled case, such as a variant this client does not know.</summary>
     protected static InvalidOperationException NoCaseMatched() =>
@@ -1245,6 +1320,18 @@ public static class Schemas
 
     public static Schema<T?> NullableReference<T>(Schema<T> target)
         where T : class => (Schema<T?>)(object)target;
+
+    /// <summary>
+    /// A value held in a type of its own that says whether it is present, such as F#'s
+    /// <c>option</c>.
+    /// </summary>
+    public static OptionalSchema<TOptional, T> Optional<TOptional, T>(
+        Schema<T> target,
+        Func<TOptional, bool> isPresent,
+        Func<TOptional, T> valueOf,
+        Func<T, TOptional> present,
+        TOptional absent
+    ) => new(target, isPresent, valueOf, present, absent);
 
     public static EventStreamSchema<TEvent> EventStream<TEvent>(Schema<TEvent> eventSchema) =>
         new(eventSchema);

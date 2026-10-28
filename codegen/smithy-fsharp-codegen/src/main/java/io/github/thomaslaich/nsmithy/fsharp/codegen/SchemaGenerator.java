@@ -1,13 +1,18 @@
 /*
  * Declares the runtime schema of each shape in the shape's Schemas namespace.
  *
- * A structure, union, list, or map gets a class deriving from the runtime's StructSchema,
- * UnionSchema, ListSchema, or MapSchema, which reads and writes the F# type directly, and a holder
- * type whose Schema property is the one instance:
+ * A structure, union, list, or map gets a class deriving from the runtime's AccessorStructSchema,
+ * AccessorUnionSchema, ElementListSchema, or EntryMapSchema, and a holder type whose Schema property
+ * is the one instance:
  *
  *   PersonBuilder      what a deserializer fills in, one value option per member
  *   PersonSchemaImpl   the schema class (internal)
  *   PersonSchema       the holder: PersonSchema.Schema
+ *
+ * F# cannot override a method whose type parameter allows a ref struct, so the runtime bases own
+ * the generic reading and writing: a schema class overrides only the non-generic members (building
+ * a value, telling union cases apart) and hands each member over as an accessor, a pair of
+ * functions that get it from a value and set it on a builder.
  *
  * F# initializes a file's static values in the order they are declared, so a schema refers to
  * another structure, union, list, or map through Schemas.Lazy, which resolves it once every
@@ -41,7 +46,6 @@ final class SchemaGenerator {
   private static final String SERDE = "global.NSmithy.Core.Serde.";
   private static final String SCHEMAS = SERDE + "Schemas";
   private static final String GENERIC = "global.System.Collections.Generic.";
-  private static final String OPTION_ADAPTER = "SchemaOptionAdapter";
 
   private final FSharpContext context;
   private final Model model;
@@ -114,32 +118,55 @@ final class SchemaGenerator {
     }
 
     // The schema class.
-    List<String> declarations = new ArrayList<>();
+    List<String> accessors = new ArrayList<>();
     for (int i = 0; i < members.size(); i++) {
       MemberShape member = members.get(i);
+      String target = impl + ".Target" + i;
       List<String> arguments = new ArrayList<>();
       arguments.add(FSharpNaming.stringLiteral(member.getMemberName()));
-      arguments.add(impl + ".Target" + i);
+      arguments.add(target);
       if (ShapeSupport.isRequired(member)) {
         arguments.add("isRequired = true");
       }
       namedTraits(arguments, "traits", memberTraits(member));
-      declarations.add(SERDE + "MemberSchema(" + String.join(", ", arguments) + ")");
+      String memberSchema = SERDE + "MemberSchema(" + String.join(", ", arguments) + ")";
+      String property = property(member, isError, message);
+      String valueType = FSharpMembers.valueType(context, member);
+      String get = "(fun (value: " + type + ") -> value." + property + ")";
+      if (FSharpMembers.isOptional(member)) {
+        accessors.add(
+            String.format(
+                "%sStructMember.Create<%s, %s, %s option>(%s, %s, %s, (fun (builder: %s) value ->"
+                    + " builder.%s <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))",
+                SERDE,
+                type,
+                builder,
+                valueType,
+                memberSchema,
+                optional(valueType, target),
+                get,
+                builder,
+                property));
+      } else {
+        accessors.add(
+            String.format(
+                "%sStructMember.Create<%s, %s, %s>(%s, %s, %s, (fun (builder: %s) value ->"
+                    + " builder.%s <- ValueSome value))",
+                SERDE, type, builder, valueType, memberSchema, target, get, builder, property));
+      }
     }
     writer.write("type internal $L() =", impl).indent();
-    writer.write("inherit $LStructSchema<$L, $L>(", SERDE, type, builder).indent();
+    writer.write("inherit $LAccessorStructSchema<$L, $L>(", SERDE, type, builder).indent();
     writer.write("$L,", FSharpLiterals.shapeId(shape.getId()));
     String traits = FSharpLiterals.traits(shape.getAllTraits().values());
     writer.write(
         "$L$L)",
-        array(declarations, SERDE + "MemberSchema"),
+        array(accessors, SERDE + "StructMember<" + type + ", " + builder + ">"),
         traits == null ? "" : ",\ntraits = " + traits);
     writer.dedent();
     writeTargets(writer, members);
     writer.write("override _.CreateTypedBuilder() = $L()", builder);
     writeBuild(writer, shape, type, members, message, isError);
-    writeSerializeMembers(writer, impl, members, isError, message);
-    writeDeserializeMember(writer, impl, members, isError, message);
     writer.dedent().write("");
 
     writeHolder(writer, shape, SERDE + "StructSchema<" + type + ", " + builder + ">", impl + "()");
@@ -154,22 +181,45 @@ final class SchemaGenerator {
     String noCase =
         "invalidOp " + FSharpNaming.stringLiteral("No union case matched '" + name + "'.");
 
-    List<String> declarations = new ArrayList<>();
+    List<String> cases = new ArrayList<>();
     for (int i = 0; i < members.size(); i++) {
       MemberShape member = members.get(i);
+      String target = impl + ".Target" + i;
       List<String> arguments = new ArrayList<>();
       arguments.add(FSharpNaming.stringLiteral(member.getMemberName()));
-      arguments.add(impl + ".Target" + i);
+      arguments.add(target);
       namedTraits(arguments, "traits", memberTraits(member));
-      declarations.add(SERDE + "MemberSchema(" + String.join(", ", arguments) + ")");
+      String memberSchema = SERDE + "MemberSchema(" + String.join(", ", arguments) + ")";
+      String caseName = type + "." + FSharpNaming.caseName(member);
+      String valueType = FSharpMembers.valueType(context, member);
+      String get;
+      String create;
+      if (ShapeSupport.isUnit(member.getTarget())) {
+        get = "(fun (_: " + type + ") -> global.NSmithy.Core.SmithyUnit.Value)";
+        create = "(fun (_: " + valueType + ") -> " + caseName + ")";
+      } else {
+        get =
+            "(fun (value: "
+                + type
+                + ") -> match value with "
+                + caseName
+                + " value -> value | _ -> "
+                + noCase
+                + ")";
+        create = "(fun (value: " + valueType + ") -> " + caseName + "(value))";
+      }
+      cases.add(
+          String.format(
+              "%sUnionCase.Create<%s, %s>(%s, %s, %s, %s)",
+              SERDE, type, valueType, memberSchema, target, get, create));
     }
     writer.write("type internal $L() =", impl).indent();
-    writer.write("inherit $LUnionSchema<$L>(", SERDE, type).indent();
+    writer.write("inherit $LAccessorUnionSchema<$L>(", SERDE, type).indent();
     writer.write("$L,", FSharpLiterals.shapeId(shape.getId()));
     String traits = FSharpLiterals.traits(shape.getAllTraits().values());
     writer.write(
         "$L$L)",
-        array(declarations, SERDE + "MemberSchema"),
+        array(cases, SERDE + "UnionCase<" + type + ">"),
         traits == null ? "" : ",\ntraits = " + traits);
     writer.dedent();
     writeTargets(writer, members);
@@ -185,42 +235,6 @@ final class SchemaGenerator {
           i);
     }
     writer.write("| $L.Unknown _ -> $L", type, noCase).dedent();
-
-    writer
-        .write("override _.SerializeCase(value, serializer) =")
-        .indent()
-        .write("match value with");
-    for (int i = 0; i < members.size(); i++) {
-      MemberShape member = members.get(i);
-      String caseName = type + "." + FSharpNaming.caseName(member);
-      if (ShapeSupport.isUnit(member.getTarget())) {
-        writer.write("| $L ->", caseName).indent();
-        writer.write(
-            "$L.Target$L.Write($L, global.NSmithy.Core.SmithyUnit.Value, &serializer)", impl, i, i);
-      } else {
-        writer.write("| $L case$L ->", caseName, i).indent();
-        writer.write("$L", write(member, String.valueOf(i), "case" + i, impl + ".Target" + i));
-      }
-      writer.dedent();
-    }
-    writer.write("| $L.Unknown _ -> $L", type, noCase).dedent();
-
-    writer
-        .write("override _.DeserializeCase(index, deserializer) =")
-        .indent()
-        .write("match index with");
-    for (int i = 0; i < members.size(); i++) {
-      MemberShape member = members.get(i);
-      String caseName = type + "." + FSharpNaming.caseName(member);
-      if (ShapeSupport.isUnit(member.getTarget())) {
-        writer.write("| $L ->", i).indent();
-        writer.write("$L.Target$L.Read(&deserializer) |> ignore", impl, i);
-        writer.write("$L", caseName).dedent();
-      } else {
-        writer.write("| $L -> $L($L)", i, caseName, read(member, impl + ".Target" + i));
-      }
-    }
-    writer.write("| _ -> $L", noCase).dedent();
     writer.dedent().write("");
 
     writeHolder(writer, shape, SERDE + "UnionSchema<" + type + ">", impl + "()");
@@ -237,7 +251,9 @@ final class SchemaGenerator {
     String builder = GENERIC + "List<" + element + ">";
 
     writer.write("type internal $L() =", impl).indent();
-    writer.write("inherit $LListSchema<$L, $L, $L>(", SERDE, type, element, builder).indent();
+    writer
+        .write("inherit $LElementListSchema<$L, $L, $L>(", SERDE, type, element, builder)
+        .indent();
     List<String> arguments = new ArrayList<>();
     arguments.add(FSharpLiterals.shapeId(shape.getId()));
     arguments.add(
@@ -250,20 +266,12 @@ final class SchemaGenerator {
         "static member val Target0: $LSchema<$L> = $L",
         SERDE,
         element,
-        elementSchema(shape, member, sparse));
+        elementSchema(member, sparse));
     writer.write("override _.GetElements(value) = value :> $LIEnumerable<$L>", GENERIC, element);
     writer.write("override _.CreateTypedBuilder() = $L()", builder);
     writer.write("override _.Add(builder, value) = builder.Add(value)");
     writer.write(
         "override _.Build(builder) = global.Microsoft.FSharp.Collections.List.ofSeq builder");
-    writer.write("override _.SerializeElements(value, serializer) =").indent();
-    writer.write("for element in value do").indent();
-    writer
-        .write("$L", writeElement(member, sparse, "0", "element", impl + ".Target0"))
-        .dedent()
-        .dedent();
-    writer.write("override _.DeserializeElement(builder, deserializer) =").indent();
-    writer.write("$L", readElement(member, sparse, "builder.Add", impl + ".Target0")).dedent();
     writer.dedent().write("");
 
     writeHolder(
@@ -285,7 +293,7 @@ final class SchemaGenerator {
     String entry = GENERIC + "KeyValuePair<string, " + value + ">";
 
     writer.write("type internal $L() =", impl).indent();
-    writer.write("inherit $LMapSchema<$L, $L, $L>(", SERDE, type, value, builder).indent();
+    writer.write("inherit $LEntryMapSchema<$L, $L, $L>(", SERDE, type, value, builder).indent();
     List<String> arguments = new ArrayList<>();
     arguments.add(FSharpLiterals.shapeId(shape.getId()));
     arguments.add(impl + ".Target0");
@@ -298,7 +306,7 @@ final class SchemaGenerator {
         "static member val Target0: $LSchema<$L> = $L",
         SERDE,
         value,
-        elementSchema(shape, member, sparse));
+        elementSchema(member, sparse));
     writer.write("override _.GetEntries(value) = value :> $LIEnumerable<$L>", GENERIC, entry);
     writer.write(
         "override _.CreateTypedBuilder() = $L(global.System.StringComparer.Ordinal)", builder);
@@ -309,15 +317,6 @@ final class SchemaGenerator {
             + " (fun (entry: $L) -> entry.Key, entry.Value) builder)",
         entry);
     writer.dedent();
-    writer.write("override _.SerializeEntries(value, serializer) =").indent();
-    writer.write("for entry in value do").indent();
-    writer.write("serializer.WriteString(0, entry.Key)");
-    writer
-        .write("$L", writeElement(member, sparse, "1", "entry.Value", impl + ".Target0"))
-        .dedent()
-        .dedent();
-    writer.write("override _.DeserializeEntry(builder, key, deserializer) =").indent();
-    writer.write("$L", readElement(member, sparse, "builder[key] <- ", impl + ".Target0")).dedent();
     writer.dedent().write("");
 
     writeHolder(
@@ -325,28 +324,6 @@ final class SchemaGenerator {
         shape,
         SERDE + "MapSchema<" + type + ", " + value + ", " + builder + ">",
         impl + "()");
-  }
-
-  /** The schema adapter for the {@code option} elements of a sparse list or map. */
-  void writeOptionAdapter(FSharpWriter writer) {
-    writer.write(
-        """
-        type internal $1L<'T>(target: $2LSchema<'T>) =
-            inherit $2LSchema<'T option>()
-            override _.Id = target.Id
-            override _.Kind = target.Kind
-            override _.Traits = target.Traits
-            override _.Write(index, value, serializer) =
-                match value with
-                | Some value -> target.Write(index, value, &serializer)
-                | None -> serializer.WriteNull(index)
-            override _.Read(deserializer) =
-                if deserializer.TryReadNull() then None else Some(target.Read(&deserializer))
-            interface $2LINullableSchema with
-                member _.Target = target :> $2LSchema
-        """,
-        OPTION_ADAPTER,
-        SERDE);
   }
 
   private void writeHolder(FSharpWriter writer, Shape shape, String schemaType, String value) {
@@ -444,186 +421,6 @@ final class SchemaGenerator {
         + ")";
   }
 
-  private void writeSerializeMembers(
-      FSharpWriter writer,
-      String impl,
-      List<MemberShape> members,
-      boolean isError,
-      Optional<MemberShape> message) {
-    if (members.isEmpty()) {
-      writer.write("override _.SerializeMembers(_value, _serializer) = ()");
-      return;
-    }
-    writer.write("override _.SerializeMembers(value, serializer) =").indent();
-    for (int i = 0; i < members.size(); i++) {
-      MemberShape member = members.get(i);
-      String value = "value." + property(member, isError, message);
-      String target = impl + ".Target" + i;
-      if (FSharpMembers.isOptional(member)) {
-        writer.write("match $L with", value);
-        writer.write(
-            "| Some member$L -> $L", i, write(member, String.valueOf(i), "member" + i, target));
-        writer.write("| None -> serializer.WriteNull($L)", i);
-      } else {
-        writer.write("$L", write(member, String.valueOf(i), value, target));
-      }
-    }
-    writer.dedent();
-  }
-
-  private void writeDeserializeMember(
-      FSharpWriter writer,
-      String impl,
-      List<MemberShape> members,
-      boolean isError,
-      Optional<MemberShape> message) {
-    if (members.isEmpty()) {
-      writer.write("override _.DeserializeMember(_builder, _index, _deserializer) = ()");
-      return;
-    }
-    writer.write("override _.DeserializeMember(builder, index, deserializer) =").indent();
-    writer.write("match index with");
-    for (int i = 0; i < members.size(); i++) {
-      MemberShape member = members.get(i);
-      String property = "builder." + property(member, isError, message);
-      String read = read(member, impl + ".Target" + i);
-      writer.write("| $L ->", i).indent();
-      if (FSharpMembers.isValueType(model, member)) {
-        writer.write(
-            "$L <- if deserializer.TryReadNull() then ValueNone else ValueSome($L)",
-            property,
-            read);
-      } else {
-        writer.write("let value = $L", read);
-        writer.write("$L <- if isNull (box value) then ValueNone else ValueSome value", property);
-      }
-      writer.dedent();
-    }
-    writer.write("| _ -> ()").dedent();
-  }
-
-  /** Writes a list element or map value, which is an {@code option} in a sparse collection. */
-  private String writeElement(
-      MemberShape member, boolean sparse, String index, String value, String target) {
-    if (!sparse) {
-      return write(member, index, value, target);
-    }
-    return "match "
-        + value
-        + " with\n| Some present -> "
-        + write(member, index, "present", target)
-        + "\n| None -> serializer.WriteNull("
-        + index
-        + ")";
-  }
-
-  /** Reads a list element or map value and hands it to {@code add}. */
-  private String readElement(MemberShape member, boolean sparse, String add, String target) {
-    String read = read(member, target);
-    String assign = add.endsWith(" ") ? add : add + "(";
-    String close = add.endsWith(" ") ? "" : ")";
-    if (!sparse) {
-      return assign + read + close;
-    }
-    if (FSharpMembers.isValueType(model, member)) {
-      return assign + "(if deserializer.TryReadNull() then None else Some(" + read + "))" + close;
-    }
-    return "let element = "
-        + read
-        + "\n"
-        + assign
-        + "(if isNull (box element) then None else Some element)"
-        + close;
-  }
-
-  /**
-   * The call writing {@code value} as member {@code index}: the serializer's own call for the
-   * member's kind, or the member's target schema for a kind it has none for.
-   */
-  private String write(MemberShape member, String index, String value, String target) {
-    Shape shape = model.expectShape(member.getTarget());
-    if (ShapeSupport.isStreamingBlobMember(model, member)) {
-      return "serializer.WriteStream(" + index + ", " + value + ")";
-    }
-    if (ShapeSupport.isEventStreamMember(model, member)) {
-      return "serializer.WriteEventStream(" + index + ", " + value + ", " + schema(shape) + ")";
-    }
-    if (ShapeSupport.isUnit(shape.getId()) || ShapeSupport.isValidationException(shape.getId())) {
-      return target + ".Write(" + index + ", " + value + ", &serializer)";
-    }
-    String call =
-        switch (shape.getType()) {
-          case BOOLEAN -> "WriteBoolean";
-          case BYTE -> "WriteByte";
-          case SHORT -> "WriteShort";
-          case INTEGER -> "WriteInteger";
-          case LONG -> "WriteLong";
-          case FLOAT -> "WriteFloat";
-          case DOUBLE -> "WriteDouble";
-          case BIG_INTEGER -> "WriteBigInteger";
-          case BIG_DECIMAL -> "WriteBigDecimal";
-          case STRING -> "WriteString";
-          case BLOB -> "WriteBlob";
-          case TIMESTAMP -> "WriteTimestamp";
-          case DOCUMENT -> "WriteDocument";
-          default -> null;
-        };
-    if (call != null) {
-      return "serializer." + call + "(" + index + ", " + value + ")";
-    }
-    return switch (shape.getType()) {
-      case ENUM -> "serializer.WriteStringEnum(" + index + ", " + value + ".Value)";
-      case INT_ENUM -> "serializer.WriteIntEnum(" + index + ", int " + value + ")";
-      case STRUCTURE ->
-          "serializer.WriteStruct(" + index + ", " + value + ", " + schema(shape) + ")";
-      case UNION -> "serializer.WriteUnion(" + index + ", " + value + ", " + schema(shape) + ")";
-      case LIST, SET -> "serializer.WriteList(" + index + ", " + value + ", " + schema(shape) + ")";
-      case MAP -> "serializer.WriteMap(" + index + ", " + value + ", " + schema(shape) + ")";
-      default -> target + ".Write(" + index + ", " + value + ", &serializer)";
-    };
-  }
-
-  /** The expression reading a member's value, calling the deserializer for the member's kind. */
-  private String read(MemberShape member, String target) {
-    Shape shape = model.expectShape(member.getTarget());
-    if (ShapeSupport.isStreamingBlobMember(model, member)) {
-      return "deserializer.ReadStream()";
-    }
-    if (ShapeSupport.isEventStreamMember(model, member)) {
-      return "deserializer.ReadEventStream(" + schema(shape) + ")";
-    }
-    if (ShapeSupport.isUnit(shape.getId()) || ShapeSupport.isValidationException(shape.getId())) {
-      return target + ".Read(&deserializer)";
-    }
-    return switch (shape.getType()) {
-      case BOOLEAN -> "deserializer.ReadBoolean()";
-      case BYTE -> "deserializer.ReadByte()";
-      case SHORT -> "deserializer.ReadShort()";
-      case INTEGER -> "deserializer.ReadInteger()";
-      case LONG -> "deserializer.ReadLong()";
-      case FLOAT -> "deserializer.ReadFloat()";
-      case DOUBLE -> "deserializer.ReadDouble()";
-      case BIG_INTEGER -> "deserializer.ReadBigInteger()";
-      case BIG_DECIMAL -> "deserializer.ReadBigDecimal()";
-      case STRING -> "deserializer.ReadString()";
-      case BLOB -> "deserializer.ReadBlob()";
-      case TIMESTAMP -> "deserializer.ReadTimestamp()";
-      case DOCUMENT -> "deserializer.ReadDocument()";
-      // A format whose enums are ordinals (protobuf) reads an ordinal the model does not define as
-      // null, which becomes the Unknown case.
-      case ENUM -> symbols.typeOf(shape) + ".FromValue(deserializer.ReadStringEnum())";
-      case INT_ENUM ->
-          "global.Microsoft.FSharp.Core.LanguagePrimitives.EnumOfValue<int, "
-              + symbols.typeOf(shape)
-              + ">(deserializer.ReadIntEnum())";
-      case STRUCTURE -> "deserializer.ReadStruct(" + schema(shape) + ")";
-      case UNION -> "deserializer.ReadUnion(" + schema(shape) + ")";
-      case LIST, SET -> "deserializer.ReadList(" + schema(shape) + ")";
-      case MAP -> "deserializer.ReadMap(" + schema(shape) + ")";
-      default -> target + ".Read(&deserializer)";
-    };
-  }
-
   /** A shape's schema, referenced from code that runs once every schema is initialized. */
   private String schema(Shape shape) {
     if ("smithy.api".equals(shape.getId().getNamespace())) {
@@ -679,18 +476,20 @@ final class SchemaGenerator {
         + ">)";
   }
 
-  private String elementSchema(Shape collection, MemberShape member, boolean sparse) {
+  private String elementSchema(MemberShape member, boolean sparse) {
     String target = lazy(model.expectShape(member.getTarget()));
     if (!sparse) {
       return target;
     }
-    context.files().useOptionAdapter(collection);
-    return OPTION_ADAPTER
-        + "<"
-        + symbols.typeOf(model.expectShape(member.getTarget()))
-        + ">("
-        + target
-        + ")";
+    return optional(symbols.typeOf(model.expectShape(member.getTarget())), target);
+  }
+
+  /** The schema of an {@code option} whose present value goes through {@code target}. */
+  private static String optional(String type, String target) {
+    return String.format(
+        "%s.Optional<%s option, %s>(%s, (fun value -> value.IsSome), (fun value -> value.Value),"
+            + " (fun value -> Some value), None)",
+        SCHEMAS, type, type, target);
   }
 
   private String elementType(MemberShape member, boolean sparse) {

@@ -69,6 +69,10 @@ instead of `AwsSigV4Presigner`, and set the client's `Endpoint` instead of using
   records, discriminated unions for unions and enums, `option` for members that may be
   absent, F# `list` and `Map`, and exception classes for errors. The schemas work with
   every NSmithy codec. Clients and servers are not generated for F# yet.
+- Schema bases that own the generic reading and writing, for a language that cannot override
+  those methods: `AccessorStructSchema` with a `StructMember` per member, `AccessorUnionSchema`
+  with a `UnionCase` per case, `ElementListSchema`, `EntryMapSchema`, and `Schemas.Optional` for
+  a value in a type that says whether it is present, such as F#'s `option`.
 
 ### Changed
 
