@@ -30,6 +30,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- The JSON codec types its serializer by the container it writes into and writes a structure
+  member's name and value in one call, which makes writing 5–7% faster.
 - The JSON codec reads a payload forward-only with `Utf8JsonReader` instead of parsing it into a
   `JsonDocument` first, which makes reading about a third faster.
 - The ASP.NET Core adapter copies request headers directly, skips a request body declared empty,

@@ -306,7 +306,7 @@ public class SerializationExecutionBenchmarks : IDisposable
     public int Schema()
     {
         ResetWriter();
-        var serializer = new JsonShapeSerializer(writer, SchemaPlan, materializeDefaults: true);
+        var serializer = JsonShapeSerializer.ForRoot(writer, SchemaPlan, materializeDefaults: true);
         ListItemsOutputSchema.Schema.Write(MemberIndex.Root, smithyList, ref serializer);
         writer.Flush();
         return destination.WrittenCount;
