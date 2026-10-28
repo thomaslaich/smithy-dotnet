@@ -49,8 +49,7 @@ part of the AWS client stack:
 
 - SigV4 signing and presigning
 - Modeled endpoint rules, including partitions, FIPS, dual-stack, and S3
-  addressing, plus standard regional endpoint resolution for models without
-  rules
+  addressing
 - The AWS SDKs' default credential chain: environment, web identity, shared
   profiles (assumed roles, IAM Identity Center, credential processes), container,
   and IMDS credentials, with region resolution from the environment and profile

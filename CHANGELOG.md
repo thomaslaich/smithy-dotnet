@@ -11,6 +11,16 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.15.0]
+
+This release resolves AWS credentials and the region the way the AWS SDKs do: web identity,
+assumed roles, container credentials, and credential processes join the default chain, and
+generated AWS clients default `Region` from the environment or profile. JSON reading and
+writing and the ASP.NET Core server get faster. When upgrading, sign with
+`AwsSigV4AuthScheme` instead of `AwsSigV4Interceptor`, presign with `AwsSigV4Signer.Presign`
+instead of `AwsSigV4Presigner`, and set the client's `Endpoint` instead of using
+`AwsRegionalEndpointResolver`.
+
 ### Added
 
 - `DefaultAwsCredentialsProvider` covers the AWS SDKs' default chain: environment, web
@@ -707,7 +717,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.11.0...v0.12.0
