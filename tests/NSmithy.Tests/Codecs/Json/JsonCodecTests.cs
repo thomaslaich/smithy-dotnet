@@ -209,6 +209,18 @@ public sealed class JsonCodecTests
         Assert.Equal(["buyer", "name"], ex.PathTokens);
     }
 
+    [Fact]
+    public void JsonCodecReportsMissingRequiredMemberByMemberNameNotJsonName()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(JsonNamedProfileSchema.Schema);
+
+        var ex = Assert.Throws<MissingRequiredMemberException>(() => codec.DeserializeText("{}"));
+
+        // The wire name is "displayName"; the report uses the member name like every other codec,
+        // protocol binding and the constraint validator do.
+        Assert.Equal(["name"], ex.PathTokens);
+    }
+
     // ---------------- list + map ----------------
 
     [Fact]

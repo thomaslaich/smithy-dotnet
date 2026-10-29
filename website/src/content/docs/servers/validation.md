@@ -73,6 +73,11 @@ and a member that breaks two constraints produces two entries: `@length` and
 The root is the empty string, and `~` and `/` inside a name are escaped as `~0`
 and `~1`.
 
+Steps are member names as modeled, not wire names: a member renamed with
+`@jsonName`, or bound to a header or query parameter, is still reported by its
+member name, so every entry of `fieldList` follows one convention whatever the
+protocol.
+
 | Where the violation is | Path |
 | --- | --- |
 | structure member | `/name` |
