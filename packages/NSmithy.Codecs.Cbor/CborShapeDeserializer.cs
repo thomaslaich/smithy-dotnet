@@ -127,7 +127,7 @@ internal readonly struct CborShapeDeserializer(CborReader reader, CborMemberPlan
             if (reader.PeekState() == CborReaderState.Null && member.IsRequired)
             {
                 reader.ReadNull();
-                throw new MissingRequiredMemberException(name);
+                throw new MissingRequiredMemberException(member.Name);
             }
 
             seen[index] = true;

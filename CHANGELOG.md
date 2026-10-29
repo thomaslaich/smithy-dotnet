@@ -11,6 +11,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- A `ValidationException` path for a required member missing from a JSON payload used the
+  member's `@jsonName`, while constraint violations, the other codecs, and HTTP bindings use the
+  member name. A request with both violations reported the same field two ways. Missing members
+  are now reported by member name as well.
+
 ## [0.15.0]
 
 This release resolves AWS credentials and the region the way the AWS SDKs do: web identity,

@@ -7,6 +7,7 @@ service Fixtures {
     version: "1"
     operations: [
         CreateUser
+        RenameUser
     ]
 }
 
@@ -26,6 +27,31 @@ operation CreateUser {
     errors: [
         UserExists
     ]
+}
+
+/// Wire names differ from member names, so validation paths show which of the two they use.
+@http(method: "POST", uri: "/users/rename")
+operation RenameUser {
+    input := {
+        @required
+        @jsonName("display_name")
+        @length(min: 3)
+        displayName: String
+
+        @jsonName("contact_info")
+        contact: Contact
+    }
+
+    output := {
+        @required
+        displayName: String
+    }
+}
+
+structure Contact {
+    @required
+    @jsonName("e_mail")
+    email: String
 }
 
 @error("client")

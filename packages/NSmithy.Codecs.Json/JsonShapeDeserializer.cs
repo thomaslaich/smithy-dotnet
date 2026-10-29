@@ -367,7 +367,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
             {
                 if (projection && member.IsRequired)
                 {
-                    throw new MissingRequiredMemberException(member.WireName);
+                    throw new MissingRequiredMemberException(member.Name);
                 }
 
                 continue;
@@ -382,7 +382,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
             }
             catch (MissingRequiredMemberException exception)
             {
-                exception.PrependPathToken(member.WireName);
+                exception.PrependPathToken(member.Name);
                 throw;
             }
 
@@ -400,7 +400,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
             // none.
             if (members[index].IsRequired)
             {
-                throw new MissingRequiredMemberException(members[index].WireName);
+                throw new MissingRequiredMemberException(members[index].Name);
             }
         }
     }

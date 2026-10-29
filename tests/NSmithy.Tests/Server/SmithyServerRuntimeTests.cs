@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Core.Validation;
@@ -152,6 +153,39 @@ public sealed class SmithyServerRuntimeTests
         Assert.Equal("ValidationException", response.Headers["X-Amzn-Errortype"].Single());
         var body = await ReadBodyAsync(response);
         Assert.Contains("/name", body, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // Absent: the codec rejects the payload before the compiled validator runs.
+    [InlineData("""{}""", "/displayName")]
+    // Present but too short: the compiled validator rejects it.
+    [InlineData("""{"display_name":"ab"}""", "/displayName")]
+    // Absent inside a nested structure whose member is renamed as well.
+    [InlineData("""{"display_name":"abc","contact_info":{}}""", "/contact/email")]
+    public async Task DispatchReportsValidationPathsByMemberNameRegardlessOfJsonName(
+        string json,
+        string expectedPath
+    )
+    {
+        var protocol = Service().ForServerOperation(RenameUserSchema.Schema);
+        var request = new SmithyHttpRequest(HttpMethod.Post, "/users/rename")
+        {
+            Body = new SmithyHttpBody.Bytes(Encoding.UTF8.GetBytes(json)),
+            ContentType = "application/json",
+        };
+
+        var response = await new SmithyServerRuntime().DispatchAsync(
+            protocol,
+            request,
+            (input, _) => Task.FromResult(new RenameUserOutput(input.DisplayName))
+        );
+
+        // Both rejection paths must name the member the same way, so a client can match every
+        // entry of fieldList against one convention.
+        Assert.Equal(400, response.StatusCode);
+        using var body = JsonDocument.Parse(await ReadBodyAsync(response));
+        var field = Assert.Single(body.RootElement.GetProperty("fieldList").EnumerateArray());
+        Assert.Equal(expectedPath, field.GetProperty("path").GetString());
     }
 
     // The three ways a handler raises: throwing before it returns a task, throwing inside an async
