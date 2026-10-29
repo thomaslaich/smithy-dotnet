@@ -335,6 +335,27 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     }
 
     [Fact]
+    public void FSharpProjectGivesTheServiceToFSharpCodegen()
+    {
+        var (file, errors) = Write(task =>
+        {
+            task.Plugin = "fsharp-codegen";
+            task.Service = "example#Service";
+            task.GenerateClient = false;
+        });
+
+        Assert.Empty(errors);
+        var fsharp = Plugin(file, "source", "fsharp-codegen");
+        Assert.Equal("example#Service", fsharp["service"]!.GetValue<string>());
+        Assert.Null(fsharp["generateClient"]);
+        Assert.Null(file["projections"]!["source"]!["plugins"]!["csharp-codegen"]);
+        Assert.Equal(
+            ["io.github.thomaslaich.nsmithy:smithy-fsharp-codegen:0.0.0-SNAPSHOT"],
+            Dependencies(file)
+        );
+    }
+
+    [Fact]
     public void ProtoPluginTakesBaseNamespaceFromCSharpCodegen()
     {
         var project = WriteFile(

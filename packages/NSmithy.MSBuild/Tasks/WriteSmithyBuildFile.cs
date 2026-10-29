@@ -15,6 +15,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 {
     private const string MavenCentral = "https://repo.maven.apache.org/maven2/";
     private const string CSharpPlugin = "csharp-codegen";
+    private const string FSharpPlugin = "fsharp-codegen";
     private const string NSmithyGroup = "io.github.thomaslaich.nsmithy";
 
     private static readonly JsonDocumentOptions ReadOptions = new()
@@ -49,6 +50,12 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 
     /// <summary>SmithyGrpc: adds the Protobuf plugin.</summary>
     public bool Grpc { get; set; }
+
+    /// <summary>
+    /// SmithyPlugin: the code generator that gets the service. <c>fsharp-codegen</c> in an F#
+    /// project, <c>csharp-codegen</c> otherwise.
+    /// </summary>
+    public string Plugin { get; set; } = CSharpPlugin;
 
     /// <summary>Name of the Protobuf plugin.</summary>
     public string ProtoPlugin { get; set; } = "proto-codegen";
@@ -251,7 +258,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             if (
                 plugin.Plugin == ProtoPlugin
                 && !settings.ContainsKey("baseNamespace")
-                && projectionPlugins[CSharpPlugin]?["baseNamespace"]?.GetValue<string>()
+                && projectionPlugins[Plugin]?["baseNamespace"]?.GetValue<string>()
                     is { } baseNamespace
             )
                 settings["baseNamespace"] = baseNamespace;
@@ -263,12 +270,13 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 
     private IEnumerable<PropertySettings> EnabledPlugins()
     {
-        var csharp = new JsonObject { ["service"] = Service };
-        if (!GenerateClient)
-            csharp["generateClient"] = false;
-        if (!GenerateServer)
-            csharp["generateServer"] = false;
-        yield return new PropertySettings(CSharpPlugin, "SmithyService", csharp, []);
+        // Only the C# generator generates clients and servers, so only it takes their switches.
+        var codegen = new JsonObject { ["service"] = Service };
+        if (Plugin == CSharpPlugin && !GenerateClient)
+            codegen["generateClient"] = false;
+        if (Plugin == CSharpPlugin && !GenerateServer)
+            codegen["generateServer"] = false;
+        yield return new PropertySettings(Plugin, "SmithyService", codegen, []);
 
         if (GenerateDocs)
             yield return new PropertySettings(
@@ -359,6 +367,11 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                 "NSmithy"
             );
         }
+        if (names.Contains(FSharpPlugin))
+            dependencies.Add(
+                $"{NSmithyGroup}:smithy-fsharp-codegen:{CSharpCodegenVersion}",
+                "NSmithy"
+            );
         if (names.Contains(ProtoPlugin))
             dependencies.Add(
                 $"{NSmithyGroup}:smithy-proto-codegen:{CSharpCodegenVersion}",

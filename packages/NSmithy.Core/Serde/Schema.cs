@@ -797,35 +797,26 @@ public abstract class ListSchema<TCollection, TElement, TBuilder>
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
-/// <summary>A list whose elements go through its element schema, as a hand-written schema builds one.</summary>
-internal sealed class DelegateListSchema<TCollection, TElement, TBuilder>(
+/// <summary>
+/// A list whose elements go through its element schema, which leaves a derived class only the
+/// non-generic members to override.
+/// </summary>
+public abstract class ElementListSchema<TCollection, TElement, TBuilder>(
     ShapeId id,
     ShapeKind kind,
     Schema<TElement> element,
-    Func<TCollection, IEnumerable<TElement>> getElements,
-    Func<TBuilder> createBuilder,
-    Action<TBuilder, TElement> add,
-    Func<TBuilder, TCollection> build,
     IEnumerable<Trait>? traits = null,
     IEnumerable<Trait>? elementTraits = null
 ) : ListSchema<TCollection, TElement, TBuilder>(id, kind, element, traits, elementTraits)
 {
-    public override IEnumerable<TElement> GetElements(TCollection value) => getElements(value);
-
-    public override TBuilder CreateTypedBuilder() => createBuilder();
-
-    public override void Add(TBuilder builder, TElement value) => add(builder, value);
-
-    public override TCollection Build(TBuilder builder) => build(builder);
-
-    public override void SerializeElements<TSerializer>(
+    public sealed override void SerializeElements<TSerializer>(
         TCollection value,
         ref TSerializer serializer
     )
     {
         // Indexed when possible: foreach over an IEnumerable boxes the collection's enumerator,
         // an allocation per list written.
-        var elements = getElements(value);
+        var elements = GetElements(value);
         if (elements is IReadOnlyList<TElement> list)
         {
             for (var index = 0; index < list.Count; index++)
@@ -842,10 +833,32 @@ internal sealed class DelegateListSchema<TCollection, TElement, TBuilder>(
         }
     }
 
-    public override void DeserializeElement<TDeserializer>(
+    public sealed override void DeserializeElement<TDeserializer>(
         TBuilder builder,
         ref TDeserializer deserializer
-    ) => add(builder, ElementSchema.Read(ref deserializer));
+    ) => Add(builder, ElementSchema.Read(ref deserializer));
+}
+
+/// <summary>A list whose elements go through its element schema, as a hand-written schema builds one.</summary>
+internal sealed class DelegateListSchema<TCollection, TElement, TBuilder>(
+    ShapeId id,
+    ShapeKind kind,
+    Schema<TElement> element,
+    Func<TCollection, IEnumerable<TElement>> getElements,
+    Func<TBuilder> createBuilder,
+    Action<TBuilder, TElement> add,
+    Func<TBuilder, TCollection> build,
+    IEnumerable<Trait>? traits = null,
+    IEnumerable<Trait>? elementTraits = null
+) : ElementListSchema<TCollection, TElement, TBuilder>(id, kind, element, traits, elementTraits)
+{
+    public override IEnumerable<TElement> GetElements(TCollection value) => getElements(value);
+
+    public override TBuilder CreateTypedBuilder() => createBuilder();
+
+    public override void Add(TBuilder builder, TElement value) => add(builder, value);
+
+    public override TCollection Build(TBuilder builder) => build(builder);
 }
 
 /// <summary>
@@ -926,6 +939,38 @@ public abstract class MapSchema<TDictionary, TValue, TBuilder>
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
+/// <summary>
+/// A map whose values go through its value schema, which leaves a derived class only the non-generic
+/// members to override.
+/// </summary>
+public abstract class EntryMapSchema<TDictionary, TValue, TBuilder>(
+    ShapeId id,
+    Schema<TValue> value,
+    IEnumerable<Trait>? traits = null,
+    IEnumerable<Trait>? keyTraits = null,
+    IEnumerable<Trait>? valueTraits = null,
+    Schema? key = null
+) : MapSchema<TDictionary, TValue, TBuilder>(id, value, traits, keyTraits, valueTraits, key)
+{
+    public sealed override void SerializeEntries<TSerializer>(
+        TDictionary value,
+        ref TSerializer serializer
+    )
+    {
+        foreach (var (key, entry) in GetEntries(value))
+        {
+            serializer.WriteString(0, key);
+            ValueSchema.Write(1, entry, ref serializer);
+        }
+    }
+
+    public sealed override void DeserializeEntry<TDeserializer>(
+        TBuilder builder,
+        string key,
+        ref TDeserializer deserializer
+    ) => Add(builder, key, ValueSchema.Read(ref deserializer));
+}
+
 /// <summary>A map whose values go through its value schema, as a hand-written schema builds one.</summary>
 internal sealed class DelegateMapSchema<TDictionary, TValue, TBuilder>(
     ShapeId id,
@@ -938,7 +983,7 @@ internal sealed class DelegateMapSchema<TDictionary, TValue, TBuilder>(
     IEnumerable<Trait>? keyTraits = null,
     IEnumerable<Trait>? valueTraits = null,
     Schema? key = null
-) : MapSchema<TDictionary, TValue, TBuilder>(id, value, traits, keyTraits, valueTraits, key)
+) : EntryMapSchema<TDictionary, TValue, TBuilder>(id, value, traits, keyTraits, valueTraits, key)
 {
     public override IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value) =>
         getEntries(value);
@@ -949,24 +994,6 @@ internal sealed class DelegateMapSchema<TDictionary, TValue, TBuilder>(
         add(builder, key, value);
 
     public override TDictionary Build(TBuilder builder) => build(builder);
-
-    public override void SerializeEntries<TSerializer>(
-        TDictionary value,
-        ref TSerializer serializer
-    )
-    {
-        foreach (var (key, entry) in getEntries(value))
-        {
-            serializer.WriteString(0, key);
-            ValueSchema.Write(1, entry, ref serializer);
-        }
-    }
-
-    public override void DeserializeEntry<TDeserializer>(
-        TBuilder builder,
-        string key,
-        ref TDeserializer deserializer
-    ) => add(builder, key, ValueSchema.Read(ref deserializer));
 }
 
 /// <summary>
@@ -1341,6 +1368,18 @@ public static class Schemas
 
     public static Schema<T?> NullableReference<T>(Schema<T> target)
         where T : class => (Schema<T?>)(object)target;
+
+    /// <summary>
+    /// A value held in a type of its own that says whether it is present, such as F#'s
+    /// <c>option</c>.
+    /// </summary>
+    public static OptionalSchema<TOptional, T> Optional<TOptional, T>(
+        Schema<T> target,
+        Func<TOptional, bool> isPresent,
+        Func<TOptional, T> valueOf,
+        Func<T, TOptional> present,
+        TOptional absent
+    ) => new(target, isPresent, valueOf, present, absent);
 
     public static EventStreamSchema<TEvent> EventStream<TEvent>(Schema<TEvent> eventSchema) =>
         new(eventSchema);

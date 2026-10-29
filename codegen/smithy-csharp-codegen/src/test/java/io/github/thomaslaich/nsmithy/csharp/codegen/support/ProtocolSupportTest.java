@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
+import io.github.thomaslaich.nsmithy.codegen.core.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
 import java.util.List;

@@ -1,7 +1,7 @@
 /*
  * Trait shape IDs that aren't part of smithy-model's prelude (e.g. alloy traits).
  */
-package io.github.thomaslaich.nsmithy.csharp.codegen;
+package io.github.thomaslaich.nsmithy.codegen.core;
 
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyInternalApi;

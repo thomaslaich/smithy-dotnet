@@ -1,12 +1,13 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.SchemaSupport;
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
-import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.CSharpShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -15,9 +16,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
-import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
@@ -35,88 +34,31 @@ import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.UnionShape;
 import software.amazon.smithy.model.traits.DefaultTrait;
-import software.amazon.smithy.model.traits.DeprecatedTrait;
-import software.amazon.smithy.model.traits.DocumentationTrait;
-import software.amazon.smithy.model.traits.EnumValueTrait;
 import software.amazon.smithy.model.traits.ErrorTrait;
-import software.amazon.smithy.model.traits.ExamplesTrait;
-import software.amazon.smithy.model.traits.ExternalDocumentationTrait;
-import software.amazon.smithy.model.traits.InternalTrait;
-import software.amazon.smithy.model.traits.RecommendedTrait;
-import software.amazon.smithy.model.traits.SinceTrait;
-import software.amazon.smithy.model.traits.SuppressTrait;
-import software.amazon.smithy.model.traits.TagsTrait;
-import software.amazon.smithy.model.traits.TitleTrait;
 import software.amazon.smithy.model.traits.Trait;
-import software.amazon.smithy.model.traits.UnstableTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
 public final class SchemaGenerator {
 
-  private static final Set<ShapeId> BUILD_TIME_TRAITS =
-      Set.of(
-          DeprecatedTrait.ID,
-          DocumentationTrait.ID,
-          ExamplesTrait.ID,
-          ExternalDocumentationTrait.ID,
-          RecommendedTrait.ID,
-          SinceTrait.ID,
-          SuppressTrait.ID,
-          TagsTrait.ID,
-          TitleTrait.ID,
-          UnstableTrait.ID,
-          TraitIds.PROMPTS,
-          ShapeId.from("smithy.rules#endpointTests"),
-          ShapeId.from("smithy.waiters#waitable"));
-
-  private static final Set<String> BUILD_TIME_TRAIT_NAMESPACES =
-      Set.of("smithy.test", "aws.iam", "aws.cloudformation");
-
   public static String shapeSchemaAccessor(
       CSharpWriter writer, GenerationContext context, Shape shape) {
     if ("smithy.api".equals(shape.getId().getNamespace())) {
-      return switch (shape.getId().getName()) {
-        // The deprecated Primitive* shapes differ only by a default value, which Smithy also
-        // places on every member that targets them.
-        case "Boolean", "PrimitiveBoolean" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Boolean");
-        case "Byte", "PrimitiveByte" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Byte");
-        case "Short", "PrimitiveShort" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Short");
-        case "Integer", "PrimitiveInteger" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Integer");
-        case "Long", "PrimitiveLong" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Long");
-        case "Float", "PrimitiveFloat" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Float");
-        case "Double", "PrimitiveDouble" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Double");
-        case "BigInteger" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".BigInteger");
-        case "BigDecimal" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".BigDecimal");
-        case "String" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".String");
-        case "Blob" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Blob");
-        case "Timestamp" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Timestamp");
-        case "Document" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Document");
-        case "Unit" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Unit");
-        default ->
-            throw new CodegenException(
-                "Unsupported Smithy prelude schema shape "
-                    + shape.getId()
-                    + " ("
-                    + shape.getType()
-                    + "). Supported prelude schema shapes: "
-                    + supportedPreludeSchemaShapeNames()
-                    + ".");
-      };
+      String name = SchemaSupport.preludeShapeSchemaName(shape);
+      return writer.typeName(RuntimeTypes.SCHEMAS) + "." + name;
     }
 
     if (shape.getType() == ShapeType.TIMESTAMP) {
       // Carry @timestampFormat into the schema so codecs resolve the wire format from it
       // (covers struct members, list elements, and map values uniformly).
-      List<Trait> tsTraits =
-          shape.getAllTraits().values().stream()
-              .filter(t -> t.toShapeId().toString().equals("smithy.api#timestampFormat"))
-              .collect(Collectors.toList());
-      return tsTraits.isEmpty()
-          ? (writer.typeName(RuntimeTypes.SCHEMAS) + ".Timestamp")
-          : (writer.typeName(RuntimeTypes.SCHEMAS) + ".TimestampWithTraits(")
-              + traitsExpr(writer, tsTraits)
-              + ")";
+      return SchemaSupport.timestampFormat(shape)
+          .map(
+              format ->
+                  writer.typeName(RuntimeTypes.SCHEMAS)
+                      + ".TimestampWithTraits("
+                      + traitsExpr(writer, List.of(format))
+                      + ")")
+          .orElseGet(() -> writer.typeName(RuntimeTypes.SCHEMAS) + ".Timestamp");
     }
 
     String preludeSchema =
@@ -134,7 +76,7 @@ public final class SchemaGenerator {
     // referenced schema's static initializer is still running, so defer it lazily. The
     // null-forgiving '!' suppresses the nullable-flow warning for self-references where the
     // property is not yet definitely assigned at the point the lambda is created.
-    return isCycleCapable(shape.getType())
+    return SchemaSupport.isCycleCapable(shape.getType())
         ? (writer.typeName(RuntimeTypes.SCHEMAS) + ".Lazy(() => ") + accessor + "!)"
         : accessor;
   }
@@ -209,16 +151,6 @@ public final class SchemaGenerator {
         + ")";
   }
 
-  /**
-   * Whether a trait is carried into runtime schemas. Documentation, tooling, and test traits are
-   * consumed at build time and left out, which keeps schema classes small.
-   */
-  static boolean isRuntimeTrait(Trait trait) {
-    ShapeId id = trait.toShapeId();
-    return !BUILD_TIME_TRAITS.contains(id)
-        && !BUILD_TIME_TRAIT_NAMESPACES.contains(id.getNamespace());
-  }
-
   public static String traitExpr(CSharpWriter writer, Trait trait) {
     String idExpr = shapeIdExpr(writer, trait.toShapeId());
     Node node = trait.toNode();
@@ -234,13 +166,11 @@ public final class SchemaGenerator {
   }
 
   public static String traitsExpr(CSharpWriter writer, Collection<? extends Trait> traits) {
-    List<Trait> sorted =
-        traits.stream().filter(SchemaGenerator::isRuntimeTrait).collect(Collectors.toList());
+    List<Trait> sorted = SchemaSupport.runtimeTraits(traits);
     if (sorted.isEmpty()) {
       return "null";
     }
 
-    sorted.sort(java.util.Comparator.comparing(t -> t.toShapeId().toString()));
     return "["
         + sorted.stream().map(value -> traitExpr(writer, value)).collect(Collectors.joining(", "))
         + "]";
@@ -328,7 +258,7 @@ public final class SchemaGenerator {
                                 context,
                                 member,
                                 "value" + index,
-                                !ShapeSupport.isReferenceType(context.model(), member),
+                                !CSharpShapeSupport.isReferenceType(context.model(), member),
                                 "Target" + index));
                       }
                     });
@@ -393,7 +323,7 @@ public final class SchemaGenerator {
     Shape memberTarget = context.model().expectShape(member.getTarget());
     String typeName = writer.typeName(sp.toSymbol(shape));
     boolean sparse = ShapeSupport.isSparse(shape);
-    boolean isReference = ShapeSupport.isReferenceType(context.model(), member);
+    boolean isReference = CSharpShapeSupport.isReferenceType(context.model(), member);
     String memberType = writer.typeName(sp.toSymbol(memberTarget)) + (sparse ? "?" : "");
     String builderType = writer.typeName(RuntimeTypes.LIST) + "<" + memberType + ">";
 
@@ -492,7 +422,7 @@ public final class SchemaGenerator {
     Shape valueTarget = context.model().expectShape(member.getTarget());
     String typeName = writer.typeName(sp.toSymbol(shape));
     boolean sparse = ShapeSupport.isSparse(shape);
-    boolean isReference = ShapeSupport.isReferenceType(context.model(), member);
+    boolean isReference = CSharpShapeSupport.isReferenceType(context.model(), member);
     String valueType = writer.typeName(sp.toSymbol(valueTarget)) + (sparse ? "?" : "");
     String builderType = writer.typeName(RuntimeTypes.DICTIONARY) + "<string, " + valueType + ">";
 
@@ -664,7 +594,7 @@ public final class SchemaGenerator {
                   w.write(
                       "private static readonly $T<$L> Target$L = $L;",
                       RuntimeTypes.SCHEMA,
-                      ShapeSupport.memberTypeExpr(
+                      CSharpShapeSupport.memberTypeExpr(
                           w, context.model(), context.symbolProvider(), member, false),
                       index,
                       rawMemberTargetExpr(w, context, member));
@@ -697,7 +627,7 @@ public final class SchemaGenerator {
                       String.valueOf(index),
                       "@case.Value",
                       "value" + index,
-                      ShapeSupport.isReferenceType(context.model(), member),
+                      CSharpShapeSupport.isReferenceType(context.model(), member),
                       null,
                       "Target" + index);
                   w.write("break;");
@@ -804,14 +734,7 @@ public final class SchemaGenerator {
    * invented. Generated enum types stay open, so the schema is the only place this is recorded.
    */
   public static String stringEnumValuesExpr(Shape shape) {
-    return shape
-        .asEnumShape()
-        .map(
-            e ->
-                e.getEnumValues().values().stream()
-                    .map(CSharpNaming::formatString)
-                    .collect(Collectors.joining(", ", "[", "]")))
-        .orElse("null");
+    return listExpr(SchemaSupport.stringEnumValues(shape));
   }
 
   /**
@@ -820,24 +743,19 @@ public final class SchemaGenerator {
    * schema has to record which ones they are.
    */
   public static String stringEnumInternalValuesExpr(Shape shape) {
-    return shape
-        .asEnumShape()
-        .map(
-            e ->
-                e.getAllMembers().values().stream()
-                    .filter(m -> m.hasTrait(InternalTrait.class))
-                    .map(m -> m.expectTrait(EnumValueTrait.class).expectStringValue())
-                    .map(CSharpNaming::formatString)
-                    .collect(Collectors.toList()))
-        .filter(values -> !values.isEmpty())
-        .map(values -> String.join(", ", values))
-        .map(values -> "[" + values + "]")
-        .orElse("null");
+    List<String> values = SchemaSupport.internalStringEnumValues(shape);
+    return values.isEmpty() ? "null" : listExpr(values);
+  }
+
+  private static String listExpr(List<String> values) {
+    return values.stream()
+        .map(CSharpNaming::formatString)
+        .collect(Collectors.joining(", ", "[", "]"));
   }
 
   /** The int values an intEnum shape defines. See {@link #stringEnumValuesExpr}. */
   public static String intEnumValuesExpr(IntEnumShape shape) {
-    return shape.getEnumValues().values().stream()
+    return SchemaSupport.intEnumValues(shape).stream()
         .map(String::valueOf)
         .collect(Collectors.joining(", ", "[", "]"));
   }
@@ -849,7 +767,7 @@ public final class SchemaGenerator {
     for (MemberShape member : members) {
       writer.write(
           "public $L $L { get; set; }",
-          ShapeSupport.memberTypeExpr(
+          CSharpShapeSupport.memberTypeExpr(
               writer, context.model(), context.symbolProvider(), member, true),
           CSharpNaming.memberName(member));
     }
@@ -1185,7 +1103,7 @@ public final class SchemaGenerator {
    */
   private static boolean propertyMayBeNull(
       GenerationContext context, MemberShape member, boolean isError) {
-    if (ShapeSupport.isReferenceType(context.model(), member)) {
+    if (CSharpShapeSupport.isReferenceType(context.model(), member)) {
       return true;
     }
     return ShapeSupport.isNullable(member) || (!isError && ShapeSupport.hasDefault(member));
@@ -1212,44 +1130,11 @@ public final class SchemaGenerator {
       writer.write(
           "private static readonly $T<$L> Target$L = $L;",
           RuntimeTypes.SCHEMA,
-          ShapeSupport.memberTypeExpr(
+          CSharpShapeSupport.memberTypeExpr(
               writer, context.model(), context.symbolProvider(), member, true),
           index,
           memberTargetExpr(writer, context, member));
     }
-  }
-
-  private static boolean isCycleCapable(ShapeType type) {
-    return switch (type) {
-      case STRUCTURE, UNION, LIST, SET, MAP -> true;
-      default -> false;
-    };
-  }
-
-  private static String supportedPreludeSchemaShapeNames() {
-    return String.join(
-        ", ",
-        "Boolean",
-        "Byte",
-        "Short",
-        "Integer",
-        "Long",
-        "Float",
-        "Double",
-        "PrimitiveBoolean",
-        "PrimitiveByte",
-        "PrimitiveShort",
-        "PrimitiveInteger",
-        "PrimitiveLong",
-        "PrimitiveFloat",
-        "PrimitiveDouble",
-        "BigInteger",
-        "BigDecimal",
-        "String",
-        "Blob",
-        "Timestamp",
-        "Document",
-        "Unit");
   }
 
   private static String localSchemaClassName(Shape shape) {
@@ -1261,13 +1146,13 @@ public final class SchemaGenerator {
     Shape target = context.model().expectShape(member.getTarget());
     String targetExpr = targetSchemaExpr(writer, context, member, target);
     String nullableMemberType =
-        ShapeSupport.memberTypeExpr(
+        CSharpShapeSupport.memberTypeExpr(
             writer, context.model(), context.symbolProvider(), member, true);
     if (!nullableMemberType.endsWith("?")) {
       return targetExpr;
     }
 
-    if (!ShapeSupport.isReferenceType(context.model(), member)) {
+    if (!CSharpShapeSupport.isReferenceType(context.model(), member)) {
       return (writer.typeName(RuntimeTypes.SCHEMAS) + ".Nullable(") + targetExpr + ")";
     }
     return (writer.typeName(RuntimeTypes.SCHEMAS) + ".NullableReference(") + targetExpr + ")";
@@ -1309,7 +1194,7 @@ public final class SchemaGenerator {
       base = targetExpr;
     } else {
       base =
-          ShapeSupport.isReferenceType(context.model(), member)
+          CSharpShapeSupport.isReferenceType(context.model(), member)
               ? (writer.typeName(RuntimeTypes.SCHEMAS) + ".NullableReference(") + targetExpr + ")"
               : (writer.typeName(RuntimeTypes.SCHEMAS) + ".Nullable(") + targetExpr + ")";
     }
@@ -1369,40 +1254,7 @@ public final class SchemaGenerator {
 
   private static String memberTraitsExpr(
       CSharpWriter writer, GenerationContext context, MemberShape member) {
-    List<Trait> traits = new ArrayList<>(member.getAllTraits().values());
-    Shape target = context.model().expectShape(member.getTarget());
-    if (shouldInlineTargetTraits(target)) {
-      for (Trait trait : target.getAllTraits().values()) {
-        if (traits.stream().noneMatch(existing -> existing.toShapeId().equals(trait.toShapeId()))) {
-          traits.add(trait);
-        }
-      }
-    }
-    return traitsExpr(writer, traits);
-  }
-
-  private static boolean shouldInlineTargetTraits(Shape target) {
-    if ("smithy.api".equals(target.getId().getNamespace())) {
-      return false;
-    }
-
-    return switch (target.getType()) {
-      case BOOLEAN,
-          BYTE,
-          SHORT,
-          INTEGER,
-          LONG,
-          FLOAT,
-          DOUBLE,
-          BIG_INTEGER,
-          BIG_DECIMAL,
-          STRING,
-          BLOB,
-          TIMESTAMP,
-          DOCUMENT ->
-          true;
-      default -> false;
-    };
+    return traitsExpr(writer, SchemaSupport.memberTraits(context.model(), member));
   }
 
   private static String documentExpr(CSharpWriter writer, Node node) {
@@ -1418,7 +1270,7 @@ public final class SchemaGenerator {
               + ")";
       case NUMBER ->
           (writer.typeName(RuntimeTypes.DOCUMENT) + ".From(")
-              + ShapeSupport.decimalLiteral(node.expectNumberNode().getValue())
+              + CSharpShapeSupport.decimalLiteral(node.expectNumberNode().getValue())
               + ")";
       case ARRAY -> arrayDocumentExpr(writer, node.expectArrayNode());
       case OBJECT -> objectDocumentExpr(writer, node.expectObjectNode());
@@ -1457,21 +1309,8 @@ public final class SchemaGenerator {
   }
 
   private static String primitiveTypeToPreludeSchema(CSharpWriter writer, ShapeType t) {
-    return switch (t) {
-      case BOOLEAN -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Boolean");
-      case BYTE -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Byte");
-      case SHORT -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Short");
-      case INTEGER -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Integer");
-      case LONG -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Long");
-      case FLOAT -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Float");
-      case DOUBLE -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Double");
-      case BIG_INTEGER -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".BigInteger");
-      case BIG_DECIMAL -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".BigDecimal");
-      case STRING -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".String");
-      case BLOB -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Blob");
-      case TIMESTAMP -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Timestamp");
-      case DOCUMENT -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Document");
-      default -> null;
-    };
+    return SchemaSupport.preludeSchemaName(t)
+        .map(name -> writer.typeName(RuntimeTypes.SCHEMAS) + "." + name)
+        .orElse(null);
   }
 }

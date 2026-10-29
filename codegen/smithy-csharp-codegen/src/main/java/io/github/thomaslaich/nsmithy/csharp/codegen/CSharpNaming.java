@@ -3,6 +3,7 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.Naming;
 import java.util.Set;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
@@ -118,30 +119,12 @@ public final class CSharpNaming {
 
   private CSharpNaming() {}
 
-  /** Smithy namespace -> C# namespace, prefixed with optional baseNamespace. */
-  public static String namespaceFor(String smithyNamespace, String baseNamespace) {
-    StringBuilder sb = new StringBuilder();
-    boolean first = true;
-    for (String part : smithyNamespace.split("\\.")) {
-      if (!first) {
-        sb.append('.');
-      }
-      sb.append(pascal(part));
-      first = false;
-    }
-    String suffix = sb.toString();
-    if (baseNamespace == null || baseNamespace.isBlank()) {
-      return suffix;
-    }
-    return baseNamespace + "." + suffix;
-  }
-
   public static String typeName(String value) {
-    return escapeIfNeeded(avoidInheritedMember(pascal(value)));
+    return escapeIfNeeded(avoidInheritedMember(Naming.pascal(value)));
   }
 
   public static String propertyName(String value) {
-    return escapeIfNeeded(avoidInheritedMember(pascal(value)));
+    return escapeIfNeeded(avoidInheritedMember(Naming.pascal(value)));
   }
 
   /**
@@ -168,7 +151,7 @@ public final class CSharpNaming {
    * member, so a variant with one of those names takes the variant collision suffix.
    */
   public static String variantName(MemberShape member) {
-    String name = pascal(member.getMemberName());
+    String name = Naming.pascal(member.getMemberName());
     boolean collides =
         INHERITED_MEMBERS.contains(name)
             || UNION_MEMBERS.contains(name)
@@ -178,7 +161,7 @@ public final class CSharpNaming {
 
   /** The static factory that creates a union variant, named after the member as modeled. */
   public static String variantFactoryName(MemberShape member) {
-    return "From" + pascal(member.getMemberName());
+    return "From" + Naming.pascal(member.getMemberName());
   }
 
   private static String avoidInheritedMember(String name) {
@@ -186,42 +169,12 @@ public final class CSharpNaming {
   }
 
   public static String parameterName(String value) {
-    String camel = camel(value);
+    String camel = Naming.camel(value);
     return KEYWORDS.contains(camel) ? "@" + camel : camel;
   }
 
   public static String fileSegment(String value) {
-    return pascal(value);
-  }
-
-  public static String pascal(String value) {
-    StringBuilder sb = new StringBuilder(value.length());
-    boolean capitalize = true;
-    for (int i = 0; i < value.length(); ) {
-      int cp = value.codePointAt(i);
-      int width = Character.charCount(cp);
-      if (!Character.isLetterOrDigit(cp)) {
-        capitalize = true;
-        i += width;
-        continue;
-      }
-      if (sb.length() == 0 && Character.isDigit(cp)) {
-        sb.append('_');
-      }
-      String s = new String(Character.toChars(cp));
-      sb.append(capitalize ? s.toUpperCase(java.util.Locale.ROOT) : s);
-      capitalize = false;
-      i += width;
-    }
-    return sb.length() == 0 ? "_" : sb.toString();
-  }
-
-  public static String camel(String value) {
-    String p = pascal(value);
-    if (p.length() <= 1) {
-      return p.toLowerCase(java.util.Locale.ROOT);
-    }
-    return Character.toLowerCase(p.charAt(0)) + p.substring(1);
+    return Naming.pascal(value);
   }
 
   private static String escapeIfNeeded(String v) {

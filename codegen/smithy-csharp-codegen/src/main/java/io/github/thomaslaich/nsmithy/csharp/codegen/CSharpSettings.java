@@ -23,6 +23,7 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.Naming;
 import java.util.Optional;
 import software.amazon.smithy.model.node.ExpectationNotMetException;
 import software.amazon.smithy.model.node.ObjectNode;
@@ -162,6 +163,6 @@ public final class CSharpSettings {
 
   /** Convenience: C# namespace for a given Smithy namespace. */
   public String csharpNamespace(String smithyNamespace) {
-    return CSharpNaming.namespaceFor(smithyNamespace, baseNamespace);
+    return Naming.namespaceFor(smithyNamespace, baseNamespace);
   }
 }

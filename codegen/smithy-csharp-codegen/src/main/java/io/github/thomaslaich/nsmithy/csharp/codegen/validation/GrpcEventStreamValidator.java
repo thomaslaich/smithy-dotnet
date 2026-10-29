@@ -1,7 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.validation;
 
-import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
+import io.github.thomaslaich.nsmithy.codegen.core.TraitIds;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
