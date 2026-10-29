@@ -17,6 +17,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   member's `@jsonName`, while constraint violations, the other codecs, and HTTP bindings use the
   member name. A request with both violations reported the same field two ways. Missing members
   are now reported by member name as well.
+- The POM of a contracts JAR declared no dependencies, so a consumer resolving the JAR could not
+  load a model that uses traits from another package, such as `aws.protocols#restJson1`. The
+  `maven.dependencies` of the contracts project's `smithy-build.json` are now POM dependencies.
+  The POM's elements are also in the POM namespace now, rather than rendered with `xmlns=""`.
 
 ## [0.15.0]
 

@@ -162,6 +162,7 @@
       GroupId="$(SmithyMavenGroupId)"
       ArtifactId="$(SmithyMavenArtifactId)"
       Version="$(PackageVersion)"
+      BuildFile="$(MSBuildProjectDirectory)/smithy-build.json"
       OutputDirectory="$(PackageOutputAbsolutePath)"
     />
   </Target>

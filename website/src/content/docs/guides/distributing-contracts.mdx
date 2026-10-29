@@ -58,6 +58,9 @@ model package.
 
    The output directory contains the NuGet package and the Maven JAR, POM, and
    checksum files. The JAR contains the model in Smithy's discovery layout.
+   The POM declares the `maven.dependencies` of the project's
+   `smithy-build.json`, so consumers get the trait packages the model uses
+   along with it.
 
 3. **Install locally** (optional). To make the JAR available to local Smithy CLI
    builds during development:
