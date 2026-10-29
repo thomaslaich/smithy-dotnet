@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Microsoft.Build.Framework;
 using MsBuildTask = Microsoft.Build.Utilities.Task;
@@ -36,6 +38,13 @@ public sealed class CreateSmithyJar : MsBuildTask
     [Required]
     public string Version { get; set; } = "";
 
+    /// <summary>
+    /// The contracts project's smithy-build.json. Its <c>maven.dependencies</c> become POM
+    /// dependencies, so a consumer resolving the JAR also gets the traits the model uses. Empty
+    /// when there is none.
+    /// </summary>
+    public string BuildFile { get; set; } = "";
+
     /// <summary>Directory where the JAR, POM, and checksum files are written.</summary>
     [Required]
     public string OutputDirectory { get; set; } = "";
@@ -55,6 +64,11 @@ public sealed class CreateSmithyJar : MsBuildTask
         if (smithyFiles.Count == 0)
         {
             Log.LogError("NSmithy: no .smithy files found to pack into JAR.");
+            return false;
+        }
+
+        if (!TryReadDependencies(out var dependencies))
+        {
             return false;
         }
 
@@ -84,7 +98,7 @@ public sealed class CreateSmithyJar : MsBuildTask
                 WriteEntry(zip, $"META-INF/smithy/{entry}", File.ReadAllBytes(file));
         }
 
-        var pom = GeneratePom();
+        var pom = GeneratePom(dependencies);
         File.WriteAllText(pomPath, pom, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
         WriteChecksums(jarPath);
@@ -101,22 +115,80 @@ public sealed class CreateSmithyJar : MsBuildTask
         stream.Write(content);
     }
 
-    private string GeneratePom() =>
-        new XDocument(
-            new XDeclaration("1.0", "UTF-8", null),
-            new XElement(
-                XName.Get("project", "http://maven.apache.org/POM/4.0.0"),
-                new XAttribute(
-                    XName.Get("schemaLocation", "http://www.w3.org/2001/XMLSchema-instance"),
-                    "http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd"
-                ),
-                new XElement("modelVersion", "4.0.0"),
-                new XElement("groupId", GroupId),
-                new XElement("artifactId", ArtifactId),
-                new XElement("version", Version),
-                new XElement("packaging", "jar")
-            )
-        ).ToString();
+    private bool TryReadDependencies(out List<string[]> dependencies)
+    {
+        dependencies = [];
+        if (string.IsNullOrEmpty(BuildFile) || !File.Exists(BuildFile))
+        {
+            return true;
+        }
+
+        var options = new JsonDocumentOptions
+        {
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        };
+        if (
+            JsonNode.Parse(File.ReadAllText(BuildFile), documentOptions: options)
+                is not JsonObject buildFile
+            || buildFile["maven"]?["dependencies"] is not JsonArray coordinates
+        )
+        {
+            return true;
+        }
+
+        foreach (var coordinate in coordinates.Select(node => node?.GetValue<string>() ?? ""))
+        {
+            // smithy-build.json takes groupId:artifactId:version, as the Smithy CLI does.
+            var parts = coordinate.Split(':');
+            if (parts.Length != 3 || parts.Any(string.IsNullOrWhiteSpace))
+            {
+                Log.LogError(
+                    $"NSmithy: Maven dependency '{coordinate}' in {BuildFile} is not a groupId:artifactId:version coordinate."
+                );
+                return false;
+            }
+
+            dependencies.Add(parts);
+        }
+
+        return true;
+    }
+
+    private string GeneratePom(List<string[]> dependencies)
+    {
+        XNamespace pom = "http://maven.apache.org/POM/4.0.0";
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        var project = new XElement(
+            pom + "project",
+            new XAttribute(XNamespace.Xmlns + "xsi", xsi),
+            new XAttribute(
+                xsi + "schemaLocation",
+                "http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd"
+            ),
+            new XElement(pom + "modelVersion", "4.0.0"),
+            new XElement(pom + "groupId", GroupId),
+            new XElement(pom + "artifactId", ArtifactId),
+            new XElement(pom + "version", Version),
+            new XElement(pom + "packaging", "jar")
+        );
+        if (dependencies.Count > 0)
+        {
+            project.Add(
+                new XElement(
+                    pom + "dependencies",
+                    dependencies.Select(parts => new XElement(
+                        pom + "dependency",
+                        new XElement(pom + "groupId", parts[0]),
+                        new XElement(pom + "artifactId", parts[1]),
+                        new XElement(pom + "version", parts[2])
+                    ))
+                )
+            );
+        }
+
+        return new XDocument(new XDeclaration("1.0", "UTF-8", null), project).ToString();
+    }
 
     // MD5 and SHA1 are Maven's required checksum algorithms — not used for security.
 #pragma warning disable CA5351, CA5350
