@@ -11,6 +11,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.15.1]
+
+This release fixes two bugs: `ValidationException` paths for missing JSON members, and the
+missing Maven dependencies in a contracts JAR's POM.
+
 ### Fixed
 
 - A `ValidationException` path for a required member missing from a JSON payload used the
@@ -728,7 +733,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.12.0...v0.13.0
