@@ -30,7 +30,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
             """
             {
               "version": "1.0",
-              "maven": { "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.73.0"] },
+              "maven": { "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"] },
               "suppressions": [{ "id": "UnstableTrait", "namespace": "*" }],
               "plugins": { "csharp-codegen": { "service": "ignored#Service" } }
             }
@@ -50,7 +50,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         Assert.Equal(source, file["sources"]![0]!.GetValue<string>());
         Assert.Equal(
             [
-                "software.amazon.smithy:smithy-aws-traits:1.73.0",
+                "software.amazon.smithy:smithy-aws-traits:1.74.1",
                 CodegenArtifact,
                 AwsCodegenArtifact,
             ],
@@ -331,7 +331,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         Assert.True(configured["tags"]!.GetValue<bool>());
         Assert.Equal("aws.protocols#restJson1", configured["protocol"]!.GetValue<string>());
         Assert.True(Plugin(withoutFile, "source", "openapi")["useIntegerType"]!.GetValue<bool>());
-        Assert.Contains("software.amazon.smithy:smithy-openapi:1.73.0", Dependencies(withoutFile));
+        Assert.Contains("software.amazon.smithy:smithy-openapi:1.74.1", Dependencies(withoutFile));
     }
 
     [Fact]
@@ -458,7 +458,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         {
             BuildEngine = engine,
             CSharpCodegenVersion = "0.0.0-SNAPSHOT",
-            SmithyVersion = "1.73.0",
+            SmithyVersion = "1.74.1",
             OutputFile = outputFile,
         };
         configure(task);

@@ -88,7 +88,7 @@ See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
 | Property | Description |
 | --- | --- |
 | `SmithyCliPath` | Smithy CLI executable. Takes precedence over the `NSmithy.SmithyCli` package and `smithy` on `PATH`. |
-| `SmithyVersion` | Smithy version NSmithy is built against. `SmithyCliVersionCheck` compares the Smithy CLI with it, and `software.amazon.smithy` Maven dependencies should use it. Default: `1.73.0`. |
+| `SmithyVersion` | Smithy version NSmithy is built against. `SmithyCliVersionCheck` compares the Smithy CLI with it, and `software.amazon.smithy` Maven dependencies should use it. Default: `1.74.1`. |
 | `SmithyCliVersionCheck` | How the Smithy CLI's version is checked against `SmithyVersion`: `exact`, `minimum` (that version or later), or `none`. Default: `exact` for `NSmithy.SmithyCli`, `minimum` for a CLI you provide. |
 
 ### Maven dependencies

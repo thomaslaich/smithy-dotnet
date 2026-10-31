@@ -21,7 +21,7 @@ NSmithy looks for the CLI in this order:
 3. `smithy` on `PATH`.
 
 Before generating, NSmithy checks the CLI's version against `SmithyVersion`
-(currently `1.73.0`); see [Version check](#version-check).
+(currently `1.74.1`); see [Version check](#version-check).
 
 ## The NSmithy.SmithyCli package
 
@@ -41,7 +41,7 @@ To add it yourself, reference it in each project that generates code:
 
 ```xml title="MyService.Server.csproj"
 <ItemGroup>
-  <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+  <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
 </ItemGroup>
 ```
 
@@ -52,7 +52,7 @@ package reference in `Directory.Packages.props`:
 
 ```xml title="Directory.Packages.props"
 <ItemGroup>
-  <GlobalPackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+  <GlobalPackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
 </ItemGroup>
 ```
 
@@ -69,7 +69,7 @@ then runs `smithy` from `PATH`. The NSmithy templates leave it out by default.
 ### Installing the Smithy CLI
 
 Skip this with `NSmithy.SmithyCli`, which provides the CLI. Otherwise, install
-Smithy CLI `SmithyVersion` (1.73.0) or later so that `smithy` is on `PATH`:
+Smithy CLI `SmithyVersion` (1.74.1) or later so that `smithy` is on `PATH`:
 
 <Tabs syncKey="smithy-cli-install">
   <TabItem label="Homebrew">
@@ -101,7 +101,7 @@ Smithy CLI `SmithyVersion` (1.73.0) or later so that `smithy` is on `PATH`:
 
     ```toml title="pixi.toml"
     [dependencies]
-    smithy = ">=1.73.0"
+    smithy = ">=1.74.1"
     ```
   </TabItem>
   <TabItem label="Installer">
@@ -170,7 +170,7 @@ only on builds that regenerate code. A failed check stops the build:
 
 ```text
 error NSMITHYCLIVERSION: NSmithy: Smithy CLI 1.71.0 (smithy) is older than
-SmithyVersion (1.73.0). Use Smithy CLI 1.73.0 or later, or set
+SmithyVersion (1.74.1). Use Smithy CLI 1.74.1 or later, or set
 SmithyCliVersionCheck to none to skip this check.
 ```
 

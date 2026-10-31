@@ -15,7 +15,7 @@
     <PackageReference Include="NSmithy.Client" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Codecs.Cbor" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.0.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
     <ProjectReference Include="../contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj" />
   </ItemGroup>
 </Project>

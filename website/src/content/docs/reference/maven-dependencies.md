@@ -31,7 +31,7 @@ assumes it:
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-aws-iam-traits:1.73.0"]
+    "dependencies": ["software.amazon.smithy:smithy-aws-iam-traits:1.74.1"]
   }
 }
 ```

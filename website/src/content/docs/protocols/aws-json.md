@@ -99,7 +99,7 @@ the modeled HTTP status code.
 Add the AWS trait package to `smithy-build.json`:
 
 ```json title="smithy-build.json"
-"software.amazon.smithy:smithy-aws-traits:1.73.0"
+"software.amazon.smithy:smithy-aws-traits:1.74.1"
 ```
 
 The client uses `NSmithy.Client`, `NSmithy.Codecs.Json`, and

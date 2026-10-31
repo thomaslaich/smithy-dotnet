@@ -13,7 +13,7 @@
       version against it (see SmithyCliVersionCheck), and software.amazon.smithy:* Maven
       artifacts in your contracts smithy-build.json should use it too.
     -->
-    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.73.0</SmithyVersion>
+    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.74.1</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion>
     <!--
       Set to 'true' to add the smithy-docgen plugin to the effective smithy-build.json; the

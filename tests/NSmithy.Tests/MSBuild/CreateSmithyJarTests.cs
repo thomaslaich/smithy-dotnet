@@ -31,7 +31,7 @@ public sealed class CreateSmithyJarTests : IDisposable
               "sources": ["model"],
               "maven": {
                 "dependencies": [
-                  "software.amazon.smithy:smithy-aws-traits:1.73.0",
+                  "software.amazon.smithy:smithy-aws-traits:1.74.1",
                   "com.disneystreaming.alloy:alloy-core:0.3.40",
                 ],
               },
@@ -44,7 +44,7 @@ public sealed class CreateSmithyJarTests : IDisposable
         Assert.Empty(errors);
         Assert.Equal(
             [
-                ("software.amazon.smithy", "smithy-aws-traits", "1.73.0"),
+                ("software.amazon.smithy", "smithy-aws-traits", "1.74.1"),
                 ("com.disneystreaming.alloy", "alloy-core", "0.3.40"),
             ],
             pom.Root!.Element(Pom + "dependencies")!

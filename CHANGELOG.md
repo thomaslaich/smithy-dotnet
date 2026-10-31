@@ -11,6 +11,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **Smithy 1.74.1.** Updated the bundled CLI, `SmithyVersion`, and Smithy dependencies. With the
+  default exact version check, projects that reference `NSmithy.SmithyCli` must update it to
+  1.74.1, and `software.amazon.smithy` Maven dependencies should use 1.74.1.
+
 ## [0.15.1]
 
 This release fixes two bugs: `ValidationException` paths for missing JSON members, and the
