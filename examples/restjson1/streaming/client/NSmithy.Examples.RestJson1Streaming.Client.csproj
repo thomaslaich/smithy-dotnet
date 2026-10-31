@@ -18,6 +18,6 @@
     <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.0.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
   </ItemGroup>
 </Project>

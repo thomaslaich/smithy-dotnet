@@ -10,7 +10,7 @@
     The package version is the Smithy CLI version (SMITHY_VERSION in download-smithy-cli.sh),
     not the NSmithy version, so an NSmithy upgrade reuses the package already in the NuGet
     cache. TreatAsLocalProperty keeps the release build's -p:Version from overriding it.
-    Republishing the same CLI needs a fourth version part (e.g. 1.73.0.1).
+    Republishing the same CLI needs a fourth version part (e.g. 1.74.1.1).
   -->
   <PropertyGroup>
     <PackageTags>$(PackageTags);smithy-cli;msbuild</PackageTags>

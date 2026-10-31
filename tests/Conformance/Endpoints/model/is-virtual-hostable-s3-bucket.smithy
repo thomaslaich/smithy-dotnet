@@ -1,4 +1,4 @@
-// From smithy-aws-endpoints 1.73.0 (src/test/resources/.../functions/errorfiles/valid/is-virtual-hostable-s3-bucket.smithy),
+// From smithy-aws-endpoints 1.74.1 (src/test/resources/.../functions/errorfiles/valid/is-virtual-hostable-s3-bucket.smithy),
 // Apache-2.0, with the namespace and service renamed so the three models can be assembled together.
 $version: "2.0"
 
