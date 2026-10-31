@@ -120,6 +120,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Overview', slug: 'servers' },
 						{ label: 'Validation', slug: 'servers/validation' },
+						{ label: 'Authorization', slug: 'servers/authorization' },
 						{ label: 'Hosting multiple protocols', slug: 'servers/hosting' },
 						{ label: 'Fake handlers', slug: 'servers/fake-handlers' },
 						{ label: 'MCP', slug: 'servers/mcp' },

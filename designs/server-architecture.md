@@ -94,7 +94,7 @@ The table contains no routes and no protocol code. `Map{Service}` only
 translates the generated `{Service}Protocols` flags into protocol instances:
 
 ```csharp
-public static IEndpointRouteBuilder MapWeatherService(
+public static SmithyServiceEndpointConventionBuilder MapWeatherService(
     this IEndpointRouteBuilder endpoints,
     WeatherServiceProtocols protocols = WeatherServiceProtocols.RestJson1)
 {
@@ -243,7 +243,7 @@ and the protocol frames and deframes the events ([streaming.md](streaming.md)).
 ## The Host Adapter
 
 A host adapter connects a web framework to the rest of the system and holds
-the only framework dependency. The ASP.NET Core adapter does four things.
+the only framework dependency. The ASP.NET Core adapter does five things.
 
 **Maps endpoints.** `MapSmithyService(catalog, protocols)` creates one endpoint
 per `ServerRoute`, named `{Operation} ({Protocol})`, or one per `ByDispatch`
@@ -251,7 +251,21 @@ protocol. It translates greedy labels (`/files/{key+}`) into ASP.NET Core
 catch-alls (`/files/{**key}`). Endpoints are plain `RequestDelegate`s, so
 mapping needs no minimal-API parameter binding, no reflection, and no request
 delegate generator. A route that repeats the method and path of an earlier one
-fails at startup, naming the protocol that repeats it.
+fails at startup, naming the protocol that repeats it. Each endpoint carries
+`SmithyEndpointMetadata` naming the service, the protocol, and the operations
+it serves, and `MapSmithyService` returns a convention builder over all of the
+service's endpoints, so ASP.NET Core conventions apply per service and can
+tell operations apart.
+
+**Authorizes from the model.** Each catalog entry carries its operation's
+effective auth schemes, which codegen resolves with Smithy's `ServiceIndex`,
+including `smithy.api#noAuth` when the operation can be called without
+authentication. `WithModeledAuthorization()` turns them into endpoint metadata:
+`[Authorize]` for operations that require authentication, `[AllowAnonymous]`
+for the rest. A `ByDispatch` endpoint whose operations differ allows anonymous
+calls and authorizes a protected operation after resolving it, through the same
+policy evaluator and result handler as ASP.NET Core's authorization middleware.
+Checking credentials stays with the application's authentication handlers.
 
 **Converts the request.** The `HttpContext` becomes a `SmithyHttpRequest`
 carrying the method, target, headers and a `SmithyHttpBody`: buffered bytes,

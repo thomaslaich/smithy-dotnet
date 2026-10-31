@@ -1,3 +1,4 @@
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Core.Validation;
 using NSmithy.Http;
@@ -18,6 +19,17 @@ public interface IServerOperation
     /// Null for streaming operations.
     /// </summary>
     OperationJsonSchemas? JsonSchemas { get; }
+
+    /// <summary>
+    /// The operation's effective auth schemes in priority order, as Smithy resolves them from the
+    /// service's auth traits and the operation's <c>@auth</c>. Contains
+    /// <see cref="ServerOperation.NoAuth"/> when the operation can be invoked without
+    /// authentication: when no scheme applies, or it has <c>@optionalAuth</c>.
+    /// </summary>
+    IReadOnlyList<ShapeId> AuthSchemes { get; }
+
+    /// <summary>Whether every call must authenticate with one of <see cref="AuthSchemes"/>.</summary>
+    bool RequiresAuthentication { get; }
 
     /// <summary>Binds the operation to <paramref name="protocol"/>, once per mapped protocol.</summary>
     IServerOperationBinding Bind(IServiceProtocol protocol);
@@ -58,15 +70,20 @@ public interface IServerOperationBinding
 /// <summary>Creates server operations with inferred input and output types.</summary>
 public static class ServerOperation
 {
+    /// <summary><c>smithy.api#noAuth</c>: the scheme of calls made without authentication.</summary>
+    public static readonly ShapeId NoAuth = new("smithy.api", "noAuth");
+
     /// <summary>
     /// An operation whose handler <paramref name="resolveHandler"/> resolves from each request's
-    /// services, so handler lifetimes are the application's.
+    /// services, so handler lifetimes are the application's. Without
+    /// <paramref name="authSchemes"/>, the operation needs no authentication.
     /// </summary>
     public static ServerOperation<TInput, TOutput> Create<TInput, TOutput>(
         OperationSchema<TInput, TOutput> schema,
         Func<IServiceProvider, Func<TInput, CancellationToken, Task<TOutput>>> resolveHandler,
-        OperationJsonSchemas? jsonSchemas = null
-    ) => new(schema, resolveHandler, jsonSchemas);
+        OperationJsonSchemas? jsonSchemas = null,
+        IReadOnlyList<ShapeId>? authSchemes = null
+    ) => new(schema, resolveHandler, jsonSchemas, authSchemes);
 }
 
 /// <summary>
@@ -76,7 +93,8 @@ public static class ServerOperation
 public sealed class ServerOperation<TInput, TOutput>(
     OperationSchema<TInput, TOutput> schema,
     Func<IServiceProvider, Func<TInput, CancellationToken, Task<TOutput>>> resolveHandler,
-    OperationJsonSchemas? jsonSchemas = null
+    OperationJsonSchemas? jsonSchemas = null,
+    IReadOnlyList<ShapeId>? authSchemes = null
 ) : IServerOperation
 {
     private readonly Func<
@@ -91,10 +109,26 @@ public sealed class ServerOperation<TInput, TOutput>(
 
     public OperationJsonSchemas? JsonSchemas { get; } = jsonSchemas;
 
+    public IReadOnlyList<ShapeId> AuthSchemes { get; } = CopyAuthSchemes(authSchemes);
+
+    public bool RequiresAuthentication => !AuthSchemes.Contains(ServerOperation.NoAuth);
+
     // For invocation with decoded input; HTTP dispatch validates through its protocol instead.
     private readonly ISmithyValidator<TInput>? inputValidator = SmithyValidator.FromSchema(
         schema.Input
     );
+
+    // An empty list would mean neither authenticated nor anonymous calls can reach the operation.
+    private static ShapeId[] CopyAuthSchemes(IReadOnlyList<ShapeId>? authSchemes) =>
+        authSchemes switch
+        {
+            null => [ServerOperation.NoAuth],
+            [] => throw new ArgumentException(
+                $"An operation needs at least one auth scheme; use {nameof(ServerOperation)}.{nameof(ServerOperation.NoAuth)} for none.",
+                nameof(authSchemes)
+            ),
+            _ => [.. authSchemes],
+        };
 
     public IServerOperationBinding Bind(IServiceProtocol protocol)
     {

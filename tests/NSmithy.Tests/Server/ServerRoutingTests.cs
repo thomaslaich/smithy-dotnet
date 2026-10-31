@@ -157,7 +157,7 @@ public sealed class ServerRoutingTests
 
     // Names the operation in a header, like AWS JSON's X-Amz-Target, and serializes with
     // restJson1. With streams set, it reports every operation as streaming its request body.
-    private sealed class HeaderDispatchProtocol(bool streams = false) : IProtocol
+    internal sealed class HeaderDispatchProtocol(bool streams = false) : IProtocol
     {
         public IServiceProtocol ForService(ServiceSchema service) =>
             new ServiceProtocol(new RestJson1Protocol().ForService(service), service, streams);
