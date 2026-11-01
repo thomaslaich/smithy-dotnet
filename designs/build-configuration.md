@@ -40,6 +40,7 @@ code path, and every MSBuild property means the same thing in every project.
 | Contract build files | `SmithyContractsBuildFile` items, collected from contracts project references or set for packaged contracts. |
 | Contract sources | `SmithySource` items, collected the same way. |
 | Generation properties | `SmithyService`, `SmithyGenerateClient`, `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, `SmithyGrpc`, and `SmithyProjection`. |
+| Contract coordinates | `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and `PackageVersion` of a contracts project. |
 
 ## The effective build file
 
@@ -86,6 +87,7 @@ ways fails the build.
 | `docgen` | `SmithyGenerateDocs` | `service` ← `SmithyService` |
 | `openapi` | `SmithyOpenApiProtocol` | `service` ← `SmithyService`, `protocol` ← `SmithyOpenApiProtocol` |
 | `proto-codegen` | `SmithyGrpc` | `service` ← `SmithyService` |
+| `contracts-jar` | `SmithyMavenGroupId` with `SmithyPublish` | `groupId` ← `SmithyMavenGroupId`, `artifactId` ← `SmithyMavenArtifactId`, `version` ← `PackageVersion` |
 
 Some keys have defaults that apply only when the file does not set them:
 `openapi` writes integer shapes as `integer` (`useIntegerType`), and
@@ -100,7 +102,7 @@ other projections keep inheriting it. A projection other than `source` must
 exist in the project build file.
 
 `SmithyService` is the switch for code generation from properties. A project
-without it adds no plugins from properties. Such a project either only builds
+without it adds no code generation plugins from properties. Such a project either only builds
 and validates its model, as a contracts project does, or configures NSmithy's
 plugins entirely in `smithy-build.json`, for example one `csharp-codegen` per
 projection to generate several services. `docgen`, `openapi`, and
@@ -149,10 +151,19 @@ repositories. See [Maven dependencies](../website/src/content/docs/reference/mav
 ## Contracts projects
 
 A contracts project (`SmithyPublish=true`) publishes its own `smithy-build.json`
-in the NuGet package and the Maven JAR, never the effective build file. Its
-consumers therefore receive the model's settings and none of the contracts
-project's generation settings. Without `SmithyService`, a contracts project's
-build validates the model and generates nothing.
+in the NuGet package, never the effective build file. Its consumers therefore
+receive the model's settings and none of the contracts project's generation
+settings. Without `SmithyService`, a contracts project's build validates the
+model and generates no code.
+
+With `SmithyMavenGroupId` set, the effective build file also runs NSmithy's
+`contracts-jar` plugin, which packages the projection's sources as a Maven JAR
+and POM. `dotnet pack` copies them next to the `.nupkg`. The plugin is an
+ordinary Smithy build plugin, so a project outside .NET produces the same
+artifact from its own `smithy-build.json`. The POM declares the Maven artifacts
+that provide the shapes and traits the model references, derived from the
+model rather than copied from `maven.dependencies`. Publishing the files is
+left to Maven tooling.
 
 ## Diagnostics
 
@@ -162,6 +173,7 @@ build validates the model and generates nothing.
 | `NSMITHYSERVICE` | `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, or `SmithyGrpc` is set without `SmithyService`. |
 | `NSMITHYPROJECTION` | `SmithyProjection` names a projection the project build file does not define. |
 | `NSMITHYDEPENDENCY` | Two inputs declare the same Maven artifact at different versions. |
+| `NSMITHYMAVEN` | `SmithyMavenGroupId` is set without `SmithyMavenArtifactId`, a version, or a project build file, or `dotnet pack` finds no JAR to copy. |
 
 Each message names the property or file to change.
 

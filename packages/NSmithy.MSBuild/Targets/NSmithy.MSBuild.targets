@@ -6,7 +6,9 @@
     Two independent behaviours, both opt-in via properties:
 
       SmithyPublish=true   Pack smithy model files into the NuGet package and (when
-                           SmithyMavenGroupId is also set) produce a Maven JAR.
+                           SmithyMavenGroupId is also set) produce a Maven JAR: the
+                           build runs the contracts-jar Smithy plugin, and pack copies
+                           its JAR and POM next to the .nupkg.
                            Requires a smithy-build.json at the project root so that
                            IDE tooling (Smithy VS Code / IntelliJ extensions) can
                            resolve traits from Maven dependencies.
@@ -63,12 +65,6 @@
       >TaskHostFactory</_NSmithyTaskFactory
     >
   </PropertyGroup>
-
-  <UsingTask
-    TaskName="CreateSmithyJar"
-    AssemblyFile="$(_NSmithyTasksAssembly)"
-    TaskFactory="$(_NSmithyTaskFactory)"
-  />
 
   <UsingTask
     TaskName="WriteSmithyBuildFile"
@@ -140,30 +136,30 @@
   </ItemGroup>
 
   <!--
-    After dotnet pack, create a Maven JAR alongside the NuGet package.
-    Gated on SmithyMavenGroupId so projects that only want NuGet distribution
-    can skip it by leaving SmithyMavenGroupId unset.
+    After dotnet pack, put the Maven JAR, POM, and checksums next to the NuGet package. The build
+    produced them: with SmithyMavenGroupId set, the effective smithy-build.json runs the
+    contracts-jar plugin. Projects that only want NuGet distribution leave SmithyMavenGroupId unset.
   -->
   <Target
-    Name="_CreateSmithyJar"
+    Name="_CopySmithyContractsJar"
     AfterTargets="Pack"
     Condition="'$(SmithyPublish)' == 'true' and '$(SmithyMavenGroupId)' != ''"
   >
-    <Error
-      Text="NSmithy: SmithyMavenArtifactId must be set when SmithyMavenGroupId is set."
-      Condition="'$(SmithyMavenArtifactId)' == ''"
-    />
+    <PropertyGroup>
+      <_SmithyContractsJarDir>$(SmithyBuildOutputPath)$(SmithyProjection)/contracts-jar/</_SmithyContractsJarDir>
+    </PropertyGroup>
     <ItemGroup>
-      <_JarSmithySource Include="$(SmithySources)/**/*.smithy" />
+      <_SmithyContractsJarFile Include="$(_SmithyContractsJarDir)$(SmithyMavenArtifactId)-$(PackageVersion).jar*;$(_SmithyContractsJarDir)$(SmithyMavenArtifactId)-$(PackageVersion).pom*" />
     </ItemGroup>
-    <CreateSmithyJar
-      Sources="@(_JarSmithySource)"
-      SourcesRoot="$(SmithySources)"
-      GroupId="$(SmithyMavenGroupId)"
-      ArtifactId="$(SmithyMavenArtifactId)"
-      Version="$(PackageVersion)"
-      BuildFile="$(MSBuildProjectDirectory)/smithy-build.json"
-      OutputDirectory="$(PackageOutputAbsolutePath)"
+    <Error
+      Code="NSMITHYMAVEN"
+      Text="NSmithy: found no $(SmithyMavenArtifactId)-$(PackageVersion).jar in $(_SmithyContractsJarDir). Build the project before packing it."
+      Condition="'@(_SmithyContractsJarFile)' == ''"
+    />
+    <Copy
+      SourceFiles="@(_SmithyContractsJarFile)"
+      DestinationFolder="$(PackageOutputAbsolutePath)"
+      SkipUnchangedFiles="true"
     />
   </Target>
 
@@ -391,6 +387,14 @@
         >$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'smithy-build.json'))</_SmithyEffectiveBuildFile
       >
     </PropertyGroup>
+    <PropertyGroup Condition="'$(SmithyPublish)' == 'true'">
+      <_SmithyContractsGroupId>$(SmithyMavenGroupId)</_SmithyContractsGroupId>
+    </PropertyGroup>
+    <Error
+      Code="NSMITHYMAVEN"
+      Text="NSmithy: SmithyMavenGroupId needs a smithy-build.json at the project root. The contracts JAR packages its sources."
+      Condition="'$(_SmithyContractsGroupId)' != '' and '$(_SmithyProjectBuildFile)' == ''"
+    />
     <Error
       Text="NSmithy: SmithyService must be set when generating from a contracts reference. Add &lt;SmithyService&gt;my.namespace#MyService&lt;/SmithyService&gt; to your project."
       Condition="'@(SmithySource)' != '' and '$(SmithyService)' == '' and '$(_SmithyProjectBuildFile)' == ''"
@@ -411,6 +415,9 @@
       Grpc="$(SmithyGrpc)"
       ProtoPlugin="$(SmithyProtoPlugin)"
       Projection="$(SmithyProjection)"
+      ContractsGroupId="$(_SmithyContractsGroupId)"
+      ContractsArtifactId="$(SmithyMavenArtifactId)"
+      ContractsVersion="$(PackageVersion)"
       CSharpCodegenVersion="$(SmithyCSharpCodegenVersion)"
       SmithyVersion="$(SmithyVersion)"
       OutputFile="$(_SmithyEffectiveBuildFile)"

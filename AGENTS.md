@@ -45,7 +45,8 @@ stale or missing staged JAR produces confusing codegen errors.
 
 - `codegen/` — Java/Gradle code generators. `smithy-csharp-codegen` (C# emission),
   `smithy-csharp-aws-codegen` (AWS protocols, endpoint rules, and customizations,
-  as a `CSharpIntegration`), and `smithy-proto-codegen` (`.proto` emission for gRPC).
+  as a `CSharpIntegration`), `smithy-proto-codegen` (`.proto` emission for gRPC), and
+  `smithy-contracts-jar` (packages a contract as a Maven JAR + POM).
 - `packages/` — C# runtime and tooling packages (`NSmithy.Core`, `NSmithy.Http`,
   `NSmithy.Client`, `NSmithy.Server.AspNetCore`, `NSmithy.Codecs.*`,
   `NSmithy.Protocols.*`, `NSmithy.MSBuild`).

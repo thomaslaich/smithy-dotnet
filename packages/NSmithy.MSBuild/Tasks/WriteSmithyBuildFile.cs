@@ -15,6 +15,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 {
     private const string MavenCentral = "https://repo.maven.apache.org/maven2/";
     private const string CSharpPlugin = "csharp-codegen";
+    private const string ContractsJarPlugin = "contracts-jar";
     private const string NSmithyGroup = "io.github.thomaslaich.nsmithy";
 
     private static readonly JsonDocumentOptions ReadOptions = new()
@@ -32,7 +33,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     /// <summary>Model files of the referenced contracts, added to the sources.</summary>
     public ITaskItem[] Sources { get; set; } = [];
 
-    /// <summary>SmithyService. When empty, no plugin gets settings from properties.</summary>
+    /// <summary>SmithyService. When empty, only the contracts-jar plugin gets settings from properties.</summary>
     public string Service { get; set; } = "";
 
     /// <summary>SmithyGenerateClient; written as generateClient only when false.</summary>
@@ -52,6 +53,18 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 
     /// <summary>Name of the Protobuf plugin.</summary>
     public string ProtoPlugin { get; set; } = "proto-codegen";
+
+    /// <summary>
+    /// SmithyMavenGroupId of a contracts project: adds the contracts-jar plugin, which packages
+    /// the model as a Maven JAR and POM. Empty when the project publishes no JAR.
+    /// </summary>
+    public string ContractsGroupId { get; set; } = "";
+
+    /// <summary>SmithyMavenArtifactId of the contracts JAR.</summary>
+    public string ContractsArtifactId { get; set; } = "";
+
+    /// <summary>Maven version of the contracts JAR: the package version.</summary>
+    public string ContractsVersion { get; set; } = "";
 
     /// <summary>The projection that receives the settings from properties.</summary>
     public string Projection { get; set; } = "source";
@@ -214,15 +227,33 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                         "NSMITHYSERVICE",
                         $"NSmithy: {property} requires SmithyService, which names the service its plugin generates for."
                     );
-            return !Log.HasLoggedErrors;
         }
+        if (!string.IsNullOrEmpty(ContractsGroupId))
+        {
+            if (string.IsNullOrEmpty(ContractsArtifactId))
+                LogError(
+                    "NSMITHYMAVEN",
+                    "NSmithy: SmithyMavenArtifactId must be set when SmithyMavenGroupId is set."
+                );
+            if (string.IsNullOrEmpty(ContractsVersion))
+                LogError(
+                    "NSMITHYMAVEN",
+                    "NSmithy: the contracts JAR needs a version. Set Version (or VersionPrefix)."
+                );
+        }
+        if (Log.HasLoggedErrors)
+            return false;
+
+        var plugins = EnabledPlugins().ToList();
+        if (plugins.Count == 0)
+            return true;
 
         var projectionPlugins = ProjectionPlugins(root);
         if (projectionPlugins is null)
             return false;
         var topLevel = root["plugins"] as JsonObject;
 
-        foreach (var plugin in EnabledPlugins())
+        foreach (var plugin in plugins)
         {
             // The settings Smithy would use for the projection: its own when it defines the
             // plugin, which replace the top-level ones entirely, or else the top-level ones. The
@@ -263,6 +294,21 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 
     private IEnumerable<PropertySettings> EnabledPlugins()
     {
+        if (!string.IsNullOrEmpty(ContractsGroupId))
+            yield return new PropertySettings(
+                ContractsJarPlugin,
+                "SmithyMavenGroupId",
+                new JsonObject
+                {
+                    ["groupId"] = ContractsGroupId,
+                    ["artifactId"] = ContractsArtifactId,
+                    ["version"] = ContractsVersion,
+                },
+                []
+            );
+        if (string.IsNullOrEmpty(Service))
+            yield break;
+
         var csharp = new JsonObject { ["service"] = Service };
         if (!GenerateClient)
             csharp["generateClient"] = false;
@@ -309,6 +355,8 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             (CSharpPlugin, "generateClient") => "SmithyGenerateClient",
             (CSharpPlugin, "generateServer") => "SmithyGenerateServer",
             ("openapi", "protocol") => "SmithyOpenApiProtocol",
+            (ContractsJarPlugin, "artifactId") => "SmithyMavenArtifactId",
+            (ContractsJarPlugin, "version") => "Version",
             (_, "service") => "SmithyService",
             _ => plugin.Property,
         };
@@ -362,6 +410,11 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         if (names.Contains(ProtoPlugin))
             dependencies.Add(
                 $"{NSmithyGroup}:smithy-proto-codegen:{CSharpCodegenVersion}",
+                "NSmithy"
+            );
+        if (names.Contains(ContractsJarPlugin))
+            dependencies.Add(
+                $"{NSmithyGroup}:smithy-contracts-jar:{CSharpCodegenVersion}",
                 "NSmithy"
             );
         if (names.Contains("docgen"))

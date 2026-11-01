@@ -118,9 +118,9 @@ See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for 
 
 | Property | Description |
 | --- | --- |
-| `SmithyPublish` | Pack `.smithy` model files into the NuGet package and (when `SmithyMavenGroupId` is set) produce a Maven JAR on `dotnet pack`. Default: `false`. |
+| `SmithyPublish` | Pack `.smithy` model files into the NuGet package and (when `SmithyMavenGroupId` is set) produce a Maven JAR. Default: `false`. |
 | `SmithySources` | Directory containing the `.smithy` source files to publish. Default: `$(MSBuildProjectDirectory)/model`. |
-| `SmithyMavenGroupId` | Maven `groupId` for the emitted JAR (e.g. `io.github.acme`). When set, `dotnet pack` produces a JAR alongside the `.nupkg`. |
+| `SmithyMavenGroupId` | Maven `groupId` for the emitted JAR (e.g. `io.github.acme`). When set, the build runs the `contracts-jar` plugin and `dotnet pack` copies its JAR, POM, and checksums next to the `.nupkg`. The version is `PackageVersion`. |
 | `SmithyMavenArtifactId` | Maven `artifactId` for the emitted JAR (e.g. `my-service-contracts`). Required when `SmithyMavenGroupId` is set. |
 
 ## Items

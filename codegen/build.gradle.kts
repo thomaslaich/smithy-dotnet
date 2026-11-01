@@ -89,7 +89,7 @@ subprojects {
 // Bundled Maven repo for offline codegen (consumed by NSmithy.MSBuild).
 //
 // Assembles the codegen toolchain (smithy-csharp-codegen, smithy-csharp-aws-codegen,
-// smithy-proto-codegen) and the first-party Smithy trait packages our protocols need,
+// smithy-proto-codegen, smithy-contracts-jar) and the first-party Smithy trait packages our protocols need,
 // plus their full runtime closure (JARs *and* POMs), into a Maven-layout directory. NSmithy.MSBuild
 // points the Smithy CLI at it via SMITHY_MAVEN_REPOS, so `smithy build` resolves the
 // codegen plugin and model traits from local files — Smithy's own offline mechanism,
@@ -110,6 +110,7 @@ dependencies {
     codegenBundle("io.github.thomaslaich.nsmithy:smithy-csharp-codegen:${project.version}")
     codegenBundle("io.github.thomaslaich.nsmithy:smithy-csharp-aws-codegen:${project.version}")
     codegenBundle("io.github.thomaslaich.nsmithy:smithy-proto-codegen:${project.version}")
+    codegenBundle("io.github.thomaslaich.nsmithy:smithy-contracts-jar:${project.version}")
     codegenBundle("software.amazon.smithy.java:smithy-ai-traits:$smithyAiTraitsVer")
     codegenBundle("software.amazon.smithy:smithy-aws-traits:$smithyVer")
     codegenBundle("software.amazon.smithy:smithy-protocol-traits:$smithyVer")
@@ -125,6 +126,7 @@ tasks.register("bundleMavenRepo") {
         ":smithy-csharp-codegen:publishToMavenLocal",
         ":smithy-csharp-aws-codegen:publishToMavenLocal",
         ":smithy-proto-codegen:publishToMavenLocal",
+        ":smithy-contracts-jar:publishToMavenLocal",
     )
     val conf = codegenBundle
     val outDir = layout.buildDirectory.dir("maven-bundle")

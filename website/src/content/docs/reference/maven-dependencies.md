@@ -65,5 +65,5 @@ Artifacts then come from the repositories in `smithy-build.json` or
 `SMITHY_MAVEN_REPOS`, or from Maven Central when neither lists one, and are
 cached in your Maven cache (`~/.m2/repository`). NSmithy's plugins are
 published to Maven Central as `io.github.thomaslaich.nsmithy:smithy-csharp-codegen`,
-`smithy-csharp-aws-codegen`, and `smithy-proto-codegen`, at the NSmithy version. Use this to resolve through
+`smithy-csharp-aws-codegen`, `smithy-proto-codegen`, and `smithy-contracts-jar`, at the NSmithy version. Use this to resolve through
 a mirror, or to share one Maven cache across projects.

@@ -440,6 +440,102 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         Assert.Contains("0.9.0", error.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ContractsJarPackagesTheModelWithoutAService()
+    {
+        var project = WriteFile(
+            "smithy-build.json",
+            """
+            {
+              "version": "1.0",
+              "sources": ["model"],
+              "maven": { "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"] }
+            }
+            """
+        );
+
+        var (file, errors) = Write(task =>
+        {
+            task.ProjectBuildFile = project;
+            task.ContractsGroupId = "io.github.acme";
+            task.ContractsArtifactId = "hello-contracts";
+            task.ContractsVersion = "1.2.3";
+        });
+
+        Assert.Empty(errors);
+        var jar = Plugin(file, "source", "contracts-jar");
+        Assert.Equal("io.github.acme", jar["groupId"]!.GetValue<string>());
+        Assert.Equal("hello-contracts", jar["artifactId"]!.GetValue<string>());
+        Assert.Equal("1.2.3", jar["version"]!.GetValue<string>());
+        Assert.Equal(
+            [
+                "software.amazon.smithy:smithy-aws-traits:1.74.1",
+                "io.github.thomaslaich.nsmithy:smithy-contracts-jar:0.0.0-SNAPSHOT",
+            ],
+            Dependencies(file)
+        );
+        Assert.Null(file["projections"]!["source"]!["plugins"]!["csharp-codegen"]);
+    }
+
+    [Fact]
+    public void ContractsJarConfiguredInBuildFileGetsItsArtifact()
+    {
+        var project = WriteFile(
+            "smithy-build.json",
+            """
+            {
+              "version": "1.0",
+              "plugins": {
+                "contracts-jar": { "groupId": "io.github.acme", "artifactId": "a", "version": "1.0.0" }
+              }
+            }
+            """
+        );
+
+        var (file, errors) = Write(task => task.ProjectBuildFile = project);
+
+        Assert.Empty(errors);
+        Assert.Equal(
+            ["io.github.thomaslaich.nsmithy:smithy-contracts-jar:0.0.0-SNAPSHOT"],
+            Dependencies(file)
+        );
+    }
+
+    [Fact]
+    public void ContractsJarCoordinateSetByPropertyAndBuildFileFails()
+    {
+        var project = WriteFile(
+            "smithy-build.json",
+            """{ "version": "1.0", "plugins": { "contracts-jar": { "version": "9.9.9" } } }"""
+        );
+
+        var (_, errors) = Write(task =>
+        {
+            task.ProjectBuildFile = project;
+            task.ContractsGroupId = "io.github.acme";
+            task.ContractsArtifactId = "hello-contracts";
+            task.ContractsVersion = "1.2.3";
+        });
+
+        var error = Assert.Single(errors);
+        Assert.Equal("NSMITHYPLUGIN", error.Code);
+        Assert.Contains("Version", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ContractsJarWithoutArtifactIdFails()
+    {
+        var (_, errors) = Write(task =>
+        {
+            task.ContractsGroupId = "io.github.acme";
+            task.ContractsVersion = "1.2.3";
+        });
+
+        var error = Assert.Single(errors);
+        Assert.Equal("NSMITHYMAVEN", error.Code);
+        Assert.Contains("SmithyMavenArtifactId", error.Message, StringComparison.Ordinal);
+    }
+
     private string WriteFile(string relativePath, string content)
     {
         var path = Path.Combine(_directory, relativePath);
