@@ -79,7 +79,8 @@ internal sealed class SmithyOperationAuthorization(IReadOnlyList<IAuthorizeData>
     {
         var services = httpContext.RequestServices;
         // Read the completed endpoint so enclosing and later conventions participate, just as
-        // they do for a route endpoint. Ignore the AllowAnonymous marker used to defer this check.
+        // they do for a route endpoint. The AllowAnonymous marker that defers this check is not
+        // IAuthorizeData, so it has no effect here.
         var metadata = httpContext.GetEndpoint()!.Metadata;
         var policy =
             await AuthorizationPolicy

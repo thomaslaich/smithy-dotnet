@@ -192,7 +192,10 @@ public sealed class ServerAuthorizationTests
                 }
             },
             dispatch
-                ? new SmithyServerProtocol("Dispatch", new ServerRoutingTests.HeaderDispatchProtocol())
+                ? new SmithyServerProtocol(
+                    "Dispatch",
+                    new ServerRoutingTests.HeaderDispatchProtocol()
+                )
                 : new SmithyServerProtocol("RestJson1", new RestJson1Protocol())
         );
         using var client = app.GetTestClient();
@@ -216,9 +219,8 @@ public sealed class ServerAuthorizationTests
         Assert.Equal(HttpStatusCode.OK, await SendAsync("Secret", "employee"));
     }
 
-    private sealed record RequirementMetadata(
-        IEnumerable<IAuthorizationRequirement> Requirements
-    ) : IAuthorizationRequirementData
+    private sealed record RequirementMetadata(IEnumerable<IAuthorizationRequirement> Requirements)
+        : IAuthorizationRequirementData
     {
         public IEnumerable<IAuthorizationRequirement> GetRequirements() => Requirements;
     }
