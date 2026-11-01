@@ -20,9 +20,10 @@ public static partial class SmithyAspNetCoreServer
     /// Maps the operations of <paramref name="catalog"/> over each of
     /// <paramref name="protocols"/>: one endpoint per route a protocol reports, or one endpoint for
     /// a protocol that resolves the operation from the request. Two routes with the same method and
-    /// path fail.
+    /// path fail. The endpoints are mapped into a route group, which is returned so conventions
+    /// apply to all of them, and each carries <see cref="SmithyEndpointMetadata"/>.
     /// </summary>
-    public static IEndpointRouteBuilder MapSmithyService(
+    public static RouteGroupBuilder MapSmithyService(
         this IEndpointRouteBuilder endpoints,
         ServiceOperationCatalog catalog,
         IReadOnlyList<SmithyServerProtocol> protocols
@@ -37,6 +38,7 @@ public static partial class SmithyAspNetCoreServer
 
         IOperationSchema[] schemas = [.. operations.Select(operation => operation.Schema)];
         var mappedRoutes = new HashSet<string>(StringComparer.Ordinal);
+        var group = endpoints.MapGroup("");
         foreach (var protocol in protocols)
         {
             var serviceProtocol = protocol.Protocol.ForService(service);
@@ -65,14 +67,21 @@ public static partial class SmithyAspNetCoreServer
                             service
                         );
                         var requiredQuery = route.RequiredQuery;
-                        endpoints
+                        group
                             .MapMethods(
                                 pattern,
                                 [route.Method],
                                 httpContext =>
                                     DispatchRouteAsync(httpContext, operation, requiredQuery)
                             )
-                            .WithDisplayName($"{route.Operation.Name} ({protocol.Name})");
+                            .WithDisplayName($"{route.Operation.Name} ({protocol.Name})")
+                            .WithMetadata(
+                                new SmithyEndpointMetadata(
+                                    service,
+                                    protocol.Name,
+                                    [catalog.GetOperation(route.Operation)]
+                                )
+                            );
                     }
 
                     break;
@@ -97,18 +106,22 @@ public static partial class SmithyAspNetCoreServer
                         protocol,
                         service
                     );
-                    endpoints
+                    group
                         .MapMethods(
                             byDispatch.Path,
                             [byDispatch.Method],
-                            httpContext => DispatchByNameAsync(httpContext, byDispatch, bound)
+                            httpContext =>
+                                DispatchByNameAsync(httpContext, catalog, byDispatch, bound)
                         )
-                        .WithDisplayName($"{service.Id.Name} ({protocol.Name})");
+                        .WithDisplayName($"{service.Id.Name} ({protocol.Name})")
+                        .WithMetadata(
+                            new SmithyEndpointMetadata(service, protocol.Name, operations)
+                        );
                     break;
             }
         }
 
-        return endpoints;
+        return group;
     }
 
     private static async Task DispatchRouteAsync(
@@ -133,6 +146,7 @@ public static partial class SmithyAspNetCoreServer
 
     private static async Task DispatchByNameAsync(
         HttpContext httpContext,
+        ServiceOperationCatalog catalog,
         ServerRouting.ByDispatch routing,
         Dictionary<ShapeId, IServerOperationBinding> operations
     )
@@ -146,6 +160,27 @@ public static partial class SmithyAspNetCoreServer
             .ConfigureAwait(false);
         if (operationId is { } id && operations.TryGetValue(id, out var operation))
         {
+            if (
+                catalog.GetOperation(id).RequiresAuthentication
+                && httpContext.GetEndpoint()?.Metadata.GetMetadata<SmithyOperationAuthorization>()
+                    is { } authorization
+            )
+            {
+                await authorization
+                    .AuthorizeAsync(
+                        httpContext,
+                        context =>
+                            SmithyAspNetCoreHost.DispatchBuiltRequestAsync(
+                                context,
+                                operation,
+                                request,
+                                cancellationToken
+                            )
+                    )
+                    .ConfigureAwait(false);
+                return;
+            }
+
             await SmithyAspNetCoreHost
                 .DispatchBuiltRequestAsync(httpContext, operation, request, cancellationToken)
                 .ConfigureAwait(false);

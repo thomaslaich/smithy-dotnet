@@ -29,6 +29,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.ServiceIndex;
+import software.amazon.smithy.model.knowledge.ServiceIndex.AuthSchemeMode;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.OperationShape;
@@ -38,6 +40,7 @@ import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.model.traits.RequiredTrait;
+import software.amazon.smithy.model.traits.synthetic.NoAuthTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -235,7 +238,8 @@ public final class ServerGenerator implements Runnable {
 
   /**
    * The operation table entries: each operation's schema, its handler resolved from a request's
-   * services, and, for unary operations, its JSON Schemas.
+   * services, for unary operations its JSON Schemas, and its effective auth schemes unless it needs
+   * no authentication.
    */
   private void writeCatalogOperations(List<OperationShape> ops) {
     for (int i = 0; i < ops.size(); i++) {
@@ -245,22 +249,15 @@ public final class ServerGenerator implements Runnable {
               + unaryAdapter(
                   op, writer.format("services.GetRequiredService<$L>()", opHandlerName(op)));
       String separator = i + 1 == ops.size() ? "" : ",";
-      if (isStreaming(op)) {
-        writer.write(
-            "$T.Create($L, $L)$L",
-            RuntimeTypes.SERVER_OPERATION,
-            SchemaGenerator.operationSchemaAccessor(writer, context, op),
-            resolver,
-            separator);
-      } else {
-        writer.write(
-            "$T.Create($L, $L, $L.Value)$L",
-            RuntimeTypes.SERVER_OPERATION,
-            SchemaGenerator.operationSchemaAccessor(writer, context, op),
-            resolver,
-            operationJsonSchemasClass(op),
-            separator);
-      }
+      String jsonSchemas = isStreaming(op) ? "" : ", " + operationJsonSchemasClass(op) + ".Value";
+      writer.write(
+          "$T.Create($L, $L$L$L)$L",
+          RuntimeTypes.SERVER_OPERATION,
+          SchemaGenerator.operationSchemaAccessor(writer, context, op),
+          resolver,
+          jsonSchemas,
+          authSchemesArgument(op),
+          separator);
     }
   }
 
@@ -379,6 +376,25 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
+  /**
+   * The operation's effective auth schemes as a named {@code authSchemes} argument, with {@code
+   * smithy.api#noAuth} when it can be invoked without authentication. Empty when that is the only
+   * scheme, the runtime's default.
+   */
+  private String authSchemesArgument(OperationShape op) {
+    List<ShapeId> schemes =
+        List.copyOf(
+            ServiceIndex.of(context.model())
+                .getEffectiveAuthSchemes(service, op, AuthSchemeMode.NO_AUTH_AWARE)
+                .keySet());
+    if (schemes.equals(List.of(NoAuthTrait.ID))) {
+      return "";
+    }
+    return schemes.stream()
+        .map(id -> SchemaGenerator.shapeIdExpr(writer, id))
+        .collect(Collectors.joining(", ", ", authSchemes: [", "]"));
+  }
+
   private boolean isStreaming(OperationShape op) {
     return ShapeSupport.isStreamingShape(context.model(), op.getInputShape())
         || ShapeSupport.isStreamingShape(context.model(), op.getOutputShape());
@@ -429,6 +445,7 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("protocolEnum", protocolEnum);
       writer.putContext("defaultProtocol", serverProtocols.get(0).name());
       writer.putContext("endpointRouteBuilder", RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER);
+      writer.putContext("routeGroupBuilder", RuntimeTypes.ROUTE_GROUP_BUILDER);
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext(
           "argumentOutOfRangeException", RuntimeTypes.ARGUMENT_OUT_OF_RANGE_EXCEPTION);
@@ -439,7 +456,7 @@ public final class ServerGenerator implements Runnable {
           writer.consumer(w -> writeSelectedProtocolMappings(serverProtocols, protocolEnum)));
       writer.write(
           """
-          public static ${endpointRouteBuilder:T} Map${contract:L}(
+          public static ${routeGroupBuilder:T} Map${contract:L}(
               this ${endpointRouteBuilder:T} endpoints,
               ${protocolEnum:L} protocols = ${protocolEnum:L}.${defaultProtocol:L})
           {

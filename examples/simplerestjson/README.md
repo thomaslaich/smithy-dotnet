@@ -56,18 +56,21 @@ Or call the server directly:
 
 ```bash
 curl -i http://localhost:5000/health
-curl -i -H 'X-Api-Key: nsmithy-demo-key' http://localhost:5000/authenticated-health
 curl -i http://localhost:5000/version
-curl -i http://localhost:5000/restaurant/napoli/menu
+curl -i -H 'X-Api-Key: nsmithy-demo-key' http://localhost:5000/authenticated-health
+curl -i -H 'X-Api-Key: nsmithy-demo-key' http://localhost:5000/restaurant/napoli/menu
 curl -i -X POST http://localhost:5000/restaurant/napoli/menu/item \
+  -H 'X-Api-Key: nsmithy-demo-key' \
   -H 'Content-Type: application/json' \
   -d '{"food":{"pizza":{"name":"Quattro Formaggi","base":"T","toppings":["CHEESE"]}},"price":11.0}'
 ```
 
-The generated client configures `HttpApiKeyAuthScheme`, which adds the
-`X-Api-Key` header for operations modeled with `@httpApiKeyAuth`. The
-`/authenticated-health` handler validates that header to keep the example
-end-to-end.
+The service is modeled with `@httpApiKeyAuth`, so every operation requires the
+`X-Api-Key` header except `Health`, marked `@auth([])`, and `Version`, marked
+`@optionalAuth`. The client configures `HttpApiKeyAuthScheme`, which adds the
+header. The server validates it with an ASP.NET Core authentication handler,
+and `WithModeledAuthorization()` decides from the model which operations need
+it. Without the header, the other operations return 401.
 
 The `/openUnions` endpoint round-trips an `OpenUnionsPayload` union. There are
 two variants.
@@ -78,6 +81,7 @@ The variant name is the key, and its value is the payload:
 
 ```bash
 curl -i -X PUT http://localhost:5000/openUnions \
+  -H 'X-Api-Key: nsmithy-demo-key' \
   -H 'Content-Type: application/json' \
   -d '{"tagged":{"str":"hello"}}'
 ```
@@ -89,6 +93,7 @@ payload fields:
 
 ```bash
 curl -i -X PUT http://localhost:5000/openUnions \
+  -H 'X-Api-Key: nsmithy-demo-key' \
   -H 'Content-Type: application/json' \
   -d '{"discriminated":{"key":"smol","content":"hello"}}'
 ```

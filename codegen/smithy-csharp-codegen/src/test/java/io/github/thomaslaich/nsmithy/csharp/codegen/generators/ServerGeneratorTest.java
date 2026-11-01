@@ -311,13 +311,12 @@ final class ServerGeneratorTest {
     assertTrue(
         containsIgnoringWhitespace(
             generated,
-            "public static IEndpointRouteBuilder MapStreamingService(this IEndpointRouteBuilder"
-                + " endpoints, StreamingServiceProtocols protocols ="
+            "public static RouteGroupBuilder MapStreamingService(this"
+                + " IEndpointRouteBuilder endpoints, StreamingServiceProtocols protocols ="
                 + " StreamingServiceProtocols.Grpc)"),
         generated);
     assertFalse(
-        generated.contains("public static IEndpointRouteBuilder MapStreamingServiceGrpc"),
-        generated);
+        generated.contains("public static RouteGroupBuilder MapStreamingServiceGrpc"), generated);
   }
 
   @Test
@@ -335,12 +334,12 @@ final class ServerGeneratorTest {
     assertTrue(
         containsIgnoringWhitespace(
             generated,
-            "public static IEndpointRouteBuilder MapStreamingService(this IEndpointRouteBuilder"
-                + " endpoints, StreamingServiceProtocols protocols ="
+            "public static RouteGroupBuilder MapStreamingService(this"
+                + " IEndpointRouteBuilder endpoints, StreamingServiceProtocols protocols ="
                 + " StreamingServiceProtocols.RestJson1)"),
         generated);
     assertFalse(
-        generated.contains("public static IEndpointRouteBuilder MapStreamingServiceRestJson1"),
+        generated.contains("public static RouteGroupBuilder MapStreamingServiceRestJson1"),
         generated);
     // Routes come from the protocol at runtime, not from generated code.
     assertFalse(generated.contains("MapMethods"), generated);
@@ -370,8 +369,9 @@ final class ServerGeneratorTest {
     assertTrue(
         containsIgnoringWhitespace(
             generated,
-            "public static IEndpointRouteBuilder MapMultiService(this IEndpointRouteBuilder"
-                + " endpoints, MultiServiceProtocols protocols = MultiServiceProtocols.RpcV2Cbor)"),
+            "public static RouteGroupBuilder MapMultiService(this"
+                + " IEndpointRouteBuilder endpoints, MultiServiceProtocols protocols ="
+                + " MultiServiceProtocols.RpcV2Cbor)"),
         generated);
     assertTrue(generated.contains("if ((protocols & ~MultiServiceProtocols.All) != 0)"), generated);
     assertTrue(
@@ -389,11 +389,9 @@ final class ServerGeneratorTest {
             == generated.lastIndexOf("ServerOperation.Create("),
         generated);
     assertFalse(
-        generated.contains("public static IEndpointRouteBuilder MapMultiServiceRestJson1"),
-        generated);
+        generated.contains("public static RouteGroupBuilder MapMultiServiceRestJson1"), generated);
     assertFalse(
-        generated.contains("public static IEndpointRouteBuilder MapMultiServiceRpcV2Cbor"),
-        generated);
+        generated.contains("public static RouteGroupBuilder MapMultiServiceRpcV2Cbor"), generated);
   }
 
   @Test
@@ -440,6 +438,59 @@ final class ServerGeneratorTest {
                 + " services => (_, ct) =>"
                 + " services.GetRequiredService<IPingHandler>().PingAsync(ct),"
                 + " PingJsonSchemas.Value)"),
+        generated);
+  }
+
+  @Test
+  void serverOperationsCarryTheirEffectiveAuthSchemes() throws Exception {
+    String generated =
+        renderServer(
+            "",
+            """
+            $version: "2"
+
+            namespace example.auth
+
+            @httpBearerAuth
+            @httpApiKeyAuth(name: "X-Api-Key", in: "header")
+            service AuthService {
+                version: "1"
+                operations: [Delete, Health, Lookup, Status]
+            }
+
+            operation Delete {}
+
+            @auth([])
+            operation Health {}
+
+            @auth([httpApiKeyAuth])
+            operation Lookup {}
+
+            @optionalAuth
+            operation Status {}
+            """,
+            "example.auth#AuthService",
+            "Example.Auth");
+
+    // Without @auth, every scheme on the service applies, in alphabetical order.
+    assertTrue(
+        generated.contains(
+            "DeleteJsonSchemas.Value, authSchemes:"
+                + " [ShapeId.Parse(\"smithy.api#httpApiKeyAuth\"),"
+                + " ShapeId.Parse(\"smithy.api#httpBearerAuth\")]),"),
+        generated);
+    assertTrue(generated.contains("HealthJsonSchemas.Value),"), generated);
+    assertTrue(
+        generated.contains(
+            "LookupJsonSchemas.Value, authSchemes:"
+                + " [ShapeId.Parse(\"smithy.api#httpApiKeyAuth\")]),"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "StatusJsonSchemas.Value, authSchemes:"
+                + " [ShapeId.Parse(\"smithy.api#httpApiKeyAuth\"),"
+                + " ShapeId.Parse(\"smithy.api#httpBearerAuth\"),"
+                + " ShapeId.Parse(\"smithy.api#noAuth\")])"),
         generated);
   }
 

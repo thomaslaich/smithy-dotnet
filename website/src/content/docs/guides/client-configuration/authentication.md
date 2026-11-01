@@ -56,8 +56,9 @@ var client = new WeatherClient(
     });
 ```
 
-The `simplerestjson` example includes an API-key-protected operation that
-validates the header sent by `HttpApiKeyAuthScheme`.
+The `simplerestjson` example sends the key with `HttpApiKeyAuthScheme` and
+validates it on the server with
+[modeled authorization](/smithy-dotnet/servers/authorization/).
 
 ## AWS SigV4
 

@@ -1,0 +1,118 @@
+---
+title: Authorization
+description: Require authorization for the operations whose model requires authentication.
+---
+
+Smithy models auth per operation. A service applies auth scheme traits such as
+`@httpBearerAuth`, and each operation can narrow them with `@auth`, drop them
+with `@auth([])`, or make them optional with `@optionalAuth`:
+
+```smithy
+@httpBearerAuth
+service PetService {
+    operations: [AdoptPet, ListPets, GetHealth]
+}
+
+operation AdoptPet {}       // requires a bearer token
+
+@optionalAuth
+operation ListPets {}       // works with or without one
+
+@auth([])
+operation GetHealth {}      // takes no auth
+```
+
+How credentials are checked is up to the application: register an ASP.NET Core
+authentication handler (JWT bearer, an API key handler, ...) as usual.
+`WithModeledAuthorization()` then requires authorization for protected operations
+and explicitly exempts public operations, including from enclosing and fallback
+policies:
+
+```csharp title="Program.cs"
+builder.Services.AddAuthentication().AddJwtBearer();
+builder.Services.AddAuthorization();
+builder.Services.AddPetServiceHandler<PetHandler>();
+
+var app = builder.Build();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapPetService().WithModeledAuthorization();
+```
+
+The helper decides **which operations require authorization**, not **which
+credentials they accept**. It does not map Smithy auth scheme IDs to ASP.NET Core
+authentication schemes. For example, a bearer-only operation can accept a
+cookie-authenticated caller if the application's policy allows it. Configure
+handlers and policies to restrict the accepted authentication schemes.
+
+| Operation | Endpoint metadata |
+| --- | --- |
+| an auth scheme applies | `[Authorize]` with the given policies, or the default policy |
+| `@optionalAuth`, `@auth([])`, or no auth scheme on the service | `[AllowAnonymous]` |
+
+`[AllowAnonymous]` overrides authorization required by an enclosing group or a
+fallback policy, so operations the model marks public stay reachable. With
+`@optionalAuth`, a caller who sends valid credentials is still authenticated;
+invalid credentials make the caller anonymous instead of failing the call.
+
+For example, an enclosing policy still protects `AdoptPet`, but does not protect
+`GetHealth` or `ListPets`:
+
+```csharp
+var internalApi = app.MapGroup("/internal").RequireAuthorization("Employees");
+internalApi.MapPetService().WithModeledAuthorization();
+```
+
+`AdoptPet` must satisfy both the `Employees` policy and the default policy.
+The two public operations remain anonymously accessible under `/internal`.
+
+Pass policy names to authorize protected operations with them instead of the
+default policy:
+
+```csharp
+app.MapPetService().WithModeledAuthorization("PetOwners");
+```
+
+Without `WithModeledAuthorization()`, the model's auth has no effect on the
+server and the application protects endpoints as it would any other.
+
+## Protocols with a single endpoint
+
+Every built-in server protocol maps one endpoint per operation. A custom
+protocol can instead map one endpoint for all operations and read the operation
+from the request, as an AWS JSON server would from `X-Amz-Target`. When those
+operations are all protected, the endpoint requires authorization like any
+other. When some are public, the endpoint allows anonymous calls and authorizes
+a protected operation once it is resolved, after the request body is read.
+That deferred check combines the modeled authorization policy with authorization
+metadata on the endpoint, including requirements inherited from enclosing groups,
+just as for an endpoint serving a single protected operation.
+
+## Custom conventions
+
+`Map{Service}` maps the service's endpoints into a route group and returns it,
+so ASP.NET Core's endpoint conventions apply to every operation of the
+service:
+
+```csharp
+app.MapPetService().RequireRateLimiting("pets");
+```
+
+Each endpoint carries `SmithyEndpointMetadata` with the operations it serves.
+Each operation's `AuthSchemes` lists its effective scheme IDs in priority
+order, so a convention can pick authentication schemes per operation. Group
+conventions run before an endpoint's own metadata is added, so a convention
+that reads `SmithyEndpointMetadata` uses `Finally`:
+
+```csharp
+var bearerAuth = ShapeId.Parse("smithy.api#httpBearerAuth");
+IEndpointConventionBuilder service = app.MapPetService();
+service.Finally(endpoint =>
+{
+    var smithy = endpoint.Metadata.OfType<SmithyEndpointMetadata>().Single();
+    if (smithy.Operations.Any(o => o.AuthSchemes.Contains(bearerAuth)))
+    {
+        endpoint.Metadata.Add(new AuthorizeAttribute { AuthenticationSchemes = "Bearer" });
+    }
+});
+```

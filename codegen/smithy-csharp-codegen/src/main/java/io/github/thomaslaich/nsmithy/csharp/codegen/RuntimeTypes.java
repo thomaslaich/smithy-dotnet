@@ -117,6 +117,8 @@ public final class RuntimeTypes {
   public static final Symbol I_SERVER_OPERATION = type("NSmithy.Server.IServerOperation");
   public static final Symbol SMITHY_SERVER_PROTOCOL =
       type("NSmithy.Server.AspNetCore.SmithyServerProtocol");
+  public static final Symbol ROUTE_GROUP_BUILDER =
+      type("Microsoft.AspNetCore.Routing.RouteGroupBuilder");
   public static final Symbol SERVICE_OPERATION_CATALOG =
       type("NSmithy.Server.ServiceOperationCatalog");
   public static final Symbol SERVICE_PROMPT_ARGUMENT_DEFINITION =
