@@ -5,10 +5,12 @@
  *   I{Service}ServiceHandler     every operation's handler
  *   {Service}ServiceProtocols    the protocols the service is served over, as flags
  *   {Service}ServiceDefinition   the operation table: each operation's schema, its handler
- *                                resolved from a request's services, and its JSON Schemas
+ *                                resolved from a request's services, its JSON Schemas, and
+ *                                its auth schemes
  *   {Service}ServiceServerExtensions
  *                                Add{Service}ServiceHandler and Map{Service}Service, extension
- *                                methods for ASP.NET Core
+ *                                methods for ASP.NET Core; Map{Service}Service returns the
+ *                                service's route group
  *
  * The runtime's SmithyServerRuntime reads requests, validates input, calls the handler, and writes
  * responses and errors; the generated code only tells it which handler serves which operation.
@@ -23,12 +25,17 @@ import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.ServiceIndex;
+import software.amazon.smithy.model.knowledge.ServiceIndex.AuthSchemeMode;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.traits.DocumentationTrait;
+import software.amazon.smithy.model.traits.synthetic.NoAuthTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -163,7 +170,8 @@ final class ServerGenerator {
 
   /**
    * An operation table entry: the operation's schema, a function that resolves its handler from a
-   * request's services, and, for an operation that streams nothing, its JSON Schemas.
+   * request's services, for an operation that streams nothing, its JSON Schemas, and its auth
+   * schemes.
    */
   private String serverOperation(OperationShape operation) {
     boolean hasInput = !ShapeSupport.isUnit(operation.getInputShape());
@@ -208,6 +216,7 @@ final class ServerGenerator {
     if (!isStreaming(operation)) {
       arguments.add("jsonSchemas = " + jsonSchemas(operation));
     }
+    authSchemes(operation).ifPresent(schemes -> arguments.add("authSchemes = " + schemes));
     return SERVER
         + "ServerOperation.Create<"
         + input
@@ -230,6 +239,25 @@ final class ServerGenerator {
         .getTrait(DocumentationTrait.class)
         .ifPresent(trait -> arguments.add(FSharpNaming.stringLiteral(trait.getValue())));
     return SERVER + "OperationJsonSchemas(" + String.join(", ", arguments) + ")";
+  }
+
+  /**
+   * The operation's effective auth schemes, with {@code smithy.api#noAuth} when it can be invoked
+   * without authentication. Empty when that is the only scheme, the runtime's default.
+   */
+  private Optional<String> authSchemes(OperationShape operation) {
+    List<ShapeId> schemes =
+        List.copyOf(
+            ServiceIndex.of(model)
+                .getEffectiveAuthSchemes(service, operation, AuthSchemeMode.NO_AUTH_AWARE)
+                .keySet());
+    if (schemes.equals(List.of(NoAuthTrait.ID))) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        schemes.stream()
+            .map(FSharpLiterals::shapeId)
+            .collect(Collectors.joining("; ", "[| ", " |]")));
   }
 
   private String prompts(List<OperationShape> operations) {
@@ -333,17 +361,18 @@ final class ServerGenerator {
     if (!protocols.isEmpty()) {
       String protocolEnum = contract + "Protocols";
       String routes = "global.Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";
+      String group = "global.Microsoft.AspNetCore.Routing.RouteGroupBuilder";
       writer.write("");
       writer.write(
           "/// <summary>Maps the service's operations over <c>protocols</c>, by default its first"
-              + " protocol.</summary>");
+              + " protocol, into a route group, and returns the group.</summary>");
       writer.write(EXTENSION);
       writer.write(
           "static member Map$L(endpoints: $L, ?protocols: $L) : $L =",
           contract,
           routes,
           protocolEnum,
-          routes);
+          group);
       writer.indent();
       writer.write("global.System.ArgumentNullException.ThrowIfNull(endpoints)");
       writer.write(

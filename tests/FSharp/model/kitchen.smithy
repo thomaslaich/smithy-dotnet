@@ -14,6 +14,8 @@ use smithy.ai#prompts
 @simpleRestJson
 @rpcv2Cbor
 @rpcv2Json
+@httpApiKeyAuth(name: "X-Api-Key", in: "header")
+@auth([])
 @prompts({
     order_for_table: {
         description: "Order a dish for a table"
@@ -23,7 +25,7 @@ use smithy.ai#prompts
 })
 service Kitchen {
     version: "2024-01-01"
-    operations: [Order, Ping]
+    operations: [CloseTable, Order, Ping]
 }
 
 /// Orders a dish for a table.
@@ -57,6 +59,17 @@ operation Order {
 @readonly
 @http(method: "GET", uri: "/ping")
 operation Ping {}
+
+/// Closes a table; only staff with an API key may.
+@auth([httpApiKeyAuth])
+@http(method: "POST", uri: "/tables/{table}/close")
+operation CloseTable {
+    input := {
+        @required
+        @httpLabel
+        table: String
+    }
+}
 
 structure OrderForTableArguments {
     /// The table to serve.

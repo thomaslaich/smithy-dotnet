@@ -15,6 +15,7 @@
     <Compile Include="ClientTests.fs" />
     <Compile Include="ServerTests.fs" />
     <Compile Include="McpTests.fs" />
+    <Compile Include="AuthorizationTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
