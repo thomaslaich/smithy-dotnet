@@ -101,8 +101,9 @@ operation CustomCode {
     errors: [ UnknownServerError ]
 }
 
-/// Returns the current service version.
+/// Returns the current service version, with or without an API key.
 @readonly
+@optionalAuth
 @http(method: "GET", uri: "/version", code: 200)
 operation Version {
     output: VersionOutput
@@ -255,8 +256,9 @@ structure GenericClientError {
     message: String
 }
 
-/// Returns the health status of the service.
+/// Returns the health status of the service. Needs no API key.
 @readonly
+@auth([])
 @http(method: "GET", uri: "/health", code: 200)
 operation Health {
     input: HealthInput,
@@ -264,19 +266,14 @@ operation Health {
     errors: [ UnknownServerError ]
 }
 
-/// Returns health status only when the configured client API key is present.
+/// Returns health status only to callers with a valid API key.
 @readonly
 @http(method: "GET", uri: "/authenticated-health", code: 200)
 operation AuthenticatedHealth {
-    input := {
-        @httpHeader("X-Api-Key")
-        apiKey: String
-    }
     output := {
         @required
         status: String
-    },
-    errors: [ UnauthorizedError ]
+    }
 }
 
 @input
@@ -311,13 +308,6 @@ enum UnknownServerErrorCode {
 }
 
 /// Returned when an authenticated example request is missing the expected API key.
-@error("client")
-@httpError(401)
-structure UnauthorizedError {
-    @required
-    message: String
-}
-
 
 @trait
 document freeForm

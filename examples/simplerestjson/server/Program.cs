@@ -1,18 +1,60 @@
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 using Alloy.Test;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Options;
+using NSmithy.Server.AspNetCore;
 using NSmithy.Server.AspNetCore.Docs;
 
 var builder = WebApplication.CreateBuilder(args);
+builder
+    .Services.AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyAuthenticationHandler.SchemeName,
+        null
+    );
+builder.Services.AddAuthorization();
 builder.Services.AddPizzaAdminServiceHandler<PizzaHandler>();
 
 var app = builder.Build();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapSmithyDocs();
-app.MapPizzaAdminService();
+
+// Operations require the API key unless the model marks them @auth([]) or @optionalAuth.
+app.MapPizzaAdminService().WithModeledAuthorization();
 app.Run();
+
+// Authenticates requests that carry the demo key in the header @httpApiKeyAuth names.
+internal sealed class ApiKeyAuthenticationHandler(
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder
+) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    public const string SchemeName = "ApiKey";
+
+    private const string ApiKey = "nsmithy-demo-key";
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        if (!Request.Headers.TryGetValue("X-Api-Key", out var key))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
+        if (!string.Equals(key, ApiKey, StringComparison.Ordinal))
+            return Task.FromResult(AuthenticateResult.Fail("Invalid API key."));
+
+        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "demo")], SchemeName);
+        return Task.FromResult(
+            AuthenticateResult.Success(
+                new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)
+            )
+        );
+    }
+}
 
 internal sealed class PizzaHandler : IPizzaAdminServiceHandler
 {
-    internal const string ApiKey = "nsmithy-demo-key";
-
     private static readonly Dictionary<string, MenuItem> DefaultMenu = new()
     {
         ["margherita"] = new MenuItem(
@@ -76,13 +118,7 @@ internal sealed class PizzaHandler : IPizzaAdminServiceHandler
     public Task<AuthenticatedHealthOutput> AuthenticatedHealthAsync(
         AuthenticatedHealthInput input,
         CancellationToken cancellationToken = default
-    )
-    {
-        if (!string.Equals(input.ApiKey, ApiKey, StringComparison.Ordinal))
-            throw new UnauthorizedError("Missing or invalid API key.");
-
-        return Task.FromResult(new AuthenticatedHealthOutput("authenticated"));
-    }
+    ) => Task.FromResult(new AuthenticatedHealthOutput("authenticated"));
 
     public Task<VersionOutput> VersionAsync(
         VersionInput input,
