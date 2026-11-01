@@ -11,11 +11,50 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.16.0]
+
+This release generates F# types, schemas, clients, and servers, and authorizes server operations
+from their modeled auth. When upgrading, update `NSmithy.SmithyCli` and `software.amazon.smithy`
+Maven dependencies to Smithy 1.74.1, and derive a hand-written list or map schema from
+`ListSchema` or `MapSchema` instead of calling `Schemas.List`, `Schemas.Set`, or `Schemas.Map`.
+
+### Added
+
+- F# code generation. An F# project that references `NSmithy.MSBuild` generates F# types
+  and runtime schemas with the new `fsharp-codegen` plugin (`smithy-fsharp-codegen`):
+  records, discriminated unions for unions and enums, `option` for members that may be
+  absent, F# `list` and `Map`, and exception classes for errors. The schemas work with
+  every NSmithy codec. Clients and servers are generated too, on the same runtime as C#:
+  `I{Service}Client` and `{Service}Client` with `Task`-returning methods, and handler
+  interfaces with `Add{Service}ServiceHandler` and `Map{Service}Service` for ASP.NET Core.
+  Paginators, waiters, endpoint-rule resolvers, and fakes are not generated for F# yet. The
+  generated `{Service}Definition` works with `NSmithy.Server.Mcp`, and `WithModeledAuthorization`
+  authorizes F# operations from their modeled auth, as in C#.
+- Schema bases that own the generic reading and writing, for a language that cannot override
+  those methods: `AccessorStructSchema` with a `StructMember` per member, `AccessorUnionSchema`
+  with a `UnionCase` per case, `ElementListSchema`, `EntryMapSchema`, and `Schemas.Optional` for
+  a value in a type that says whether it is present, such as F#'s `option`.
+- `WithModeledAuthorization` on a mapped service adds `[Authorize]` to the operations whose
+  modeled auth requires authentication and `[AllowAnonymous]` to those that allow none, such as
+  `@auth([])` and `@optionalAuth`. Generated operations carry their effective auth schemes in
+  `IServerOperation.AuthSchemes`, and every mapped endpoint carries `SmithyEndpointMetadata`.
+
 ### Changed
 
 - **Smithy 1.74.1.** Updated the bundled CLI, `SmithyVersion`, and Smithy dependencies. With the
   default exact version check, projects that reference `NSmithy.SmithyCli` must update it to
   1.74.1, and `software.amazon.smithy` Maven dependencies should use 1.74.1.
+- `Map{Service}` maps the service into a route group and returns its `RouteGroupBuilder`, so
+  conventions such as `RequireRateLimiting` apply to the service's endpoints. It is still an
+  `IEndpointRouteBuilder`, so existing calls compile unchanged.
+- The language-neutral parts of the C# plugin moved to `smithy-dotnet-codegen-core`.
+  Integrations that use `TraitIds` or `ShapeSupport` import them from
+  `io.github.thomaslaich.nsmithy.codegen.core`; the C#-specific helpers of `ShapeSupport`
+  are now `CSharpShapeSupport`.
+
+### Fixed
+
+- A structure with a member named `type` no longer fails server code generation.
 
 ### Removed
 
@@ -64,19 +103,6 @@ instead of `AwsSigV4Presigner`, and set the client's `Endpoint` instead of using
 - `SmithyHttpServerResponse.SingleChunk` and `TryGetSingleChunk`: a body of one buffered chunk,
   which a host can recognize and write in one call. The built-in protocols use it for unary
   responses.
-- F# code generation. An F# project that references `NSmithy.MSBuild` generates F# types
-  and runtime schemas with the new `fsharp-codegen` plugin (`smithy-fsharp-codegen`):
-  records, discriminated unions for unions and enums, `option` for members that may be
-  absent, F# `list` and `Map`, and exception classes for errors. The schemas work with
-  every NSmithy codec. Clients and servers are generated too, on the same runtime as C#:
-  `I{Service}Client` and `{Service}Client` with `Task`-returning methods, and handler
-  interfaces with `Add{Service}ServiceHandler` and `Map{Service}Service` for ASP.NET Core.
-  Paginators, waiters, endpoint-rule resolvers, and fakes are not generated for F# yet. The
-  generated `{Service}Definition` works with `NSmithy.Server.Mcp`, as in C#.
-- Schema bases that own the generic reading and writing, for a language that cannot override
-  those methods: `AccessorStructSchema` with a `StructMember` per member, `AccessorUnionSchema`
-  with a `UnionCase` per case, `ElementListSchema`, `EntryMapSchema`, and `Schemas.Optional` for
-  a value in a type that says whether it is present, such as F#'s `option`.
 
 ### Changed
 
@@ -92,14 +118,9 @@ instead of `AwsSigV4Presigner`, and set the client's `Endpoint` instead of using
   faster.
 - The published packages require the lowest dependency versions they work with:
   `System.Formats.Cbor` and `System.IO.Hashing` 10.0.0 and `Scalar.AspNetCore` 2.11.3.
-- The language-neutral parts of the C# plugin moved to `smithy-dotnet-codegen-core`.
-  Integrations that use `TraitIds` or `ShapeSupport` import them from
-  `io.github.thomaslaich.nsmithy.codegen.core`; the C#-specific helpers of `ShapeSupport`
-  are now `CSharpShapeSupport`.
 
 ### Fixed
 
-- A structure with a member named `type` no longer fails server code generation.
 - A waiter whose last delay came to under a millisecond never stopped on a test clock such as
   `FakeTimeProvider`: `Task.Delay` takes such a delay as none and completes without consulting the
   clock. Delays are now rounded up to whole milliseconds.
@@ -762,7 +783,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.13.0...v0.14.0
