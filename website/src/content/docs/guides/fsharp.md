@@ -9,8 +9,8 @@ and server. Generation runs during `dotnet build`, as it does for C#, and the
 generated code uses the same runtime packages.
 
 :::caution[Experimental]
-Paginators, waiters, endpoint-rule resolvers, fake clients and handlers,
-client dependency-injection registration, and the MCP adapter are C# only.
+Paginators, waiters, endpoint-rule resolvers, fake clients and handlers, and
+client dependency-injection registration are C# only.
 :::
 
 ## Set up a project
@@ -126,6 +126,14 @@ app.Run()
 `MapWeatherService` serves the service's first protocol. Pass
 `WeatherServiceProtocols` flags to serve others; see
 [Hosting multiple protocols](/smithy-dotnet/servers/hosting/).
+
+The same handler can serve MCP clients. Reference `NSmithy.Server.Mcp` and
+register the generated definition; see [MCP](/smithy-dotnet/servers/mcp/).
+
+```fsharp
+builder.Services.AddMcpServer().WithSmithyService<WeatherServiceDefinition>()
+|> ignore
+```
 
 ## Call the service
 

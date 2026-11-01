@@ -14,6 +14,7 @@
     <Compile Include="SerializationTests.fs" />
     <Compile Include="ClientTests.fs" />
     <Compile Include="ServerTests.fs" />
+    <Compile Include="McpTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,6 +42,7 @@
     <ProjectReference Include="../../packages/NSmithy.Protocols.RpcV2Cbor/NSmithy.Protocols.RpcV2Cbor.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Protocols.RpcV2Json/NSmithy.Protocols.RpcV2Json.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Server.Mcp/NSmithy.Server.Mcp.csproj" />
   </ItemGroup>
 
   <Import Project="../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />

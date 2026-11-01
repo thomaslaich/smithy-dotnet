@@ -7,12 +7,20 @@ use aws.protocols#restJson1
 use smithy.protocols#rpcv2Cbor
 use smithy.protocols#rpcv2Json
 use example.shared#Money
+use smithy.ai#prompts
 
 /// A kitchen that serves dishes.
 @restJson1
 @simpleRestJson
 @rpcv2Cbor
 @rpcv2Json
+@prompts({
+    order_for_table: {
+        description: "Order a dish for a table"
+        template: "Order {{dish}} for table {{table}}."
+        arguments: OrderForTableArguments
+    }
+})
 service Kitchen {
     version: "2024-01-01"
     operations: [Order, Ping]
@@ -49,6 +57,14 @@ operation Order {
 @readonly
 @http(method: "GET", uri: "/ping")
 operation Ping {}
+
+structure OrderForTableArguments {
+    /// The table to serve.
+    @required
+    table: String
+
+    dish: String
+}
 
 /// A dish on the menu.
 structure Dish {
