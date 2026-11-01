@@ -186,10 +186,11 @@ public static partial class RatingSchema
 
 A union schema derives from `UnionSchema<T>` the same way: it declares its
 cases and implements `CaseOf`, `SerializeCase`, and `DeserializeCase` by
-switching over the generated variant types. Lists, maps, and enums need no
-generated class; `Schemas.List`, `Schemas.Map`, `Schemas.StringEnum`, and
-`Schemas.IntEnum` build them from the element or value schema and the
-collection's own accessors.
+switching over the generated variant types. A list or map schema derives from
+`ListSchema` or `MapSchema` and implements `SerializeElements` and
+`DeserializeElement`, or `SerializeEntries` and `DeserializeEntry`, with its
+collection's own accessors. Enums need no generated class; `Schemas.StringEnum`
+and `Schemas.IntEnum` build them from their values.
 
 `Build` is where a required member absent from the payload fails, throwing
 where the codec can turn it into a modeled error. A defaulted member's builder
@@ -353,7 +354,7 @@ list, a map key and value are members 0 and 1, and a union writes its one case
 under the case's index:
 
 ```csharp
-// The list schema `Schemas.List` builds for `list Names { member: String }`
+// A list schema for `list Names { member: String }`
 public void SerializeElements<TSerializer>(Names value, ref TSerializer serializer)
 {
     foreach (var item in value.Values)

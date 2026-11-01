@@ -137,12 +137,7 @@ public static class ValidationExceptionSchema
     {
         private static readonly Schema<string?> Target0 = Schemas.NullableReference(Schemas.String);
         private static readonly Schema<IReadOnlyList<ValidationExceptionField>?> Target1 =
-            Schemas.NullableReference(
-                Schemas.List(
-                    ShapeId.Parse("smithy.framework#ValidationExceptionFieldList"),
-                    ValidationExceptionFieldSchema.Schema
-                )
-            );
+            Schemas.NullableReference(new FieldListSchema());
 
         public override Builder CreateTypedBuilder() => new();
 
@@ -174,6 +169,49 @@ public static class ValidationExceptionSchema
                     break;
             }
         }
+    }
+
+    private sealed class FieldListSchema()
+        : ListSchema<
+            IReadOnlyList<ValidationExceptionField>,
+            ValidationExceptionField,
+            List<ValidationExceptionField>
+        >(
+            ShapeId.Parse("smithy.framework#ValidationExceptionFieldList"),
+            ShapeKind.List,
+            ValidationExceptionFieldSchema.Schema
+        )
+    {
+        public override IEnumerable<ValidationExceptionField> GetElements(
+            IReadOnlyList<ValidationExceptionField> value
+        ) => value;
+
+        public override List<ValidationExceptionField> CreateTypedBuilder() => [];
+
+        public override void Add(
+            List<ValidationExceptionField> builder,
+            ValidationExceptionField value
+        ) => builder.Add(value);
+
+        public override IReadOnlyList<ValidationExceptionField> Build(
+            List<ValidationExceptionField> builder
+        ) => builder.AsReadOnly();
+
+        public override void SerializeElements<TSerializer>(
+            IReadOnlyList<ValidationExceptionField> value,
+            ref TSerializer serializer
+        )
+        {
+            for (var index = 0; index < value.Count; index++)
+            {
+                ElementSchema.Write(0, value[index], ref serializer);
+            }
+        }
+
+        public override void DeserializeElement<TDeserializer>(
+            List<ValidationExceptionField> builder,
+            ref TDeserializer deserializer
+        ) => builder.Add(ElementSchema.Read(ref deserializer));
     }
 
     /// <summary>
