@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.thomaslaich.nsmithy.codegen.core.SchemaSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -74,7 +75,7 @@ final class SchemaGeneratorTest {
 
     var retained =
         operation.getAllTraits().values().stream()
-            .filter(SchemaGenerator::isRuntimeTrait)
+            .filter(SchemaSupport::isRuntimeTrait)
             .map(trait -> trait.toShapeId().toString())
             .sorted()
             .toList();

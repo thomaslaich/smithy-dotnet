@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointResolverGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointRules;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientDependencyInjectionGenerator;
@@ -17,7 +18,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StructureGenerato
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpServiceGenerator;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.waiters.WaiterGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.waiters.WaiterMethods;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;

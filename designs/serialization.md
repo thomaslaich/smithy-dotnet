@@ -192,6 +192,18 @@ switching over the generated variant types. A list or map schema derives from
 collection's own accessors. Enums need no generated class; `Schemas.StringEnum`
 and `Schemas.IntEnum` build them from their values.
 
+A language that cannot override these generic methods derives from accessor
+bases instead. `AccessorStructSchema<T, TBuilder>` takes one `StructMember` per
+member (the member's schema, a function that gets it from a value, and one that
+sets it on a builder) and implements `SerializeMembers` and `DeserializeMember`
+over them. `AccessorUnionSchema<T>` does the same with one `UnionCase` per case,
+and `ElementListSchema` and `EntryMapSchema` go through the element or value
+schema. The derived class overrides only non-generic members: `Build`, `CaseOf`,
+and the collection accessors. `Schemas.Optional` reads and writes a value held in
+a type that says whether it is present, such as F#'s `option`. Each member costs
+a delegate call and a generic virtual call more than generated straight-line
+code.
+
 `Build` is where a required member absent from the payload fails, throwing
 where the codec can turn it into a modeled error. A defaulted member's builder
 property starts at its modeled default, so an absent member keeps it.
