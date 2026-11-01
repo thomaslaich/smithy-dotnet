@@ -39,9 +39,3 @@ This work includes:
   command and messaging semantics.
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server interfaces beyond HTTP-centric assumptions.
-
-## Later work
-
-These are plausible future areas, but they are not the current focus:
-
-- F#-specific generation

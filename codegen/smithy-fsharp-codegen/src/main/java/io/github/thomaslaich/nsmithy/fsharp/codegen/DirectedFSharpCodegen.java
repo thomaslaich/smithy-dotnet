@@ -18,7 +18,7 @@ import software.amazon.smithy.codegen.core.directed.GenerateStructureDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateUnionDirective;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
-/** Generates the F# type and schema of every shape, and the service's client. */
+/** Generates the F# type and schema of every shape, and the service's client and server. */
 @SmithyUnstableApi
 final class DirectedFSharpCodegen
     implements DirectedCodegen<FSharpContext, FSharpSettings, FSharpIntegration> {
@@ -52,6 +52,9 @@ final class DirectedFSharpCodegen
     new SchemaGenerator(directive.context()).service(directive.shape());
     if (directive.settings().generateClient()) {
       new ClientGenerator(directive.context(), directive.shape()).run();
+    }
+    if (directive.settings().generateServer()) {
+      new ServerGenerator(directive.context(), directive.shape()).run();
     }
   }
 
