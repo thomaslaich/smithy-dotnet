@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+    <VersionPrefix>0.6.0</VersionPrefix>
+    <VersionSuffix>SNAPSHOT</VersionSuffix>
+    <SmithyPublish>true</SmithyPublish>
+    <SmithyMavenGroupId>io.github.thomaslaich.nsmithy.examples</SmithyMavenGroupId>
+    <SmithyMavenArtifactId>bookshelf</SmithyMavenArtifactId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
+  </ItemGroup>
+</Project>

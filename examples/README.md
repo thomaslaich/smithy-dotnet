@@ -12,6 +12,7 @@ All .NET example projects are collected in [`examples.slnx`](examples.slnx).
 | [restjson1/streaming](restjson1/streaming/) | `aws.protocols#restJson1` | Bidirectional restJson1 event streaming (chat service) |
 | [waiters](waiters/) | `aws.protocols#restJson1` | Deployments service whose deployments take a while: generated waiters, failure and timeout |
 | [simplerestjson](simplerestjson/) | `alloy#simpleRestJson` | Pizza Admin service: unions, enums, maps, errors, API-key auth |
+| [fsharp](fsharp/) | `aws.protocols#restJson1` | Bookshelf service with an F# server and client: records, options, unions, errors |
 | [rpcv2cbor/unary](rpcv2cbor/unary/) | `smithy.protocols#rpcv2Cbor` | The restJson1 Weather service over CBOR: resources, pagination, errors, retries |
 | [rpcv2cbor/streaming](rpcv2cbor/streaming/) | `smithy.protocols#rpcv2Cbor` | Bidirectional rpcv2Cbor event streaming (chat service) |
 | [grpc/unary](grpc/unary/) | `alloy.proto#grpc` | Library service over native gRPC (no protoc): proto codec features like sparse maps, oneOf unions, enums |
