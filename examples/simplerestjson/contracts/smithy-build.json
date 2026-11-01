@@ -5,5 +5,12 @@
     "dependencies": [
       "com.disneystreaming.alloy:alloy-core:0.3.40"
     ]
+  },
+  "plugins": {
+    "contracts-jar": {
+      "dependencies": [
+        "com.disneystreaming.alloy:alloy-core:0.3.40"
+      ]
+    }
   }
 }

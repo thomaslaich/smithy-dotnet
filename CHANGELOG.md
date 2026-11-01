@@ -22,8 +22,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - **Contracts JARs are built by the `contracts-jar` plugin.** With `SmithyMavenGroupId` set, the
   contracts project's build runs the plugin and `dotnet pack` copies its output next to the
-  `.nupkg`. The POM now declares the Maven artifacts whose shapes and traits the model uses,
-  instead of every entry in `maven.dependencies`. `SmithyMavenGroupId` now requires a
+  `.nupkg`. The POM now requires an explicit
+  `plugins.contracts-jar.dependencies` list (`[]` for no external dependencies),
+  instead of copying every entry in `maven.dependencies`. `SmithyMavenGroupId` now requires a
   `smithy-build.json` at the project root.
 
 ### Deprecated

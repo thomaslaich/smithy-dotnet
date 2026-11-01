@@ -472,7 +472,8 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
             {
               "version": "1.0",
               "sources": ["model"],
-              "maven": { "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"] }
+              "maven": { "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"] },
+              "plugins": { "contracts-jar": { "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"] } }
             }
             """
         );
@@ -490,6 +491,10 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         Assert.Equal("io.github.acme", jar["groupId"]!.GetValue<string>());
         Assert.Equal("hello-contracts", jar["artifactId"]!.GetValue<string>());
         Assert.Equal("1.2.3", jar["version"]!.GetValue<string>());
+        Assert.Equal(
+            "software.amazon.smithy:smithy-aws-traits:1.74.1",
+            jar["dependencies"]![0]!.GetValue<string>()
+        );
         Assert.Equal(
             [
                 "software.amazon.smithy:smithy-aws-traits:1.74.1",

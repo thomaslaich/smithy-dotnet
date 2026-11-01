@@ -50,6 +50,22 @@ model package.
 
    `Version` (or `VersionPrefix`/`VersionSuffix`) is reused as the Maven version.
 
+   In the project's `smithy-build.json`, declare the contract's dependencies in
+   `plugins.contracts-jar.dependencies`. Include the Maven artifacts providing
+   external shapes and traits, but omit code generators and other build tools:
+
+   ```json
+   "plugins": {
+     "contracts-jar": {
+       "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"]
+     }
+   }
+   ```
+
+   This setting is required. Use `"dependencies": []` when the contract has no
+   external dependencies. Keep the corresponding artifacts in `maven.dependencies`
+   too, so Smithy can load them during the build.
+
 2. **Pack.**
 
    ```shell
@@ -58,9 +74,8 @@ model package.
 
    The build runs NSmithy's `contracts-jar` Smithy plugin, and pack copies its
    JAR, POM, and checksum files next to the NuGet package. The JAR contains the
-   model in Smithy's discovery layout. The POM declares the Maven artifacts that
-   provide the traits and shapes the model uses, so consumers get them along
-   with the contract.
+   model in Smithy's discovery layout. The POM declares the explicitly configured
+   dependencies, so consumers get them along with the contract.
 
 3. **Install locally** (optional). To make the JAR available to local Smithy CLI
    builds during development:
@@ -128,7 +143,8 @@ CLI:
     "contracts-jar": {
       "groupId": "io.github.acme",
       "artifactId": "my-service-contracts",
-      "version": "${CONTRACTS_VERSION}"
+      "version": "${CONTRACTS_VERSION}",
+      "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"]
     }
   }
 }
@@ -146,7 +162,7 @@ shapes tagged `internal`.
 | Setting | Description |
 | --- | --- |
 | `groupId`, `artifactId`, `version` | The contract's Maven coordinates. Required. |
-| `dependencies` | `groupId:artifactId:version` coordinates to declare in the POM instead of the ones derived from the model. |
+| `dependencies` | Required list of `groupId:artifactId:version` coordinates to declare in the POM. Use `[]` when no external dependencies are needed. |
 
 ## NuGet distribution
 

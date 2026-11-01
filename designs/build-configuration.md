@@ -161,8 +161,10 @@ With `SmithyMavenGroupId` set, the effective build file also runs NSmithy's
 and POM. `dotnet pack` copies them next to the `.nupkg`. The plugin is an
 ordinary Smithy build plugin, so a project outside .NET produces the same
 artifact from its own `smithy-build.json`. The POM declares the Maven artifacts
-that provide the shapes and traits the model references, derived from the
-model rather than copied from `maven.dependencies`. Publishing the files is
+explicitly listed in `plugins.contracts-jar.dependencies`. This setting is
+required (use `[]` for no external dependencies) and is preserved when MSBuild
+adds the coordinates. It is not inferred from the model or copied from
+`maven.dependencies`, which can also contain build tools. Publishing the files is
 left to Maven tooling.
 
 ## Diagnostics

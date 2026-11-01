@@ -5,5 +5,12 @@
     "dependencies": [
       "software.amazon.smithy:smithy-protocol-traits:1.74.1"
     ]
+  },
+  "plugins": {
+    "contracts-jar": {
+      "dependencies": [
+        "software.amazon.smithy:smithy-protocol-traits:1.74.1"
+      ]
+    }
   }
 }

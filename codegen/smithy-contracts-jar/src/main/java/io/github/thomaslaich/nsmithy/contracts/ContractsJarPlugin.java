@@ -40,16 +40,17 @@ import software.amazon.smithy.model.node.StringNode;
  *   "contracts-jar": {
  *     "groupId": "io.github.acme",
  *     "artifactId": "my-service-contracts",
- *     "version": "${CONTRACTS_VERSION}"
+ *     "version": "${CONTRACTS_VERSION}",
+ *     "dependencies": []
  *   }
  * }
  * }</pre>
  *
  * <p>The JAR holds what the built-in {@code sources} plugin emits for the projection (the source
  * files for {@code source}, the projected model otherwise) in Smithy's {@code META-INF/smithy}
- * discovery layout. The POM declares the Maven artifacts that provide the shapes and traits the
- * model's own shapes reference. Set {@code dependencies} to a list of {@code
- * groupId:artifactId:version} coordinates to declare them explicitly instead.
+ * discovery layout. The required {@code dependencies} setting lists the {@code
+ * groupId:artifactId:version} coordinates to declare in the POM. Include the artifacts that provide
+ * external shapes and traits; use an empty list when none are needed.
  *
  * <p>The plugin writes files only. Publish them with any Maven deploy tool.
  */
@@ -76,7 +77,12 @@ public final class ContractsJarPlugin implements SmithyBuildPlugin {
         settings
             .getArrayMember("dependencies")
             .map(ContractsJarPlugin::explicitDependencies)
-            .orElseGet(() -> DependencyResolver.resolve(context));
+            .orElseThrow(
+                () ->
+                    new SmithyBuildException(
+                        "contracts-jar: `dependencies` setting is required; declare Maven"
+                            + " coordinates or use [] when the contract has no external"
+                            + " dependencies"));
     dependencies.remove(groupId + ":" + artifactId + ":" + version);
 
     String baseName = artifactId + "-" + version;

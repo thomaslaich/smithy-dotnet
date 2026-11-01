@@ -8,16 +8,13 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import software.amazon.smithy.build.MockManifest;
 import software.amazon.smithy.build.PluginContext;
 import software.amazon.smithy.build.SmithyBuildException;
@@ -32,6 +29,8 @@ class ContractsJarPluginTest {
           .withMember("groupId", "io.github.acme")
           .withMember("artifactId", "hello-contracts")
           .withMember("version", "1.2.3")
+          .withMember(
+              "dependencies", Node.fromStrings("software.amazon.smithy:smithy-aws-traits:1.74.1"))
           .build();
 
   @Test
@@ -53,17 +52,16 @@ class ContractsJarPluginTest {
   }
 
   @Test
-  void pomDeclaresOnlyTheTraitPackagesTheModelUses() throws Exception {
+  void pomDeclaresExplicitDependencies() throws Exception {
     String pom = run(COORDINATES).getFileString("hello-contracts-1.2.3.pom").orElseThrow();
 
     assertTrue(pom.contains("<groupId>io.github.acme</groupId>"), pom);
     assertTrue(pom.contains("<artifactId>smithy-aws-traits</artifactId>"), pom);
-    // smithy-aws-traits pulls in other model JARs transitively; only the direct one is declared.
     assertEquals(1, pom.split("<dependency>", -1).length - 1, pom);
   }
 
   @Test
-  void explicitDependenciesWin() throws Exception {
+  void doesNotInferAdditionalDependencies() throws Exception {
     ObjectNode settings =
         COORDINATES.withMember("dependencies", Node.fromStrings("com.example:custom-traits:9.9.9"));
     String pom = run(settings).getFileString("hello-contracts-1.2.3.pom").orElseThrow();
@@ -85,78 +83,27 @@ class ContractsJarPluginTest {
   }
 
   @Test
-  void rejectsReferencesToLooseNonSourceFiles(@TempDir Path dir) throws IOException {
-    Path shared = dir.resolve("shared.smithy");
-    Files.writeString(shared, "$version: \"2\"\nnamespace example.shared\nstring Name\n");
-    Path own = dir.resolve("own.smithy");
-    Files.writeString(
-        own,
-        "$version: \"2\"\nnamespace example.own\nstructure Person { name: example.shared#Name }\n");
-    Model model = Model.assembler().addImport(shared).addImport(own).assemble().unwrap();
-
-    PluginContext context =
-        PluginContext.builder()
-            .model(model)
-            .originalModel(model)
-            .sources(List.of(own))
-            .settings(COORDINATES)
-            .fileManifest(new MockManifest())
-            .build();
-
+  void requiresDependencies() {
     SmithyBuildException error =
-        assertThrows(SmithyBuildException.class, () -> new ContractsJarPlugin().execute(context));
-    assertTrue(error.getMessage().contains("shared.smithy"), error.getMessage());
+        assertThrows(
+            SmithyBuildException.class, () -> run(COORDINATES.withoutMember("dependencies")));
+    assertTrue(error.getMessage().contains("`dependencies` setting is required"));
   }
 
   @Test
-  void parsesMavenLayout() {
-    Path root = Path.of("/home/me/.m2/repository");
-    Path jar =
-        root.resolve(
-            "software/amazon/smithy/smithy-aws-traits/1.73.0/smithy-aws-traits-1.73.0.jar");
-    assertEquals(
-        Optional.of("software.amazon.smithy:smithy-aws-traits:1.73.0"),
-        DependencyResolver.coordinateOf(jar, List.of(root)));
+  void acceptsEmptyDependencies() throws Exception {
+    String pom =
+        run(COORDINATES.withMember("dependencies", Node.fromStrings()))
+            .getFileString("hello-contracts-1.2.3.pom")
+            .orElseThrow();
+    assertTrue(!pom.contains("<dependency>"), pom);
   }
 
   @Test
-  void parsesGradleLayout() {
-    Path jar =
-        Path.of(
-            "/home/me/.gradle/caches/modules-2/files-2.1/com.disneystreaming.alloy/alloy-core/0.3.39/"
-                + "abc123/alloy-core-0.3.39.jar");
-    assertEquals(
-        Optional.of("com.disneystreaming.alloy:alloy-core:0.3.39"),
-        DependencyResolver.coordinateOf(jar, List.of()));
-  }
-
-  @Test
-  void parsesTimestampedSnapshot() {
-    Path root = Path.of("/home/me/.m2/repository");
-    Path jar =
-        root.resolve(
-            "io/github/acme/shared-traits/1.0-SNAPSHOT/shared-traits-1.0-20261101.120000-3.jar");
-    assertEquals(
-        Optional.of("io.github.acme:shared-traits:1.0-SNAPSHOT"),
-        DependencyResolver.coordinateOf(jar, List.of(root)));
-  }
-
-  @Test
-  void doesNotMistakeAnotherArtifactForASnapshot() {
-    assertEquals(
-        false,
-        DependencyResolver.isArtifactFile(
-            "shared-traits-extra-1.0-20261101.120000-3.jar", "shared-traits", "1.0-SNAPSHOT"));
-  }
-
-  @Test
-  void doesNotGuessOutsideKnownCaches() {
-    Path jar =
-        Path.of(
-            "/opt/libs/software/amazon/smithy/smithy-aws-traits/1.73.0/smithy-aws-traits-1.73.0.jar");
-    assertEquals(
-        Optional.empty(),
-        DependencyResolver.coordinateOf(jar, List.of(Path.of("/home/me/.m2/repository"))));
+  void rejectsNonArrayDependencies() {
+    assertThrows(
+        RuntimeException.class,
+        () -> run(COORDINATES.withMember("dependencies", "com.example:traits:1.0")));
   }
 
   private static MockManifest run(ObjectNode settings) throws URISyntaxException {
