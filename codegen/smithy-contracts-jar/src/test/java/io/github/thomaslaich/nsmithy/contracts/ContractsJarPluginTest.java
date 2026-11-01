@@ -131,6 +131,25 @@ class ContractsJarPluginTest {
   }
 
   @Test
+  void parsesTimestampedSnapshot() {
+    Path root = Path.of("/home/me/.m2/repository");
+    Path jar =
+        root.resolve(
+            "io/github/acme/shared-traits/1.0-SNAPSHOT/shared-traits-1.0-20261101.120000-3.jar");
+    assertEquals(
+        Optional.of("io.github.acme:shared-traits:1.0-SNAPSHOT"),
+        DependencyResolver.coordinateOf(jar, List.of(root)));
+  }
+
+  @Test
+  void doesNotMistakeAnotherArtifactForASnapshot() {
+    assertEquals(
+        false,
+        DependencyResolver.isArtifactFile(
+            "shared-traits-extra-1.0-20261101.120000-3.jar", "shared-traits", "1.0-SNAPSHOT"));
+  }
+
+  @Test
   void doesNotGuessOutsideKnownCaches() {
     Path jar =
         Path.of(

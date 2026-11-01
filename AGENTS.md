@@ -47,7 +47,8 @@ stale or missing staged JAR produces confusing codegen errors.
   `smithy-csharp-aws-codegen` (AWS protocols, endpoint rules, and customizations,
   as a `CSharpIntegration`), `smithy-fsharp-codegen` (F# types, schemas, clients, and servers),
   `smithy-dotnet-codegen-core` (language-neutral support the C# and F# plugins
-  share), and `smithy-proto-codegen` (`.proto` emission for gRPC).
+  share), `smithy-proto-codegen` (`.proto` emission for gRPC), and
+  `smithy-contracts-jar` (packages a contract as a Maven JAR + POM).
 - `packages/` — C# runtime and tooling packages (`NSmithy.Core`, `NSmithy.Http`,
   `NSmithy.Client`, `NSmithy.Server.AspNetCore`, `NSmithy.Codecs.*`,
   `NSmithy.Protocols.*`, `NSmithy.MSBuild`).

@@ -56,11 +56,11 @@ model package.
    dotnet pack MyService.Contracts --configuration Release
    ```
 
-   The output directory contains the NuGet package and the Maven JAR, POM, and
-   checksum files. The JAR contains the model in Smithy's discovery layout.
-   The POM declares the `maven.dependencies` of the project's
-   `smithy-build.json`, so consumers get the trait packages the model uses
-   along with it.
+   The build runs NSmithy's `contracts-jar` Smithy plugin, and pack copies its
+   JAR, POM, and checksum files next to the NuGet package. The JAR contains the
+   model in Smithy's discovery layout. The POM declares the Maven artifacts that
+   provide the traits and shapes the model uses, so consumers get them along
+   with the contract.
 
 3. **Install locally** (optional). To make the JAR available to local Smithy CLI
    builds during development:
@@ -68,27 +68,23 @@ model package.
    ```shell
    mvn install:install-file \
      -Dfile=MyService.Contracts/bin/Release/my-service-contracts-1.0.0.jar \
-     -DpomFile=MyService.Contracts/bin/Release/my-service-contracts-1.0.0.pom \
-     -Dpackaging=jar
+     -DpomFile=MyService.Contracts/bin/Release/my-service-contracts-1.0.0.pom
    ```
 
-4. **Publish to a registry.** Use the `dotnet-nsmithy push` tool to upload to a
-   Maven registry that accepts HTTP PUT, such as GitHub Packages, Artifactory,
-   or Nexus:
+4. **Publish to a registry.** The files are plain Maven artifacts. Upload them
+   with any Maven deploy tool, for example to GitHub Packages, Artifactory, or
+   Nexus:
 
    ```shell
-   dotnet tool install -g dotnet-nsmithy
-
-   dotnet nsmithy push MyService.Contracts/bin/Release \
-     --project MyService.Contracts/MyService.Contracts.csproj \
-     --registry https://maven.pkg.github.com/ORG/REPO \
-     --username $GITHUB_ACTOR \
-     --token    $GITHUB_TOKEN
+   mvn deploy:deploy-file \
+     -Dfile=MyService.Contracts/bin/Release/my-service-contracts-1.0.0.jar \
+     -DpomFile=MyService.Contracts/bin/Release/my-service-contracts-1.0.0.pom \
+     -DrepositoryId=github \
+     -Durl=https://maven.pkg.github.com/ORG/REPO
    ```
 
-   `push` reads the Maven coordinates and version from the `.csproj` automatically.
-   Credentials can also be supplied via `MAVEN_USERNAME` / `MAVEN_TOKEN` environment
-   variables.
+   `repositoryId` names the `<server>` in your Maven `settings.xml` that holds
+   the registry credentials.
 
 5. **Consume.** The client template defaults to Maven distribution:
 
@@ -111,6 +107,46 @@ produce the JAR. A separate contracts project is still recommended because it
 keeps the model decoupled from any one implementation and easier to share across
 server and client projects.
 :::
+
+## Outside .NET
+
+`contracts-jar` is an ordinary Smithy build plugin, so a contract owned by a
+Python, Java, or TypeScript project is packaged the same way with the Smithy
+CLI:
+
+```json title="smithy-build.json"
+{
+  "version": "1.0",
+  "sources": ["model"],
+  "maven": {
+    "dependencies": [
+      "software.amazon.smithy:smithy-aws-traits:1.74.1",
+      "io.github.thomaslaich.nsmithy:smithy-contracts-jar:NSMITHY_VERSION"
+    ]
+  },
+  "plugins": {
+    "contracts-jar": {
+      "groupId": "io.github.acme",
+      "artifactId": "my-service-contracts",
+      "version": "${CONTRACTS_VERSION}"
+    }
+  }
+}
+```
+
+```shell
+CONTRACTS_VERSION=1.0.0 smithy build
+```
+
+The JAR, POM, and checksums are written to
+`build/smithy/source/contracts-jar/`. Publish them as in step 4. Configure the
+plugin in a projection instead to package a filtered model, such as one without
+shapes tagged `internal`.
+
+| Setting | Description |
+| --- | --- |
+| `groupId`, `artifactId`, `version` | The contract's Maven coordinates. Required. |
+| `dependencies` | `groupId:artifactId:version` coordinates to declare in the POM instead of the ones derived from the model. |
 
 ## NuGet distribution
 

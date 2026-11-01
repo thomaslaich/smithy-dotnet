@@ -8,6 +8,7 @@ import java.util.NavigableSet;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import software.amazon.smithy.build.PluginContext;
 import software.amazon.smithy.build.SmithyBuildException;
 import software.amazon.smithy.model.Model;
@@ -26,6 +27,9 @@ import software.amazon.smithy.model.shapes.ShapeId;
  * what the model uses, not everything on the build classpath.
  */
 final class DependencyResolver {
+
+  // The timestamp and build number Maven puts in a deployed snapshot's file name.
+  private static final Pattern SNAPSHOT_SUFFIX = Pattern.compile("-\\d{8}\\.\\d{6}-\\d+\\.jar");
 
   private DependencyResolver() {}
 
@@ -120,7 +124,7 @@ final class DependencyResolver {
       Path artifactDir = versionDir.getParent();
       String artifact = artifactDir.getFileName().toString();
       Path groupDir = artifactDir.getParent();
-      if (name.equals(artifact + "-" + version + ".jar") && groupDir != null) {
+      if (isArtifactFile(name, artifact, version) && groupDir != null) {
         for (Path root : cacheRoots) {
           Path normalizedRoot = root.toAbsolutePath().normalize();
           if (groupDir.startsWith(normalizedRoot) && !groupDir.equals(normalizedRoot)) {
@@ -145,11 +149,28 @@ final class DependencyResolver {
         && gradleGroupDir.getParent().getFileName().toString().equals("files-2.1")) {
       String version = gradleVersionDir.getFileName().toString();
       String artifact = gradleArtifactDir.getFileName().toString();
-      if (name.equals(artifact + "-" + version + ".jar")) {
+      if (isArtifactFile(name, artifact, version)) {
         return Optional.of(gradleGroupDir.getFileName() + ":" + artifact + ":" + version);
       }
     }
     return Optional.empty();
+  }
+
+  /**
+   * Whether {@code name} is the JAR of {@code artifact} at {@code version}. A snapshot resolved
+   * from a remote repository keeps its timestamped name ({@code a-1.0-20260101.120000-1.jar}) in
+   * the {@code 1.0-SNAPSHOT} directory; the coordinate stays the {@code -SNAPSHOT} version.
+   */
+  static boolean isArtifactFile(String name, String artifact, String version) {
+    if (name.equals(artifact + "-" + version + ".jar")) {
+      return true;
+    }
+    if (!version.endsWith("-SNAPSHOT")) {
+      return false;
+    }
+    String prefix = artifact + "-" + version.substring(0, version.length() - "-SNAPSHOT".length());
+    return name.startsWith(prefix)
+        && SNAPSHOT_SUFFIX.matcher(name.substring(prefix.length())).matches();
   }
 
   /** Where the Smithy CLI resolves Maven dependencies to. */

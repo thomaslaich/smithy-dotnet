@@ -53,7 +53,10 @@ internal static class PushCommand
             Description =
                 "Registry password / token. Falls back to MAVEN_TOKEN or GITHUB_TOKEN environment variable.",
         };
-        var command = new Command("push", "Publish a packed Maven artifact to a Maven registry.")
+        var command = new Command(
+            "push",
+            "Deprecated: publish a packed Maven artifact to a Maven registry. Use a Maven deploy tool instead."
+        )
         {
             Arguments = { directoryArg },
             Options =
@@ -95,6 +98,11 @@ internal static class PushCommand
         string? token
     )
     {
+        await Console.Error.WriteLineAsync(
+            "warning: `dotnet nsmithy push` is deprecated and will be removed. The contracts JAR and "
+                + "POM are plain Maven artifacts: publish them with `mvn deploy:deploy-file` or your "
+                + "registry's Maven tooling."
+        );
         var csproj = CsprojReader.TryLoad(project, directory);
 
         var resolvedGroup = group ?? csproj?.GroupId;
