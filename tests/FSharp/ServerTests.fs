@@ -29,6 +29,8 @@ type private Kitchen() =
 
         member _.PingAsync(_, _) = Task.FromResult(PingOutput())
 
+        member _.CloseTableAsync(_, _) = Task.FromResult(CloseTableOutput())
+
 /// Serves the kitchen over one protocol. RPC v2 CBOR and RPC v2 JSON share their routes, so one
 /// endpoint builder cannot serve both.
 let private startServer (protocols: KitchenServiceProtocols) =

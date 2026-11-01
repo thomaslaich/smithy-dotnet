@@ -127,6 +127,10 @@ app.Run()
 `WeatherServiceProtocols` flags to serve others; see
 [Hosting multiple protocols](/smithy-dotnet/servers/hosting/).
 
+`MapWeatherService` returns the service's route group, so conventions apply to
+its endpoints. `WithModeledAuthorization()` authorizes each operation from its
+modeled auth; see [Authorization](/smithy-dotnet/servers/authorization/).
+
 The same handler can serve MCP clients. Reference `NSmithy.Server.Mcp` and
 register the generated definition; see [MCP](/smithy-dotnet/servers/mcp/).
 

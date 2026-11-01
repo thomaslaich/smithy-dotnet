@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -87,6 +88,61 @@ class ServerGeneratorTest {
     assertTrue(server.contains("type ICafeServiceHandler ="), server);
     assertFalse(server.contains("MapCafeService"), server);
     assertFalse(server.contains("AddSmithyServer"), server);
+  }
+
+  @Test
+  void operationsCarryTheirEffectiveAuthSchemes() {
+    String model =
+        """
+        $version: "2"
+        namespace example.cafe
+
+        use aws.protocols#restJson1
+
+        @restJson1
+        @httpBearerAuth
+        @httpApiKeyAuth(name: "X-Api-Key", in: "header")
+        service Cafe {
+            version: "2024-01-01"
+            operations: [Order, Menu, Status, Tab]
+        }
+
+        @http(method: "POST", uri: "/orders")
+        operation Order {}
+
+        @auth([])
+        @http(method: "GET", uri: "/menu")
+        operation Menu {}
+
+        @optionalAuth
+        @http(method: "GET", uri: "/status")
+        operation Status {}
+
+        @auth([httpApiKeyAuth])
+        @http(method: "GET", uri: "/tab")
+        operation Tab {}
+        """;
+    String server = generate(model, true).expectFileString(SERVER);
+    String apiKey = "global.NSmithy.Core.ShapeId.Parse(\"smithy.api#httpApiKeyAuth\")";
+    String bearer = "global.NSmithy.Core.ShapeId.Parse(\"smithy.api#httpBearerAuth\")";
+    String noAuth = "global.NSmithy.Core.ShapeId.Parse(\"smithy.api#noAuth\")";
+
+    // Without @auth, every scheme on the service applies, in alphabetical order.
+    assertTrue(server.contains("authSchemes = [| " + apiKey + "; " + bearer + " |]"), server);
+    assertTrue(server.contains("authSchemes = [| " + apiKey + " |]"), server);
+    assertTrue(
+        server.contains("authSchemes = [| " + apiKey + "; " + bearer + "; " + noAuth + " |]"),
+        server);
+    // @auth([]) leaves only noAuth, the runtime's default, so the argument is left out.
+    assertEquals(3, server.split("authSchemes = ", -1).length - 1, server);
+  }
+
+  @Test
+  void mapReturnsTheServicesRouteGroup() {
+    String server = generate(MODEL, true).expectFileString(SERVER);
+
+    assertTrue(
+        server.contains(") : global.Microsoft.AspNetCore.Routing.RouteGroupBuilder ="), server);
   }
 
   @Test
