@@ -88,19 +88,13 @@ internal sealed class AccessorStructMember<T, TBuilder, TValue> : StructMember<T
 }
 
 /// <summary>A structure whose members are read and written through <see cref="StructMember{T, TBuilder}"/>s.</summary>
-public abstract class AccessorStructSchema<T, TBuilder> : StructSchema<T, TBuilder>
+public abstract class AccessorStructSchema<T, TBuilder>(
+    ShapeId id,
+    StructMember<T, TBuilder>[] members,
+    IEnumerable<Trait>? traits = null
+) : StructSchema<T, TBuilder>(id, MembersOf(members), traits)
 {
-    private readonly StructMember<T, TBuilder>[] accessors;
-
-    protected AccessorStructSchema(
-        ShapeId id,
-        StructMember<T, TBuilder>[] members,
-        IEnumerable<Trait>? traits = null
-    )
-        : base(id, MembersOf(members), traits)
-    {
-        accessors = members;
-    }
+    private readonly StructMember<T, TBuilder>[] accessors = members;
 
     public sealed override void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
     {
@@ -190,19 +184,13 @@ internal sealed class AccessorUnionCase<T, TValue> : UnionCase<T>
 }
 
 /// <summary>A union whose cases are read and written through <see cref="UnionCase{T}"/>s.</summary>
-public abstract class AccessorUnionSchema<T> : UnionSchema<T>
+public abstract class AccessorUnionSchema<T>(
+    ShapeId id,
+    UnionCase<T>[] cases,
+    IEnumerable<Trait>? traits = null
+) : UnionSchema<T>(id, CasesOf(cases), traits)
 {
-    private readonly UnionCase<T>[] accessors;
-
-    protected AccessorUnionSchema(
-        ShapeId id,
-        UnionCase<T>[] cases,
-        IEnumerable<Trait>? traits = null
-    )
-        : base(id, CasesOf(cases), traits)
-    {
-        accessors = cases;
-    }
+    private readonly UnionCase<T>[] accessors = cases;
 
     public sealed override void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
     {
