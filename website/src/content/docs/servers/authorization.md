@@ -60,16 +60,18 @@ server and the application protects endpoints as it would any other.
 
 ## Protocols with a single endpoint
 
-rpcv2Cbor and the AWS JSON protocols map one endpoint for all operations and
-read the operation from the request. When those operations are all protected,
-the endpoint requires authorization like any other. When some are public, the
-endpoint allows anonymous calls and authorizes a protected operation once it is
-resolved, after the request body is read.
+Every built-in server protocol maps one endpoint per operation. A custom
+protocol can instead map one endpoint for all operations and read the operation
+from the request, as an AWS JSON server would from `X-Amz-Target`. When those
+operations are all protected, the endpoint requires authorization like any
+other. When some are public, the endpoint allows anonymous calls and authorizes
+a protected operation once it is resolved, after the request body is read.
 
 ## Custom conventions
 
-`Map{Service}` returns a `SmithyServiceEndpointConventionBuilder`, so ASP.NET
-Core's endpoint conventions apply to every operation of the service:
+`Map{Service}` maps the service's endpoints into a route group and returns it,
+so ASP.NET Core's endpoint conventions apply to every operation of the
+service:
 
 ```csharp
 app.MapPetService().RequireRateLimiting("pets");
@@ -77,11 +79,13 @@ app.MapPetService().RequireRateLimiting("pets");
 
 Each endpoint carries `SmithyEndpointMetadata` with the operations it serves.
 Each operation's `AuthSchemes` lists its effective scheme IDs in priority
-order, so a convention can pick authentication schemes per operation:
+order, so a convention can pick authentication schemes per operation. Group
+conventions run before an endpoint's own metadata is added, so a convention
+that reads `SmithyEndpointMetadata` uses `Finally`:
 
 ```csharp
 var bearerAuth = ShapeId.Parse("smithy.api#httpBearerAuth");
-app.MapPetService().Add(endpoint =>
+app.MapPetService().Finally(endpoint =>
 {
     var smithy = endpoint.Metadata.OfType<SmithyEndpointMetadata>().Single();
     if (smithy.Operations.Any(o => o.AuthSchemes.Contains(bearerAuth)))

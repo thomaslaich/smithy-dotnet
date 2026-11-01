@@ -311,14 +311,12 @@ final class ServerGeneratorTest {
     assertTrue(
         containsIgnoringWhitespace(
             generated,
-            "public static SmithyServiceEndpointConventionBuilder MapStreamingService(this"
+            "public static RouteGroupBuilder MapStreamingService(this"
                 + " IEndpointRouteBuilder endpoints, StreamingServiceProtocols protocols ="
                 + " StreamingServiceProtocols.Grpc)"),
         generated);
     assertFalse(
-        generated.contains(
-            "public static SmithyServiceEndpointConventionBuilder MapStreamingServiceGrpc"),
-        generated);
+        generated.contains("public static RouteGroupBuilder MapStreamingServiceGrpc"), generated);
   }
 
   @Test
@@ -336,13 +334,12 @@ final class ServerGeneratorTest {
     assertTrue(
         containsIgnoringWhitespace(
             generated,
-            "public static SmithyServiceEndpointConventionBuilder MapStreamingService(this"
+            "public static RouteGroupBuilder MapStreamingService(this"
                 + " IEndpointRouteBuilder endpoints, StreamingServiceProtocols protocols ="
                 + " StreamingServiceProtocols.RestJson1)"),
         generated);
     assertFalse(
-        generated.contains(
-            "public static SmithyServiceEndpointConventionBuilder MapStreamingServiceRestJson1"),
+        generated.contains("public static RouteGroupBuilder MapStreamingServiceRestJson1"),
         generated);
     // Routes come from the protocol at runtime, not from generated code.
     assertFalse(generated.contains("MapMethods"), generated);
@@ -372,7 +369,7 @@ final class ServerGeneratorTest {
     assertTrue(
         containsIgnoringWhitespace(
             generated,
-            "public static SmithyServiceEndpointConventionBuilder MapMultiService(this"
+            "public static RouteGroupBuilder MapMultiService(this"
                 + " IEndpointRouteBuilder endpoints, MultiServiceProtocols protocols ="
                 + " MultiServiceProtocols.RpcV2Cbor)"),
         generated);
@@ -392,13 +389,9 @@ final class ServerGeneratorTest {
             == generated.lastIndexOf("ServerOperation.Create("),
         generated);
     assertFalse(
-        generated.contains(
-            "public static SmithyServiceEndpointConventionBuilder MapMultiServiceRestJson1"),
-        generated);
+        generated.contains("public static RouteGroupBuilder MapMultiServiceRestJson1"), generated);
     assertFalse(
-        generated.contains(
-            "public static SmithyServiceEndpointConventionBuilder MapMultiServiceRpcV2Cbor"),
-        generated);
+        generated.contains("public static RouteGroupBuilder MapMultiServiceRpcV2Cbor"), generated);
   }
 
   @Test

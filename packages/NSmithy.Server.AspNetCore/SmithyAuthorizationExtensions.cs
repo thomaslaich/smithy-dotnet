@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,13 +16,15 @@ public static class SmithyAuthorizationExtensions
     /// are authorized with <paramref name="policyNames"/>, or the default policy without any.
     /// </summary>
     /// <remarks>
-    /// An endpoint that serves both protected and anonymous operations, as with protocols that
-    /// resolve the operation from the request, authorizes after it resolves the operation.
+    /// Endpoints without <see cref="SmithyEndpointMetadata"/> are left alone. An endpoint that
+    /// serves both protected and anonymous operations, as with protocols that resolve the
+    /// operation from the request, authorizes after it resolves the operation.
     /// </remarks>
-    public static SmithyServiceEndpointConventionBuilder WithModeledAuthorization(
-        this SmithyServiceEndpointConventionBuilder builder,
+    public static TBuilder WithModeledAuthorization<TBuilder>(
+        this TBuilder builder,
         params string[] policyNames
     )
+        where TBuilder : IEndpointConventionBuilder
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(policyNames);
@@ -30,7 +33,9 @@ public static class SmithyAuthorizationExtensions
             policyNames.Length == 0
                 ? [new AuthorizeAttribute()]
                 : [.. policyNames.Select(policy => new AuthorizeAttribute(policy))];
-        builder.Add(endpoint =>
+        // A route group runs its conventions before each endpoint's own, which add the
+        // SmithyEndpointMetadata this reads; finally conventions run after them.
+        builder.Finally(endpoint =>
         {
             if (
                 endpoint.Metadata.OfType<SmithyEndpointMetadata>().LastOrDefault() is not { } smithy

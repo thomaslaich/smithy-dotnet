@@ -445,8 +445,7 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("protocolEnum", protocolEnum);
       writer.putContext("defaultProtocol", serverProtocols.get(0).name());
       writer.putContext("endpointRouteBuilder", RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER);
-      writer.putContext(
-          "conventionBuilder", RuntimeTypes.SMITHY_SERVICE_ENDPOINT_CONVENTION_BUILDER);
+      writer.putContext("routeGroupBuilder", RuntimeTypes.ROUTE_GROUP_BUILDER);
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext(
           "argumentOutOfRangeException", RuntimeTypes.ARGUMENT_OUT_OF_RANGE_EXCEPTION);
@@ -457,7 +456,7 @@ public final class ServerGenerator implements Runnable {
           writer.consumer(w -> writeSelectedProtocolMappings(serverProtocols, protocolEnum)));
       writer.write(
           """
-          public static ${conventionBuilder:T} Map${contract:L}(
+          public static ${routeGroupBuilder:T} Map${contract:L}(
               this ${endpointRouteBuilder:T} endpoints,
               ${protocolEnum:L} protocols = ${protocolEnum:L}.${defaultProtocol:L})
           {

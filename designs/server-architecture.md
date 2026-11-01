@@ -94,7 +94,7 @@ The table contains no routes and no protocol code. `Map{Service}` only
 translates the generated `{Service}Protocols` flags into protocol instances:
 
 ```csharp
-public static SmithyServiceEndpointConventionBuilder MapWeatherService(
+public static RouteGroupBuilder MapWeatherService(
     this IEndpointRouteBuilder endpoints,
     WeatherServiceProtocols protocols = WeatherServiceProtocols.RestJson1)
 {
@@ -253,9 +253,8 @@ mapping needs no minimal-API parameter binding, no reflection, and no request
 delegate generator. A route that repeats the method and path of an earlier one
 fails at startup, naming the protocol that repeats it. Each endpoint carries
 `SmithyEndpointMetadata` naming the service, the protocol, and the operations
-it serves, and `MapSmithyService` returns a convention builder over all of the
-service's endpoints, so ASP.NET Core conventions apply per service and can
-tell operations apart.
+it serves. `MapSmithyService` maps them into a route group and returns it, so
+ASP.NET Core conventions apply per service and can tell operations apart.
 
 **Authorizes from the model.** Each catalog entry carries its operation's
 effective auth schemes, which codegen resolves with Smithy's `ServiceIndex`,
