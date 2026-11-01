@@ -24,8 +24,9 @@ operation GetHealth {}      // takes no auth
 
 How credentials are checked is up to the application: register an ASP.NET Core
 authentication handler (JWT bearer, an API key handler, ...) as usual.
-`WithModeledAuthorization()` then decides from the model which operations need
-it:
+`WithModeledAuthorization()` then requires authorization for protected operations
+and explicitly exempts public operations, including from enclosing and fallback
+policies:
 
 ```csharp title="Program.cs"
 builder.Services.AddAuthentication().AddJwtBearer();
@@ -38,6 +39,12 @@ app.UseAuthorization();
 app.MapPetService().WithModeledAuthorization();
 ```
 
+The helper decides **which operations require authorization**, not **which
+credentials they accept**. It does not map Smithy auth scheme IDs to ASP.NET Core
+authentication schemes. For example, a bearer-only operation can accept a
+cookie-authenticated caller if the application's policy allows it. Configure
+handlers and policies to restrict the accepted authentication schemes.
+
 | Operation | Endpoint metadata |
 | --- | --- |
 | an auth scheme applies | `[Authorize]` with the given policies, or the default policy |
@@ -47,6 +54,17 @@ app.MapPetService().WithModeledAuthorization();
 fallback policy, so operations the model marks public stay reachable. With
 `@optionalAuth`, a caller who sends valid credentials is still authenticated;
 invalid credentials make the caller anonymous instead of failing the call.
+
+For example, an enclosing policy still protects `AdoptPet`, but does not protect
+`GetHealth` or `ListPets`:
+
+```csharp
+var internalApi = app.MapGroup("/internal").RequireAuthorization("Employees");
+internalApi.MapPetService().WithModeledAuthorization();
+```
+
+`AdoptPet` must satisfy both the `Employees` policy and the default policy.
+The two public operations remain anonymously accessible under `/internal`.
 
 Pass policy names to authorize protected operations with them instead of the
 default policy:
@@ -66,6 +84,9 @@ from the request, as an AWS JSON server would from `X-Amz-Target`. When those
 operations are all protected, the endpoint requires authorization like any
 other. When some are public, the endpoint allows anonymous calls and authorizes
 a protected operation once it is resolved, after the request body is read.
+That deferred check combines the modeled authorization policy with authorization
+metadata on the endpoint, including requirements inherited from enclosing groups,
+just as for an endpoint serving a single protected operation.
 
 ## Custom conventions
 
@@ -85,7 +106,8 @@ that reads `SmithyEndpointMetadata` uses `Finally`:
 
 ```csharp
 var bearerAuth = ShapeId.Parse("smithy.api#httpBearerAuth");
-app.MapPetService().Finally(endpoint =>
+IEndpointConventionBuilder service = app.MapPetService();
+service.Finally(endpoint =>
 {
     var smithy = endpoint.Metadata.OfType<SmithyEndpointMetadata>().Single();
     if (smithy.Operations.Any(o => o.AuthSchemes.Contains(bearerAuth)))

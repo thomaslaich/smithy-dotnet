@@ -157,6 +157,72 @@ public sealed class ServerAuthorizationTests
         Assert.Equal(HttpStatusCode.OK, await DispatchAsync(client, "Secret", "valid"));
     }
 
+    [Theory]
+    [InlineData(false, "named")]
+    [InlineData(true, "named")]
+    [InlineData(false, "policy")]
+    [InlineData(true, "policy")]
+    [InlineData(false, "requirements")]
+    [InlineData(true, "requirements")]
+    public async Task ProtectedOperationsPreserveEnclosingRequirements(
+        bool dispatch,
+        string metadataKind
+    )
+    {
+        var employees = new AuthorizationPolicyBuilder().RequireRole("employee").Build();
+        await using var app = await StartAsync(
+            true,
+            group =>
+            {
+                switch (metadataKind)
+                {
+                    case "named":
+                        group.RequireAuthorization("Employees");
+                        break;
+                    case "policy":
+                        group.RequireAuthorization(employees);
+                        break;
+                    case "requirements":
+                        // Add metadata in a final convention too: authorization must read the
+                        // completed endpoint, not a snapshot taken by WithModeledAuthorization.
+                        ((IEndpointConventionBuilder)group).Finally(endpoint =>
+                            endpoint.Metadata.Add(new RequirementMetadata(employees.Requirements))
+                        );
+                        break;
+                }
+            },
+            dispatch
+                ? new SmithyServerProtocol("Dispatch", new ServerRoutingTests.HeaderDispatchProtocol())
+                : new SmithyServerProtocol("RestJson1", new RestJson1Protocol())
+        );
+        using var client = app.GetTestClient();
+
+        Task<HttpStatusCode> SendAsync(string operation, string? key = null) =>
+            dispatch
+                ? DispatchAsync(client, operation, key)
+                : GetAsync(client, "/" + operation.ToLowerInvariant(), key);
+
+        Assert.Equal(HttpStatusCode.OK, await SendAsync("Ping"));
+        Assert.Equal(HttpStatusCode.OK, await SendAsync("Status"));
+        Assert.Equal(HttpStatusCode.Unauthorized, await SendAsync("Secret"));
+        // A member satisfies the default policy, but not the enclosing employee requirement.
+        Assert.Equal(HttpStatusCode.Forbidden, await SendAsync("Secret", "valid"));
+        // ASP.NET Core uses an explicit policy instance instead of the default policy.
+        // Named policies and requirement metadata still combine with the default member policy.
+        Assert.Equal(
+            metadataKind == "policy" ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+            await SendAsync("Secret", "employee-only")
+        );
+        Assert.Equal(HttpStatusCode.OK, await SendAsync("Secret", "employee"));
+    }
+
+    private sealed record RequirementMetadata(
+        IEnumerable<IAuthorizationRequirement> Requirements
+    ) : IAuthorizationRequirementData
+    {
+        public IEnumerable<IAuthorizationRequirement> GetRequirements() => Requirements;
+    }
+
     private static ServerOperation<SmithyUnit, SmithyUnit> Operation(
         OperationSchema<SmithyUnit, SmithyUnit> schema,
         params ShapeId[] authSchemes
@@ -170,8 +236,14 @@ public sealed class ServerAuthorizationTests
     private static Task<WebApplication> StartAsync(params SmithyServerProtocol[] protocols) =>
         StartAsync(modeledAuthorization: true, protocols);
 
+    private static Task<WebApplication> StartAsync(
+        bool modeledAuthorization,
+        params SmithyServerProtocol[] protocols
+    ) => StartAsync(modeledAuthorization, null, protocols);
+
     private static async Task<WebApplication> StartAsync(
         bool modeledAuthorization,
+        Action<RouteGroupBuilder>? configureGroup,
         params SmithyServerProtocol[] protocols
     )
     {
@@ -189,6 +261,7 @@ public sealed class ServerAuthorizationTests
                 .RequireAuthenticatedUser()
                 .RequireRole("member")
                 .Build();
+            options.AddPolicy("Employees", policy => policy.RequireRole("employee"));
             options.DefaultPolicy = members;
             options.FallbackPolicy = members;
         });
@@ -197,7 +270,9 @@ public sealed class ServerAuthorizationTests
         {
             app.UseAuthentication();
             app.UseAuthorization();
-            var service = app.MapSmithyService(
+            var group = app.MapGroup("");
+            configureGroup?.Invoke(group);
+            var service = group.MapSmithyService(
                 new ServiceOperationCatalog(
                     Service,
                     Operation(Ping),
@@ -254,7 +329,7 @@ public sealed class ServerAuthorizationTests
         return response.StatusCode;
     }
 
-    // Authenticates "valid" as a member and "guest" as a user without the member role.
+    // Test identities independently exercise the member and employee requirements.
     private sealed class KeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
@@ -270,7 +345,13 @@ public sealed class ServerAuthorizationTests
                 return Task.FromResult(AuthenticateResult.NoResult());
             }
 
-            Claim[] claims = key == "valid" ? [new(ClaimTypes.Role, "member")] : [];
+            Claim[] claims = key.ToString() switch
+            {
+                "valid" => [new(ClaimTypes.Role, "member")],
+                "employee" => [new(ClaimTypes.Role, "member"), new(ClaimTypes.Role, "employee")],
+                "employee-only" => [new(ClaimTypes.Role, "employee")],
+                _ => [],
+            };
             var identity = new ClaimsIdentity(claims, SchemeName);
             return Task.FromResult(
                 AuthenticateResult.Success(

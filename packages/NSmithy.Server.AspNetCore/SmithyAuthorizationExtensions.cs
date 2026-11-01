@@ -13,9 +13,12 @@ public static class SmithyAuthorizationExtensions
     /// Requires authorization for the operations whose model requires authentication, and allows
     /// anonymous calls to operations with <c>@optionalAuth</c> or no auth scheme, overriding
     /// authorization required by an enclosing group or a fallback policy. Protected operations
-    /// are authorized with <paramref name="policyNames"/>, or the default policy without any.
+    /// are authorized with <paramref name="policyNames"/>, or the default policy without any,
+    /// together with authorization requirements attached to the endpoint or enclosing groups.
     /// </summary>
     /// <remarks>
+    /// This convention does not map modeled auth scheme IDs to ASP.NET Core authentication
+    /// schemes. Configure authentication handlers and policies to select accepted credentials.
     /// Endpoints without <see cref="SmithyEndpointMetadata"/> are left alone. An endpoint that
     /// serves both protected and anonymous operations, as with protocols that resolve the
     /// operation from the request, authorizes after it resolves the operation.
@@ -75,14 +78,30 @@ internal sealed class SmithyOperationAuthorization(IReadOnlyList<IAuthorizeData>
     public async Task AuthorizeAsync(HttpContext httpContext, RequestDelegate next)
     {
         var services = httpContext.RequestServices;
+        // Read the completed endpoint so enclosing and later conventions participate, just as
+        // they do for a route endpoint. Ignore the AllowAnonymous marker used to defer this check.
+        var metadata = httpContext.GetEndpoint()!.Metadata;
         var policy =
             await AuthorizationPolicy
                 .CombineAsync(
                     services.GetRequiredService<IAuthorizationPolicyProvider>(),
-                    authorizeData
+                    metadata.GetOrderedMetadata<IAuthorizeData>().Concat(authorizeData),
+                    metadata.GetOrderedMetadata<AuthorizationPolicy>()
                 )
                 .ConfigureAwait(false)
             ?? throw new InvalidOperationException("Authorization requires a policy.");
+        var requirements = metadata.GetOrderedMetadata<IAuthorizationRequirementData>();
+        if (requirements.Count > 0)
+        {
+            var builder = new AuthorizationPolicyBuilder(policy);
+            foreach (var requirement in requirements)
+            {
+                builder.AddRequirements([.. requirement.GetRequirements()]);
+            }
+
+            policy = builder.Build();
+        }
+
         var evaluator = services.GetRequiredService<IPolicyEvaluator>();
         var authentication = await evaluator
             .AuthenticateAsync(policy, httpContext)
