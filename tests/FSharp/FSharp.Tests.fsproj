@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="TypeTests.fs" />
     <Compile Include="SerializationTests.fs" />
+    <Compile Include="ClientTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,10 +26,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../packages/NSmithy.Client/NSmithy.Client.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
   </ItemGroup>
 
   <Import Project="../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />

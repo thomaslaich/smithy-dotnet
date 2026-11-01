@@ -12,12 +12,13 @@ import software.amazon.smithy.codegen.core.directed.GenerateErrorDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateIntEnumDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateListDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateMapDirective;
+import software.amazon.smithy.codegen.core.directed.GenerateOperationDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateServiceDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateStructureDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateUnionDirective;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
-/** Generates the F# type and schema of every shape. Services and operations generate nothing. */
+/** Generates the F# type and schema of every shape, and the service's client. */
 @SmithyUnstableApi
 final class DirectedFSharpCodegen
     implements DirectedCodegen<FSharpContext, FSharpSettings, FSharpIntegration> {
@@ -47,7 +48,18 @@ final class DirectedFSharpCodegen
   }
 
   @Override
-  public void generateService(GenerateServiceDirective<FSharpContext, FSharpSettings> directive) {}
+  public void generateService(GenerateServiceDirective<FSharpContext, FSharpSettings> directive) {
+    new SchemaGenerator(directive.context()).service(directive.shape());
+    if (directive.settings().generateClient()) {
+      new ClientGenerator(directive.context(), directive.shape()).run();
+    }
+  }
+
+  @Override
+  public void generateOperation(
+      GenerateOperationDirective<FSharpContext, FSharpSettings> directive) {
+    new SchemaGenerator(directive.context()).operation(directive.shape());
+  }
 
   @Override
   public void generateStructure(

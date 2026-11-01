@@ -5,7 +5,7 @@ template: splash
 pagefind: false
 head:
   - tag: title
-    content: 'NSmithy: Smithy code generation for C# and .NET'
+    content: 'NSmithy: Smithy code generation for C#, F#, and .NET'
   - tag: script
     content: document.documentElement.classList.add('nsmithy-landing')
   - tag: script
@@ -13,10 +13,10 @@ head:
       type: application/ld+json
     content: >-
       {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"NSmithy",
-      "description":"Generates C# models, typed HTTP clients, and ASP.NET Core servers from Smithy models during dotnet build.",
+      "description":"Generates C# and F# models, typed HTTP clients, and ASP.NET Core servers from Smithy models during dotnet build.",
       "url":"https://thomaslaich.github.io/smithy-dotnet/",
       "codeRepository":"https://github.com/thomaslaich/smithy-dotnet",
-      "programmingLanguage":"C#","runtimePlatform":".NET",
+      "programmingLanguage":["C#","F#"],"runtimePlatform":".NET",
       "license":"https://opensource.org/licenses/MIT",
       "author":{"@type":"Person","name":"Thomas Laich"}}
 ---

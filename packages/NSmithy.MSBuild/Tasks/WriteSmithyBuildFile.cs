@@ -270,9 +270,9 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 
     private IEnumerable<PropertySettings> EnabledPlugins()
     {
-        // Only the C# generator generates clients and servers, so only it takes their switches.
+        // Only the C# generator generates servers, so only it takes that switch.
         var codegen = new JsonObject { ["service"] = Service };
-        if (Plugin == CSharpPlugin && !GenerateClient)
+        if (!GenerateClient)
             codegen["generateClient"] = false;
         if (Plugin == CSharpPlugin && !GenerateServer)
             codegen["generateServer"] = false;
@@ -314,7 +314,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     private static string PropertyFor(PropertySettings plugin, string key) =>
         (plugin.Plugin, key) switch
         {
-            (CSharpPlugin, "generateClient") => "SmithyGenerateClient",
+            (_, "generateClient") => "SmithyGenerateClient",
             (CSharpPlugin, "generateServer") => "SmithyGenerateServer",
             ("openapi", "protocol") => "SmithyOpenApiProtocol",
             (_, "service") => "SmithyService",
