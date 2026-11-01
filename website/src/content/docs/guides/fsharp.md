@@ -33,7 +33,7 @@ and generates F#.
   <ItemGroup>
     <PackageReference Include="NSmithy.Client" Version="NSMITHY_VERSION" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="NSMITHY_VERSION" />
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
   </ItemGroup>
 </Project>
 ```
@@ -43,7 +43,7 @@ and generates F#.
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.73.0"]
+    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"]
   }
 }
 ```
