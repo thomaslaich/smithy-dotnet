@@ -3,21 +3,34 @@ on:
   release:
     types:
       - published
+  # Finishes a release whose run failed after publishing to Maven Central: run it from main with
+  # the release's tag, so the fixed workflow builds the tagged code.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and publish, e.g. v0.16.0
+        required: true
 permissions:
   contents: read
 jobs:
   release:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # NuGet trusted publishing exchanges the run's OIDC token for a short-lived API key.
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
       - name: Cache build dependencies
         uses: ./.github/actions/cache-dependencies
       - name: Resolve release version
         id: version
         # Strip a leading `v` from the release tag (e.g. v0.1.0 -> 0.1.0).
         run: |
-          tag="${{ github.event.release.tag_name }}"
+          tag="${{ github.event.release.tag_name || inputs.tag }}"
           version="${tag#v}"
           if [ -z "$version" ]; then
             echo "::error::Release tag '${tag}' did not yield a version."
@@ -57,16 +70,38 @@ jobs:
           path: artifacts/packages/*.nupkg
           if-no-files-found: error
       - name: Publish codegen JAR to Maven Central
+        # Skipped when Central already has this version, so a rerun after a later step failed can
+        # still reach NuGet. Central refuses a version twice; a partial publish needs a new one.
         env:
+          VERSION: ${{ steps.version.outputs.version }}
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-        run: devenv shell -- just publish-codegen "${{ steps.version.outputs.version }}"
+        run: |
+          published=0
+          modules="smithy-dotnet-codegen-core smithy-csharp-codegen smithy-csharp-aws-codegen smithy-fsharp-codegen smithy-proto-codegen"
+          for module in $modules; do
+            url="https://repo1.maven.org/maven2/io/github/thomaslaich/nsmithy/${module}/${VERSION}/${module}-${VERSION}.pom"
+            if curl --silent --fail --head --output /dev/null "$url"; then
+              published=$((published + 1))
+            fi
+          done
+          if [ "$published" -eq 5 ]; then
+            echo "Maven Central already has ${VERSION}; skipping."
+          elif [ "$published" -eq 0 ]; then
+            devenv shell -- just publish-codegen "$VERSION"
+          else
+            echo "::error::Maven Central has ${published} of 5 codegen modules at ${VERSION}."
+            exit 1
+          fi
+      - name: Log in to NuGet
+        # Trusted publishing: the key is valid for an hour, so log in after the long build.
+        id: nuget
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
       - name: Publish packages to NuGet
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-          NUGET_API_KEY_TOOL: ${{ secrets.NUGET_API_KEY_TOOL }}
-        run: |
-          dotnet nuget push "artifacts/packages/dotnet-nsmithy.*.nupkg" --api-key "$NUGET_API_KEY_TOOL" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
-          dotnet nuget push "artifacts/packages/NSmithy.*.nupkg" --api-key "$NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+          NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "artifacts/packages/*.nupkg" --api-key "$NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
