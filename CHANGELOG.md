@@ -71,7 +71,8 @@ instead of `AwsSigV4Presigner`, and set the client's `Endpoint` instead of using
   every NSmithy codec. Clients and servers are generated too, on the same runtime as C#:
   `I{Service}Client` and `{Service}Client` with `Task`-returning methods, and handler
   interfaces with `Add{Service}ServiceHandler` and `Map{Service}Service` for ASP.NET Core.
-  Paginators, waiters, endpoint-rule resolvers, fakes, and MCP are not generated for F# yet.
+  Paginators, waiters, endpoint-rule resolvers, and fakes are not generated for F# yet. The
+  generated `{Service}Definition` works with `NSmithy.Server.Mcp`, as in C#.
 - Schema bases that own the generic reading and writing, for a language that cannot override
   those methods: `AccessorStructSchema` with a `StructMember` per member, `AccessorUnionSchema`
   with a `UnionCase` per case, `ElementListSchema`, `EntryMapSchema`, and `Schemas.Optional` for
