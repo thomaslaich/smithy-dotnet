@@ -19,6 +19,11 @@
     <Project Path="simplerestjson/server/NSmithy.Examples.SimpleRestJson.Server.csproj" />
     <Project Path="simplerestjson/client/NSmithy.Examples.SimpleRestJson.Client.csproj" />
   </Folder>
+  <Folder Name="/fsharp/">
+    <Project Path="fsharp/contracts/NSmithy.Examples.FSharp.Contracts.csproj" />
+    <Project Path="fsharp/server/NSmithy.Examples.FSharp.Server.fsproj" />
+    <Project Path="fsharp/client/NSmithy.Examples.FSharp.Client.fsproj" />
+  </Folder>
   <Folder Name="/rpcv2cbor/unary/">
     <Project Path="rpcv2cbor/unary/contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj" />
     <Project Path="rpcv2cbor/unary/server/NSmithy.Examples.RpcV2Cbor.Server.csproj" />

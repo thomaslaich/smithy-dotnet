@@ -13,6 +13,9 @@ Paginators, waiters, endpoint-rule resolvers, fake clients and handlers, and
 client dependency-injection registration are C# only.
 :::
 
+The [F# example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/fsharp)
+has a server and a client that share a contracts project.
+
 ## Set up a project
 
 Name the service with `SmithyService`. NSmithy sees that the project is an F#
@@ -57,7 +60,7 @@ instead:
   <ItemGroup>
     <PackageReference Include="NSmithy.Server.AspNetCore" Version="NSMITHY_VERSION" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="NSMITHY_VERSION" />
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
   </ItemGroup>
 </Project>
 ```
