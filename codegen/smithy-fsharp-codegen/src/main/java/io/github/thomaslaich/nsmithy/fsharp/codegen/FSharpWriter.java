@@ -5,6 +5,9 @@
  */
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.ImportContainer;
@@ -35,24 +38,66 @@ public final class FSharpWriter extends SymbolWriter<FSharpWriter, FSharpWriter.
     return "global." + symbol.getNamespace() + "." + symbol.getName();
   }
 
+  /**
+   * Writes a template whose named parameters come from {@code context}, in a state of its own so
+   * the parameters do not leak into what the writer writes next.
+   */
+  public FSharpWriter writeTemplate(String template, Map<String, ?> context) {
+    pushState();
+    try {
+      context.forEach(this::putContext);
+      write(template);
+    } finally {
+      popState();
+    }
+    return this;
+  }
+
+  /** The code a template renders to, for a value another template writes with {@code |}. */
+  public static String render(String template, Map<String, ?> context) {
+    String code = new FSharpWriter().writeTemplate(template, context).toString();
+    return code.endsWith("\n") ? code.substring(0, code.length() - 1) : code;
+  }
+
   /** Writes a shape's documentation as an XML doc summary. */
   public void writeDocs(Shape shape) {
-    shape.getTrait(DocumentationTrait.class).ifPresent(trait -> writeDocs(trait.getValue()));
+    writeRenderedDocs(docs(shape));
   }
 
   public void writeDocs(String documentation) {
+    writeRenderedDocs(docs(documentation));
+  }
+
+  private void writeRenderedDocs(String docs) {
+    if (!docs.isEmpty()) {
+      write("$L", docs);
+    }
+  }
+
+  /**
+   * A shape's documentation as an XML doc summary, or an empty string, which a template's {@code
+   * ${?docs}} skips.
+   */
+  public static String docs(Shape shape) {
+    return shape.getTrait(DocumentationTrait.class).map(t -> docs(t.getValue())).orElse("");
+  }
+
+  public static String docs(String documentation) {
     if (documentation == null || documentation.isBlank()) {
-      return;
+      return "";
     }
-    write("/// <summary>");
+    List<String> lines = new ArrayList<>();
+    lines.add("/// <summary>");
     for (String line : documentation.strip().split("\\R", -1)) {
-      if (line.isBlank()) {
-        write("///");
-      } else {
-        write("/// $L", escapeXml(line.strip()));
-      }
+      lines.add(line.isBlank() ? "///" : "/// " + escapeXml(line.strip()));
     }
-    write("/// </summary>");
+    lines.add("/// </summary>");
+    return String.join("\n", lines);
+  }
+
+  /** Code with its documentation, if any, on the lines before it. */
+  public static String documented(String docs, String code) {
+    return docs.isEmpty() ? code : docs + "\n" + code;
   }
 
   private static String escapeXml(String value) {

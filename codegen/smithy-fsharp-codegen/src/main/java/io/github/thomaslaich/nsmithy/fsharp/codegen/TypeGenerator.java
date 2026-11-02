@@ -12,6 +12,7 @@ package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,33 +34,43 @@ final class TypeGenerator {
   }
 
   void structure(StructureShape shape) {
-    FSharpWriter writer = context.files().types(shape);
-    String name = FSharpNaming.typeName(shape.getId().getName());
-    writer.writeDocs(shape);
-    if (shape.members().isEmpty()) {
-      writer.write(
-          """
-          [<Sealed>]
-          type $1L() =
-              override _.Equals(other) = other :? $1L
-              override _.GetHashCode() = 0
-          """,
-          name);
-      return;
-    }
-    writer.write("type $L =", name);
-    writer.indent().write("{").indent();
+    List<String> fields = new ArrayList<>();
     for (MemberShape member : shape.members()) {
-      writeMemberDocs(writer, member);
-      writer.write(
-          "$L: $L", FSharpNaming.fieldName(member), FSharpMembers.fieldType(context, member));
+      fields.add(
+          documented(
+              member,
+              FSharpNaming.fieldName(member) + ": " + FSharpMembers.fieldType(context, member)));
     }
-    writer.dedent().write("}").dedent().write("");
+    context
+        .files()
+        .types(shape)
+        .writeTemplate(
+            """
+            ${?docs}
+            ${docs:L|}
+            ${/docs}
+            ${^fields}
+            [<Sealed>]
+            type ${name:L}() =
+                override _.Equals(other) = other :? ${name:L}
+                override _.GetHashCode() = 0
+            ${/fields}
+            ${?fields}
+            type ${name:L} =
+                {
+                    ${#fields}
+                    ${value:L|}
+                    ${/fields}
+                }
+            ${/fields}
+            """,
+            Map.of(
+                "docs", FSharpWriter.docs(shape),
+                "name", FSharpNaming.typeName(shape.getId().getName()),
+                "fields", fields));
   }
 
   void error(StructureShape shape) {
-    FSharpWriter writer = context.files().types(shape);
-    String name = FSharpNaming.typeName(shape.getId().getName());
     Optional<MemberShape> message = ShapeSupport.errorMessageMember(context.model(), shape);
 
     List<String> parameters = new ArrayList<>();
@@ -70,120 +81,178 @@ final class TypeGenerator {
               ? "?" + parameter + ": " + FSharpMembers.valueType(context, member)
               : parameter + ": " + FSharpMembers.valueType(context, member));
     }
-
-    writer.writeDocs(shape);
-    writer.write("type $L($L) =", name, String.join(", ", parameters));
-    writer.indent();
-    writer.write("inherit global.System.Exception($L)", message.map(this::argument).orElse(""));
+    List<String> properties = new ArrayList<>();
     for (MemberShape member : shape.members()) {
-      writeMemberDocs(writer, member);
-      writer.write(
-          "member val $L: $L = $L",
-          errorPropertyName(member, message),
-          FSharpMembers.fieldType(context, member),
-          argument(member, message));
+      properties.add(
+          documented(
+              member,
+              "member val "
+                  + errorPropertyName(member, message)
+                  + ": "
+                  + FSharpMembers.fieldType(context, member)
+                  + " = "
+                  + argument(member, message)));
     }
-    shape
-        .getTrait(RetryableTrait.class)
-        .ifPresent(
-            trait ->
-                writer.write(
-                    """
-                    interface global.NSmithy.Core.ISmithyRetryableError with
-                        member _.IsThrottlingError = $L\
-                    """,
-                    trait.getThrottling()));
-    writer.dedent().write("");
+    Optional<RetryableTrait> retryable = shape.getTrait(RetryableTrait.class);
+    context
+        .files()
+        .types(shape)
+        .writeTemplate(
+            """
+            ${?docs}
+            ${docs:L|}
+            ${/docs}
+            type ${name:L}(${parameters:L}) =
+                inherit global.System.Exception(${message:L})
+                ${#properties}
+                ${value:L|}
+                ${/properties}
+                ${?retryable}
+                interface global.NSmithy.Core.ISmithyRetryableError with
+                    member _.IsThrottlingError = ${throttling:L}
+                ${/retryable}
+            """,
+            Map.of(
+                "docs", FSharpWriter.docs(shape),
+                "name", FSharpNaming.typeName(shape.getId().getName()),
+                "parameters", String.join(", ", parameters),
+                "message", message.map(this::argument).orElse(""),
+                "properties", properties,
+                "retryable", retryable.isPresent(),
+                "throttling", retryable.map(RetryableTrait::getThrottling).orElse(false)));
   }
 
   void union(UnionShape shape) {
-    FSharpWriter writer = context.files().types(shape);
-    writer.writeDocs(shape);
-    writer.write("[<RequireQualifiedAccess>]");
-    writer.write("type $L =", FSharpNaming.typeName(shape.getId().getName()));
-    writer.indent();
+    List<String> cases = new ArrayList<>();
     for (MemberShape member : shape.members()) {
-      writeMemberDocs(writer, member);
-      if (ShapeSupport.isUnit(member.getTarget())) {
-        writer.write("| $L", FSharpNaming.caseName(member));
-      } else {
-        writer.write(
-            "| $L of $L",
-            FSharpNaming.caseName(member),
-            context.symbolProvider().typeOf(context.model().expectShape(member.getTarget())));
-      }
+      cases.add(
+          documented(
+              member,
+              ShapeSupport.isUnit(member.getTarget())
+                  ? "| " + FSharpNaming.caseName(member)
+                  : "| "
+                      + FSharpNaming.caseName(member)
+                      + " of "
+                      + context
+                          .symbolProvider()
+                          .typeOf(context.model().expectShape(member.getTarget()))));
     }
-    writer.write("/// <summary>A case this model does not define, as it was read.</summary>");
-    writer.write("| Unknown of tag: string * value: $L", FSharpLiterals.DOCUMENT);
-    writer.dedent().write("");
+    context
+        .files()
+        .types(shape)
+        .writeTemplate(
+            """
+            ${?docs}
+            ${docs:L|}
+            ${/docs}
+            [<RequireQualifiedAccess>]
+            type ${name:L} =
+                ${#cases}
+                ${value:L|}
+                ${/cases}
+                /// <summary>A case this model does not define, as it was read.</summary>
+                | Unknown of tag: string * value: ${document:L}
+            """,
+            Map.of(
+                "docs",
+                FSharpWriter.docs(shape),
+                "name",
+                FSharpNaming.typeName(shape.getId().getName()),
+                "cases",
+                cases,
+                "document",
+                FSharpLiterals.DOCUMENT));
   }
 
   void stringEnum(EnumShape shape) {
-    FSharpWriter writer = context.files().types(shape);
-    String name = FSharpNaming.typeName(shape.getId().getName());
-    Map<String, String> values = shape.getEnumValues();
-    writer.writeDocs(shape);
-    writer.write("[<RequireQualifiedAccess>]");
-    writer.write("type $L =", name);
-    writer.indent();
+    Map<String, String> enumValues = shape.getEnumValues();
+    List<String> cases = new ArrayList<>();
+    Map<String, String> values = new LinkedHashMap<>();
     for (MemberShape member : shape.members()) {
-      writeMemberDocs(writer, member);
-      writer.write("| $L", FSharpNaming.caseName(member));
-    }
-    writer.write("/// <summary>A value this model does not define.</summary>");
-    writer.write("| Unknown of value: string");
-    writer.write("");
-    writer.write("/// <summary>The value this case stands for on the wire.</summary>");
-    writer.write("member this.Value =").indent().write("match this with");
-    for (MemberShape member : shape.members()) {
-      writer.write(
-          "| $L.$L -> $L",
-          name,
+      cases.add(documented(member, "| " + FSharpNaming.caseName(member)));
+      values.put(
           FSharpNaming.caseName(member),
-          FSharpNaming.stringLiteral(values.get(member.getMemberName())));
+          FSharpNaming.stringLiteral(enumValues.get(member.getMemberName())));
     }
-    writer.write("| $L.Unknown value -> value", name).dedent();
-    writer.write("");
-    writer.write(
-        "/// <summary>The case for a value, or <c>Unknown</c> for one this model does not"
-            + " define.</summary>");
-    writer.write("static member FromValue(value: string) =").indent().write("match value with");
-    for (MemberShape member : shape.members()) {
-      writer.write(
-          "| $L -> $L.$L",
-          FSharpNaming.stringLiteral(values.get(member.getMemberName())),
-          name,
-          FSharpNaming.caseName(member));
-    }
-    writer.write("| value -> $L.Unknown value", name).dedent();
-    writer.write("");
-    writer.write("override this.ToString() = this.Value");
-    writer.write("");
-    writer.write(
-        """
-        interface global.NSmithy.Core.Serde.IStringEnumValue<$1L> with
-            member this.Value = this.Value
-            static member FromValue(value) = $1L.FromValue(value)
-        """,
-        name);
-    writer.dedent();
+    context
+        .files()
+        .types(shape)
+        .writeTemplate(
+            """
+            ${?docs}
+            ${docs:L|}
+            ${/docs}
+            [<RequireQualifiedAccess>]
+            type ${name:L} =
+                ${#cases}
+                ${value:L|}
+                ${/cases}
+                /// <summary>A value this model does not define.</summary>
+                | Unknown of value: string
+
+                /// <summary>The value this case stands for on the wire.</summary>
+                member this.Value =
+                    match this with
+                    ${#values}
+                    | ${name:L}.${key:L} -> ${value:L}
+                    ${/values}
+                    | ${name:L}.Unknown value -> value
+
+                /// <summary>The case for a value, or <c>Unknown</c> for one this model does not define.</summary>
+                static member FromValue(value: string) =
+                    match value with
+                    ${#values}
+                    | ${value:L} -> ${name:L}.${key:L}
+                    ${/values}
+                    | value -> ${name:L}.Unknown value
+
+                override this.ToString() = this.Value
+
+                interface global.NSmithy.Core.Serde.IStringEnumValue<${name:L}> with
+                    member this.Value = this.Value
+                    static member FromValue(value) = ${name:L}.FromValue(value)
+            """,
+            Map.of(
+                "docs",
+                FSharpWriter.docs(shape),
+                "name",
+                FSharpNaming.typeName(shape.getId().getName()),
+                "cases",
+                cases,
+                "values",
+                values));
   }
 
   void intEnum(IntEnumShape shape) {
-    FSharpWriter writer = context.files().types(shape);
     Map<String, Integer> values = shape.getEnumValues();
-    writer.writeDocs(shape);
-    writer.write("type $L =", FSharpNaming.typeName(shape.getId().getName()));
-    writer.indent();
+    List<String> cases = new ArrayList<>();
     for (MemberShape member : shape.members()) {
-      writeMemberDocs(writer, member);
       int value = values.get(member.getMemberName());
-      writer.write(
-          "| $L = $L",
-          FSharpNaming.intEnumValueName(member),
-          value < 0 ? "(" + value + ")" : String.valueOf(value));
+      cases.add(
+          documented(
+              member,
+              "| "
+                  + FSharpNaming.intEnumValueName(member)
+                  + " = "
+                  + (value < 0 ? "(" + value + ")" : String.valueOf(value))));
     }
-    writer.dedent().write("");
+    context
+        .files()
+        .types(shape)
+        .writeTemplate(
+            """
+            ${?docs}
+            ${docs:L|}
+            ${/docs}
+            type ${name:L} =
+                ${#cases}
+                ${value:L|}
+                ${/cases}
+            """,
+            Map.of(
+                "docs", FSharpWriter.docs(shape),
+                "name", FSharpNaming.typeName(shape.getId().getName()),
+                "cases", cases));
   }
 
   /** The order of an error's constructor parameters: required members, then optional ones. */
@@ -238,7 +307,12 @@ final class TypeGenerator {
     return parameter;
   }
 
-  private void writeMemberDocs(FSharpWriter writer, MemberShape member) {
-    ShapeSupport.memberDocumentation(context.model(), member).ifPresent(writer::writeDocs);
+  /** A member's code with the member's documentation, if any, on the lines before it. */
+  private String documented(MemberShape member, String code) {
+    return FSharpWriter.documented(
+        ShapeSupport.memberDocumentation(context.model(), member)
+            .map(FSharpWriter::docs)
+            .orElse(""),
+        code);
   }
 }
