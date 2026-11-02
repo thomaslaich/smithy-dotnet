@@ -24,7 +24,9 @@ import io.github.thomaslaich.nsmithy.codegen.core.ServicePrompts;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import software.amazon.smithy.model.Model;
@@ -42,9 +44,6 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 final class ServerGenerator {
 
   private static final String SERVER = "global.NSmithy.Server.";
-  private static final String ASP_NET_CORE = "global.NSmithy.Server.AspNetCore.";
-  private static final String DI = "global.Microsoft.Extensions.DependencyInjection.";
-  private static final String EXTENSION = "[<global.System.Runtime.CompilerServices.Extension>]";
   private static final String TASK = "global.System.Threading.Tasks.Task";
   private static final String CANCELLATION_TOKEN = "global.System.Threading.CancellationToken";
 
@@ -97,75 +96,105 @@ final class ServerGenerator {
   }
 
   private void writeHandler(FSharpWriter writer, OperationShape operation) {
-    writer.writeDocs(operation);
-    writer.write("type $L =", handlerName(operation)).indent();
-    writer.writeDocs(operation);
     List<String> parameters = new ArrayList<>();
     if (!ShapeSupport.isUnit(operation.getInputShape())) {
       parameters.add("input: " + schemas.operationType(operation.getInputShape()));
     }
     parameters.add("cancellationToken: " + CANCELLATION_TOKEN);
-    writer.write(
-        "abstract $L: $L -> $L",
-        methodName(operation),
-        String.join(" * ", parameters),
-        ShapeSupport.isUnit(operation.getOutputShape())
-            ? TASK
-            : TASK + "<" + schemas.operationType(operation.getOutputShape()) + ">");
-    writer.dedent().write("");
+    writer.writeTemplate(
+        """
+        ${?docs}
+        ${docs:L|}
+        ${/docs}
+        type ${handler:L} =
+            ${?docs}
+            ${docs:L|}
+            ${/docs}
+            abstract ${method:L}: ${parameters:L} -> ${returns:L}
+        """,
+        Map.of(
+            "docs", FSharpWriter.docs(operation),
+            "handler", handlerName(operation),
+            "method", methodName(operation),
+            "parameters", String.join(" * ", parameters),
+            "returns",
+                ShapeSupport.isUnit(operation.getOutputShape())
+                    ? TASK
+                    : TASK + "<" + schemas.operationType(operation.getOutputShape()) + ">"));
   }
 
   private void writeServiceHandler(
       FSharpWriter writer, String contract, List<OperationShape> operations) {
-    writer.writeDocs(service);
-    writer.write("type I$LHandler =", contract).indent();
-    if (operations.isEmpty()) {
-      writer.write("interface end");
-    }
-    operations.forEach(operation -> writer.write("inherit $L", handlerName(operation)));
-    writer.dedent().write("");
+    writer.writeTemplate(
+        """
+        ${?docs}
+        ${docs:L|}
+        ${/docs}
+        type I${contract:L}Handler =
+            ${^handlers}
+            interface end
+            ${/handlers}
+            ${#handlers}
+            inherit ${value:L}
+            ${/handlers}
+        """,
+        Map.of(
+            "docs", FSharpWriter.docs(service),
+            "contract", contract,
+            "handlers", operations.stream().map(ServerGenerator::handlerName).toList()));
   }
 
   private void writeProtocols(FSharpWriter writer, String contract, List<ProtocolInfo> protocols) {
-    writer.write("/// <summary>The protocols the service can be served over.</summary>");
-    writer.write("[<global.System.Flags>]");
-    writer.write("type $LProtocols =", contract).indent();
-    writer.write("| None = 0");
+    Map<String, Integer> flags = new LinkedHashMap<>();
     for (int i = 0; i < protocols.size(); i++) {
-      writer.write("| $L = $L", protocols.get(i).name(), 1 << i);
+      flags.put(protocols.get(i).name(), 1 << i);
     }
-    writer.write("| All = $L", (1 << protocols.size()) - 1);
-    writer.dedent().write("");
+    writer.writeTemplate(
+        """
+        /// <summary>The protocols the service can be served over.</summary>
+        [<global.System.Flags>]
+        type ${contract:L}Protocols =
+            | None = 0
+            ${#flags}
+            | ${key:L} = ${value:L}
+            ${/flags}
+            | All = ${all:L}
+        """,
+        Map.of("contract", contract, "flags", flags, "all", (1 << protocols.size()) - 1));
   }
 
   private void writeDefinition(
       FSharpWriter writer, String contract, List<OperationShape> operations) {
     String serviceSchema = FSharpSymbolProvider.render(symbols.schemaSymbol(service)) + ".Schema";
-    writer.write(
-        "/// <summary>The service's operation table, shared by every host adapter.</summary>");
-    writer.write("[<Sealed>]");
-    writer.write("type $LDefinition() =", contract).indent();
-    writer.write("static let catalog =").indent();
-    writer.write("$LServiceOperationCatalog(", SERVER).indent();
-    List<String> arguments = new ArrayList<>();
-    arguments.add(serviceSchema);
-    for (OperationShape operation : operations) {
-      arguments.add(serverOperation(operation));
-    }
-    writer.write("$L)", String.join(",\n", arguments)).dedent().dedent();
-    writer.write(
-        "static let prompts:"
-            + " global.System.Collections.Generic.IReadOnlyList<$LServicePromptDefinition> = $L",
-        SERVER,
-        prompts(operations));
-    writer.write("");
-    writer.write("static member internal Catalog = catalog");
-    writer.write("");
-    writer.write("interface $LIServiceDefinition with", SERVER).indent();
-    writer.write("member _.Schema = $L", serviceSchema);
-    writer.write("member _.Prompts = prompts");
-    writer.write("member _.Operations = catalog");
-    writer.dedent().dedent().write("");
+    List<String> catalog = new ArrayList<>();
+    catalog.add(serviceSchema);
+    operations.forEach(operation -> catalog.add(serverOperation(operation)));
+    writer.writeTemplate(
+        """
+        /// <summary>The service's operation table, shared by every host adapter.</summary>
+        [<Sealed>]
+        type ${contract:L}Definition() =
+            static let catalog =
+                global.NSmithy.Server.ServiceOperationCatalog(
+                    ${catalog:L|})
+            static let prompts: global.System.Collections.Generic.IReadOnlyList<global.NSmithy.Server.ServicePromptDefinition> = ${prompts:L}
+
+            static member internal Catalog = catalog
+
+            interface global.NSmithy.Server.IServiceDefinition with
+                member _.Schema = ${serviceSchema:L}
+                member _.Prompts = prompts
+                member _.Operations = catalog
+        """,
+        Map.of(
+            "contract",
+            contract,
+            "catalog",
+            String.join(",\n", catalog),
+            "prompts",
+            prompts(operations),
+            "serviceSchema",
+            serviceSchema));
   }
 
   /**
@@ -175,58 +204,53 @@ final class ServerGenerator {
    */
   private String serverOperation(OperationShape operation) {
     boolean hasInput = !ShapeSupport.isUnit(operation.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(operation.getOutputShape());
     String input = schemas.operationType(operation.getInputShape());
     String output = schemas.operationType(operation.getOutputShape());
-    String delegate =
-        "global.System.Func<"
-            + input
-            + ", "
-            + CANCELLATION_TOKEN
-            + ", "
-            + TASK
-            + "<"
-            + output
-            + ">>";
     String call =
         "handler."
             + methodName(operation)
             + "("
             + (hasInput ? "input, " : "")
             + "cancellationToken)";
-    String body =
-        hasOutput ? call : "task { do! " + call + "; return global.NSmithy.Core.SmithyUnit.Value }";
-    String resolve =
-        "global.System.Func<global.System.IServiceProvider, "
-            + delegate
-            + ">(fun services ->\n    let handler = "
-            + DI
-            + "ServiceProviderServiceExtensions.GetRequiredService<"
-            + handlerName(operation)
-            + ">(services)\n    "
-            + delegate
-            + "(fun "
-            + (hasInput ? "input" : "_")
-            + " cancellationToken -> "
-            + body
-            + "))";
-    List<String> arguments = new ArrayList<>();
-    arguments.add(FSharpSymbolProvider.render(symbols.schemaSymbol(operation)) + ".Schema");
-    arguments.add(resolve);
-    if (!isStreaming(operation)) {
-      arguments.add("jsonSchemas = " + jsonSchemas(operation));
-    }
-    authSchemes(operation).ifPresent(schemes -> arguments.add("authSchemes = " + schemes));
-    return SERVER
-        + "ServerOperation.Create<"
-        + input
-        + ", "
-        + output
-        + ">(\n    "
-        + String.join(",\n", arguments).replace("\n", "\n    ")
-        + ") :> "
-        + SERVER
-        + "IServerOperation";
+    return FSharpWriter.render(
+        """
+        global.NSmithy.Server.ServerOperation.Create<${input:L}, ${output:L}>(
+            ${schema:L},
+            global.System.Func<global.System.IServiceProvider, ${delegate:L}>(fun services ->
+                let handler = global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<${handler:L}>(services)
+                ${delegate:L}(fun ${inputName:L} cancellationToken -> ${body:L}))${?jsonSchemas},
+            jsonSchemas = ${jsonSchemas:L}${/jsonSchemas}${?authSchemes},
+            authSchemes = ${authSchemes:L}${/authSchemes}) :> global.NSmithy.Server.IServerOperation\
+        """,
+        Map.of(
+            "input",
+            input,
+            "output",
+            output,
+            "schema",
+            FSharpSymbolProvider.render(symbols.schemaSymbol(operation)) + ".Schema",
+            "delegate",
+            "global.System.Func<"
+                + input
+                + ", "
+                + CANCELLATION_TOKEN
+                + ", "
+                + TASK
+                + "<"
+                + output
+                + ">>",
+            "handler",
+            handlerName(operation),
+            "inputName",
+            hasInput ? "input" : "_",
+            "body",
+            ShapeSupport.isUnit(operation.getOutputShape())
+                ? "task { do! " + call + "; return global.NSmithy.Core.SmithyUnit.Value }"
+                : call,
+            "jsonSchemas",
+            isStreaming(operation) ? "" : jsonSchemas(operation),
+            "authSchemes",
+            authSchemes(operation).orElse("")));
   }
 
   private String jsonSchemas(OperationShape operation) {
@@ -303,108 +327,58 @@ final class ServerGenerator {
       String contract,
       List<OperationShape> operations,
       List<ProtocolInfo> protocols) {
-    String services = DI + "IServiceCollection";
-    String handler = "I" + contract + "Handler";
-    writer.write("/// <summary>Registers and maps the service in ASP.NET Core.</summary>");
-    writer.write(EXTENSION);
-    writer.write("[<AbstractClass; Sealed>]");
-    writer.write("type $LServerExtensions =", contract).indent();
+    List<String> handlers = new ArrayList<>(List.of("I" + contract + "Handler"));
+    operations.forEach(operation -> handlers.add(handlerName(operation)));
+    Map<String, String> runtimeTypes = new LinkedHashMap<>();
+    protocols.forEach(protocol -> runtimeTypes.put(protocol.name(), protocol.runtimeTypeName()));
+    writer.writeTemplate(
+        """
+        /// <summary>Registers and maps the service in ASP.NET Core.</summary>
+        [<global.System.Runtime.CompilerServices.Extension>]
+        [<AbstractClass; Sealed>]
+        type ${contract:L}ServerExtensions =
+            /// <summary>Registers the service's definition.</summary>
+            [<global.System.Runtime.CompilerServices.Extension>]
+            static member Add${contract:L}(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+                global.System.ArgumentNullException.ThrowIfNull(services)
+                global.Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<global.NSmithy.Server.IServiceDefinition, ${contract:L}Definition>())
+                services
 
-    writer.write("/// <summary>Registers the service's definition.</summary>");
-    writer.write(EXTENSION);
-    writer.write("static member Add$L(services: $L) : $L =", contract, services, services).indent();
-    writer.write("global.System.ArgumentNullException.ThrowIfNull(services)");
-    writer.write(
-        "$LExtensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services,"
-            + " $LServiceDescriptor.Singleton<$LIServiceDefinition, $LDefinition>())",
-        DI,
-        DI,
-        SERVER,
-        contract);
-    writer.write("services").dedent();
-    writer.write("");
+            /// <summary>Registers <c>'THandler</c> as the handler of every operation, and the service.</summary>
+            [<global.System.Runtime.CompilerServices.Extension>]
+            static member Add${contract:L}Handler<'THandler when 'THandler : not struct and 'THandler : not null and 'THandler :> I${contract:L}Handler>(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+                global.System.ArgumentNullException.ThrowIfNull(services)
+                ${?protocols}
+                global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
+                ${/protocols}
+                ${contract:L}ServerExtensions.Add${contract:L}(services) |> ignore
+                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<'THandler>(services) |> ignore
+                ${#handlers}
+                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<${value:L}>(services, global.System.Func<global.System.IServiceProvider, ${value:L}>(fun provider -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<'THandler>(provider) :> ${value:L})) |> ignore
+                ${/handlers}
+                services
+            ${?protocols}
 
-    writer.write(
-        "/// <summary>Registers <c>'THandler</c> as the handler of every operation, and the"
-            + " service.</summary>");
-    writer.write(EXTENSION);
-    writer.write(
-        "static member Add$LHandler<'THandler when 'THandler : not struct and 'THandler : not null"
-            + " and 'THandler :> $L>(services: $L) : $L =",
-        contract,
-        handler,
-        services,
-        services);
-    writer.indent();
-    writer.write("global.System.ArgumentNullException.ThrowIfNull(services)");
-    if (!protocols.isEmpty()) {
-      writer.write(
-          "$LSmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore",
-          ASP_NET_CORE);
-    }
-    writer.write("$LServerExtensions.Add$L(services) |> ignore", contract, contract);
-    writer.write(
-        "$LServiceCollectionServiceExtensions.AddSingleton<'THandler>(services) |> ignore", DI);
-    List<String> registered = new ArrayList<>(List.of(handler));
-    operations.forEach(operation -> registered.add(handlerName(operation)));
-    for (String type : registered) {
-      writer.write(
-          "$1LServiceCollectionServiceExtensions.AddSingleton<$2L>(services,"
-              + " global.System.Func<global.System.IServiceProvider, $2L>(fun provider ->"
-              + " $1LServiceProviderServiceExtensions.GetRequiredService<'THandler>(provider) :>"
-              + " $2L)) |> ignore",
-          DI,
-          type);
-    }
-    writer.write("services").dedent();
-
-    if (!protocols.isEmpty()) {
-      String protocolEnum = contract + "Protocols";
-      String routes = "global.Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";
-      String group = "global.Microsoft.AspNetCore.Routing.RouteGroupBuilder";
-      writer.write("");
-      writer.write(
-          "/// <summary>Maps the service's operations over <c>protocols</c>, by default its first"
-              + " protocol, into a route group, and returns the group.</summary>");
-      writer.write(EXTENSION);
-      writer.write(
-          "static member Map$L(endpoints: $L, ?protocols: $L) : $L =",
-          contract,
-          routes,
-          protocolEnum,
-          group);
-      writer.indent();
-      writer.write("global.System.ArgumentNullException.ThrowIfNull(endpoints)");
-      writer.write(
-          "let protocols = global.Microsoft.FSharp.Core.Operators.defaultArg protocols $L.$L",
-          protocolEnum,
-          protocols.get(0).name());
-      writer.write("if (protocols &&& ~~~$1L.All) <> $1L.None then", protocolEnum).indent();
-      writer.write(
-          "raise (global.System.ArgumentOutOfRangeException(\"protocols\", box protocols, \"Unknown"
-              + " $L value.\"))",
-          protocolEnum);
-      writer.dedent();
-      writer.write(
-          "let selected = global.System.Collections.Generic.List<$LSmithyServerProtocol>()",
-          ASP_NET_CORE);
-      for (ProtocolInfo protocol : protocols) {
-        writer.write("if (protocols &&& $1L.$2L) <> $1L.None then", protocolEnum, protocol.name());
-        writer.indent();
-        writer.write(
-            "selected.Add($LSmithyServerProtocol($L, global.$L()))",
-            ASP_NET_CORE,
-            FSharpNaming.stringLiteral(protocol.name()),
-            protocol.runtimeTypeName());
-        writer.dedent();
-      }
-      writer.write(
-          "$LSmithyAspNetCoreServer.MapSmithyService(endpoints, $LDefinition.Catalog, selected)",
-          ASP_NET_CORE,
-          contract);
-      writer.dedent();
-    }
-    writer.dedent().write("");
+            /// <summary>Maps the service's operations over <c>protocols</c>, by default its first protocol, into a route group, and returns the group.</summary>
+            [<global.System.Runtime.CompilerServices.Extension>]
+            static member Map${contract:L}(endpoints: global.Microsoft.AspNetCore.Routing.IEndpointRouteBuilder, ?protocols: ${contract:L}Protocols) : global.Microsoft.AspNetCore.Routing.RouteGroupBuilder =
+                global.System.ArgumentNullException.ThrowIfNull(endpoints)
+                let protocols = global.Microsoft.FSharp.Core.Operators.defaultArg protocols ${contract:L}Protocols.${defaultProtocol:L}
+                if (protocols &&& ~~~${contract:L}Protocols.All) <> ${contract:L}Protocols.None then
+                    raise (global.System.ArgumentOutOfRangeException("protocols", box protocols, "Unknown ${contract:L}Protocols value."))
+                let selected = global.System.Collections.Generic.List<global.NSmithy.Server.AspNetCore.SmithyServerProtocol>()
+                ${#protocols}
+                if (protocols &&& ${contract:L}Protocols.${key:L}) <> ${contract:L}Protocols.None then
+                    selected.Add(global.NSmithy.Server.AspNetCore.SmithyServerProtocol("${key:L}", global.${value:L}()))
+                ${/protocols}
+                global.NSmithy.Server.AspNetCore.SmithyAspNetCoreServer.MapSmithyService(endpoints, ${contract:L}Definition.Catalog, selected)
+            ${/protocols}
+        """,
+        Map.of(
+            "contract", contract,
+            "handlers", handlers,
+            "protocols", runtimeTypes,
+            "defaultProtocol", protocols.isEmpty() ? "" : protocols.get(0).name()));
   }
 
   private boolean isStreaming(OperationShape operation) {

@@ -24,7 +24,10 @@ package io.github.thomaslaich.nsmithy.fsharp.codegen;
 import io.github.thomaslaich.nsmithy.codegen.core.SchemaSupport;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import software.amazon.smithy.model.Model;
@@ -106,21 +109,10 @@ final class SchemaGenerator {
     Optional<MemberShape> message =
         isError ? ShapeSupport.errorMessageMember(model, shape) : Optional.empty();
 
-    // The builder.
-    if (members.isEmpty()) {
-      writer.write("type $L() = class end\n", builder);
-    } else {
-      writer.write("type $L() =", builder).indent();
-      for (MemberShape member : members) {
-        writer.write(
-            "member val $L: $L voption = ValueNone with get, set",
-            property(member, isError, message),
-            FSharpMembers.valueType(context, member));
-      }
-      writer.dedent().write("");
+    Map<String, String> properties = new LinkedHashMap<>();
+    for (MemberShape member : members) {
+      properties.put(property(member, isError, message), FSharpMembers.valueType(context, member));
     }
-
-    // The schema class.
     List<String> accessors = new ArrayList<>();
     for (int i = 0; i < members.size(); i++) {
       MemberShape member = members.get(i);
@@ -158,19 +150,41 @@ final class SchemaGenerator {
                 SERDE, type, builder, valueType, memberSchema, target, get, builder, property));
       }
     }
-    writer.write("type internal $L() =", impl).indent();
-    writer.write("inherit $LAccessorStructSchema<$L, $L>(", SERDE, type, builder).indent();
-    writer.write("$L,", FSharpLiterals.shapeId(shape.getId()));
-    String traits = FSharpLiterals.traits(shape.getAllTraits().values());
-    writer.write(
-        "$L$L)",
-        array(accessors, SERDE + "StructMember<" + type + ", " + builder + ">"),
-        traits == null ? "" : ",\ntraits = " + traits);
-    writer.dedent();
-    writeTargets(writer, members);
-    writer.write("override _.CreateTypedBuilder() = $L()", builder);
-    writeBuild(writer, shape, type, members, message, isError);
-    writer.dedent().write("");
+    Map<String, Object> templateContext = new HashMap<>();
+    templateContext.put("builder", builder);
+    templateContext.put("properties", properties);
+    templateContext.put("impl", impl);
+    templateContext.put("type", type);
+    templateContext.put("shapeId", FSharpLiterals.shapeId(shape.getId()));
+    templateContext.put(
+        "accessors", array(accessors, SERDE + "StructMember<" + type + ", " + builder + ">"));
+    templateContext.put("traits", traits(shape));
+    templateContext.put("targets", targets(members));
+    templateContext.put("build", build(shape, type, members, message, isError));
+    writer.writeTemplate(
+        """
+        ${^properties}
+        type ${builder:L}() = class end
+        ${/properties}
+        ${?properties}
+        type ${builder:L}() =
+            ${#properties}
+            member val ${key:L}: ${value:L} voption = ValueNone with get, set
+            ${/properties}
+        ${/properties}
+
+        type internal ${impl:L}() =
+            inherit global.NSmithy.Core.Serde.AccessorStructSchema<${type:L}, ${builder:L}>(
+                ${shapeId:L},
+                ${accessors:L|}${?traits},
+                traits = ${traits:L}${/traits})
+            ${#targets}
+            ${value:L}
+            ${/targets}
+            override _.CreateTypedBuilder() = ${builder:L}()
+            ${build:L|}
+        """,
+        templateContext);
 
     writeHolder(writer, shape, SERDE + "StructSchema<" + type + ", " + builder + ">", impl + "()");
   }
@@ -216,29 +230,45 @@ final class SchemaGenerator {
               "%sUnionCase.Create<%s, %s>(%s, %s, %s, %s)",
               SERDE, type, valueType, memberSchema, target, get, create));
     }
-    writer.write("type internal $L() =", impl).indent();
-    writer.write("inherit $LAccessorUnionSchema<$L>(", SERDE, type).indent();
-    writer.write("$L,", FSharpLiterals.shapeId(shape.getId()));
-    String traits = FSharpLiterals.traits(shape.getAllTraits().values());
-    writer.write(
-        "$L$L)",
-        array(cases, SERDE + "UnionCase<" + type + ">"),
-        traits == null ? "" : ",\ntraits = " + traits);
-    writer.dedent();
-    writeTargets(writer, members);
-
-    writer.write("override _.CaseOf(value) =").indent().write("match value with");
+    List<String> caseOf = new ArrayList<>();
     for (int i = 0; i < members.size(); i++) {
       MemberShape member = members.get(i);
-      writer.write(
-          "| $L.$L$L -> $L",
-          type,
-          FSharpNaming.caseName(member),
-          ShapeSupport.isUnit(member.getTarget()) ? "" : " _",
-          i);
+      caseOf.add(
+          "| "
+              + type
+              + "."
+              + FSharpNaming.caseName(member)
+              + (ShapeSupport.isUnit(member.getTarget()) ? "" : " _")
+              + " -> "
+              + i);
     }
-    writer.write("| $L.Unknown _ -> $L", type, noCase).dedent();
-    writer.dedent().write("");
+    Map<String, Object> templateContext = new HashMap<>();
+    templateContext.put("impl", impl);
+    templateContext.put("type", type);
+    templateContext.put("shapeId", FSharpLiterals.shapeId(shape.getId()));
+    templateContext.put("cases", array(cases, SERDE + "UnionCase<" + type + ">"));
+    templateContext.put("traits", traits(shape));
+    templateContext.put("targets", targets(members));
+    templateContext.put("caseOf", caseOf);
+    templateContext.put("noCase", noCase);
+    writer.writeTemplate(
+        """
+        type internal ${impl:L}() =
+            inherit global.NSmithy.Core.Serde.AccessorUnionSchema<${type:L}>(
+                ${shapeId:L},
+                ${cases:L|}${?traits},
+                traits = ${traits:L}${/traits})
+            ${#targets}
+            ${value:L}
+            ${/targets}
+            override _.CaseOf(value) =
+                match value with
+                ${#caseOf}
+                ${value:L}
+                ${/caseOf}
+                | ${type:L}.Unknown _ -> ${noCase:L}
+        """,
+        templateContext);
 
     writeHolder(writer, shape, SERDE + "UnionSchema<" + type + ">", impl + "()");
   }
@@ -253,10 +283,6 @@ final class SchemaGenerator {
     String element = elementType(member, sparse);
     String builder = GENERIC + "List<" + element + ">";
 
-    writer.write("type internal $L() =", impl).indent();
-    writer
-        .write("inherit $LElementListSchema<$L, $L, $L>(", SERDE, type, element, builder)
-        .indent();
     List<String> arguments = new ArrayList<>();
     arguments.add(FSharpLiterals.shapeId(shape.getId()));
     arguments.add(
@@ -264,18 +290,24 @@ final class SchemaGenerator {
     arguments.add(impl + ".Target0");
     namedTraits(arguments, "traits", FSharpLiterals.traits(shape.getAllTraits().values()));
     namedTraits(arguments, "elementTraits", memberTraits(member));
-    writer.write("$L)", String.join(",\n", arguments)).dedent();
-    writer.write(
-        "static member val Target0: $LSchema<$L> = $L",
-        SERDE,
-        element,
-        elementSchema(member, sparse));
-    writer.write("override _.GetElements(value) = value :> $LIEnumerable<$L>", GENERIC, element);
-    writer.write("override _.CreateTypedBuilder() = $L()", builder);
-    writer.write("override _.Add(builder, value) = builder.Add(value)");
-    writer.write(
-        "override _.Build(builder) = global.Microsoft.FSharp.Collections.List.ofSeq builder");
-    writer.dedent().write("");
+    writer.writeTemplate(
+        """
+        type internal ${impl:L}() =
+            inherit global.NSmithy.Core.Serde.ElementListSchema<${type:L}, ${element:L}, ${builder:L}>(
+                ${arguments:L|})
+            static member val Target0: global.NSmithy.Core.Serde.Schema<${element:L}> = ${elementSchema:L}
+            override _.GetElements(value) = value :> global.System.Collections.Generic.IEnumerable<${element:L}>
+            override _.CreateTypedBuilder() = ${builder:L}()
+            override _.Add(builder, value) = builder.Add(value)
+            override _.Build(builder) = global.Microsoft.FSharp.Collections.List.ofSeq builder
+        """,
+        Map.of(
+            "impl", impl,
+            "type", type,
+            "element", element,
+            "builder", builder,
+            "arguments", String.join(",\n", arguments),
+            "elementSchema", elementSchema(member, sparse)));
 
     writeHolder(
         writer,
@@ -295,8 +327,6 @@ final class SchemaGenerator {
     String builder = GENERIC + "Dictionary<string, " + value + ">";
     String entry = GENERIC + "KeyValuePair<string, " + value + ">";
 
-    writer.write("type internal $L() =", impl).indent();
-    writer.write("inherit $LEntryMapSchema<$L, $L, $L>(", SERDE, type, value, builder).indent();
     List<String> arguments = new ArrayList<>();
     arguments.add(FSharpLiterals.shapeId(shape.getId()));
     arguments.add(impl + ".Target0");
@@ -304,23 +334,26 @@ final class SchemaGenerator {
     namedTraits(arguments, "keyTraits", memberTraits(shape.getKey()));
     namedTraits(arguments, "valueTraits", memberTraits(member));
     arguments.add("key = " + schema(model.expectShape(shape.getKey().getTarget())));
-    writer.write("$L)", String.join(",\n", arguments)).dedent();
-    writer.write(
-        "static member val Target0: $LSchema<$L> = $L",
-        SERDE,
-        value,
-        elementSchema(member, sparse));
-    writer.write("override _.GetEntries(value) = value :> $LIEnumerable<$L>", GENERIC, entry);
-    writer.write(
-        "override _.CreateTypedBuilder() = $L(global.System.StringComparer.Ordinal)", builder);
-    writer.write("override _.Add(builder, key, value) = builder[key] <- value");
-    writer.write("override _.Build(builder) =").indent();
-    writer.write(
-        "global.Microsoft.FSharp.Collections.Map.ofSeq (global.Microsoft.FSharp.Collections.Seq.map"
-            + " (fun (entry: $L) -> entry.Key, entry.Value) builder)",
-        entry);
-    writer.dedent();
-    writer.dedent().write("");
+    writer.writeTemplate(
+        """
+        type internal ${impl:L}() =
+            inherit global.NSmithy.Core.Serde.EntryMapSchema<${type:L}, ${valueType:L}, ${builder:L}>(
+                ${arguments:L|})
+            static member val Target0: global.NSmithy.Core.Serde.Schema<${valueType:L}> = ${valueSchema:L}
+            override _.GetEntries(value) = value :> global.System.Collections.Generic.IEnumerable<${entry:L}>
+            override _.CreateTypedBuilder() = ${builder:L}(global.System.StringComparer.Ordinal)
+            override _.Add(builder, key, value) = builder[key] <- value
+            override _.Build(builder) =
+                global.Microsoft.FSharp.Collections.Map.ofSeq (global.Microsoft.FSharp.Collections.Seq.map (fun (entry: ${entry:L}) -> entry.Key, entry.Value) builder)
+        """,
+        Map.of(
+            "impl", impl,
+            "type", type,
+            "valueType", value,
+            "builder", builder,
+            "entry", entry,
+            "arguments", String.join(",\n", arguments),
+            "valueSchema", elementSchema(member, sparse)));
 
     writeHolder(
         writer,
@@ -363,12 +396,26 @@ final class SchemaGenerator {
         || ShapeSupport.isStreamingShape(model, shape.getOutputShape())) {
       arguments.add("isStreaming = true");
     }
-    FSharpWriter writer = context.files().schemas(shape);
-    writer.write("[<AbstractClass; Sealed>]");
-    writer.write("type $L =", symbols.schemaSymbol(shape).getName()).indent();
-    writer.write("static member val Schema: $LOperationSchema<$L, $L> =", SERDE, input, output);
-    writer.indent().write("$L.Operation<$L, $L>(", SCHEMAS, input, output).indent();
-    writer.write("$L)", String.join(",\n", arguments)).dedent().dedent().dedent().write("");
+    context
+        .files()
+        .schemas(shape)
+        .writeTemplate(
+            """
+            [<AbstractClass; Sealed>]
+            type ${name:L} =
+                static member val Schema: global.NSmithy.Core.Serde.OperationSchema<${input:L}, ${output:L}> =
+                    global.NSmithy.Core.Serde.Schemas.Operation<${input:L}, ${output:L}>(
+                        ${arguments:L|})
+            """,
+            Map.of(
+                "name",
+                symbols.schemaSymbol(shape).getName(),
+                "input",
+                input,
+                "output",
+                output,
+                "arguments",
+                String.join(",\n", arguments)));
   }
 
   void service(ServiceShape shape) {
@@ -395,39 +442,50 @@ final class SchemaGenerator {
   }
 
   private void writeHolder(FSharpWriter writer, Shape shape, String schemaType, String value) {
-    writer.write(
+    writer.writeTemplate(
         """
         [<AbstractClass; Sealed>]
-        type $L =
-            static member val Schema: $L = $L
+        type ${name:L} =
+            static member val Schema: ${schemaType:L} = ${value:L}
         """,
-        symbols.schemaSymbol(shape).getName(),
-        schemaType,
-        value);
+        Map.of(
+            "name", symbols.schemaSymbol(shape).getName(),
+            "schemaType", schemaType,
+            "value", value));
   }
 
-  private void writeTargets(FSharpWriter writer, List<MemberShape> members) {
+  /** The static values that hold each member's target schema, by the member's index. */
+  private List<String> targets(List<MemberShape> members) {
+    List<String> targets = new ArrayList<>();
     for (int i = 0; i < members.size(); i++) {
       MemberShape member = members.get(i);
-      writer.write(
-          "static member val Target$L: $LSchema<$L> = $L",
-          i,
-          SERDE,
-          FSharpMembers.valueType(context, member),
-          target(member));
+      targets.add(
+          FSharpWriter.render(
+              "static member val Target${index:L}: global.NSmithy.Core.Serde.Schema<${type:L}> ="
+                  + " ${target:L}",
+              Map.of(
+                  "index", i,
+                  "type", FSharpMembers.valueType(context, member),
+                  "target", target(member))));
     }
+    return targets;
   }
 
-  private void writeBuild(
-      FSharpWriter writer,
+  /** The shape's own traits, or an empty string, which a template's {@code ${?traits}} skips. */
+  private static String traits(Shape shape) {
+    String traits = FSharpLiterals.traits(shape.getAllTraits().values());
+    return traits == null ? "" : traits;
+  }
+
+  /** The schema class's Build override, which turns a filled-in builder into the value. */
+  private String build(
       StructureShape shape,
       String type,
       List<MemberShape> members,
       Optional<MemberShape> message,
       boolean isError) {
     if (members.isEmpty()) {
-      writer.write("override _.Build(_builder) = $L()", type);
-      return;
+      return FSharpWriter.render("override _.Build(_builder) = ${type:L}()", Map.of("type", type));
     }
     if (isError) {
       List<String> arguments = new ArrayList<>();
@@ -444,13 +502,15 @@ final class SchemaGenerator {
           arguments.add(parameter + " = " + required(member, builderValue));
         }
       }
-      writer.write("override _.Build(builder) =").indent();
-      writer.write("$L(", type).indent();
-      writer.write("$L)", String.join(",\n", arguments)).dedent().dedent();
-      return;
+      return FSharpWriter.render(
+          """
+          override _.Build(builder) =
+              ${type:L}(
+                  ${arguments:L|})\
+          """,
+          Map.of("type", type, "arguments", String.join(",\n", arguments)));
     }
-    writer.write("override _.Build(builder) : $L =", type).indent();
-    writer.write("{").indent();
+    Map<String, String> fields = new LinkedHashMap<>();
     for (MemberShape member : members) {
       String builderValue = "builder." + FSharpNaming.fieldName(member);
       String value;
@@ -466,9 +526,18 @@ final class SchemaGenerator {
       } else {
         value = required(member, builderValue);
       }
-      writer.write("$L = $L", FSharpNaming.fieldName(member), value);
+      fields.put(FSharpNaming.fieldName(member), value);
     }
-    writer.dedent().write("}").dedent();
+    return FSharpWriter.render(
+        """
+        override _.Build(builder) : ${type:L} =
+            {
+                ${#fields}
+                ${key:L} = ${value:L}
+                ${/fields}
+            }\
+        """,
+        Map.of("type", type, "fields", fields));
   }
 
   /**

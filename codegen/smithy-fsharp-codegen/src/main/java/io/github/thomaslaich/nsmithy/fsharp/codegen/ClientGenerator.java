@@ -16,8 +16,10 @@ import io.github.thomaslaich.nsmithy.codegen.core.Protocols;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -88,33 +90,47 @@ final class ClientGenerator {
 
   private void writeInterface(
       FSharpWriter writer, String clientInterface, List<OperationShape> operations) {
-    writer.writeDocs(service);
-    writer.write("type $L =", clientInterface).indent();
-    writer.write("inherit global.System.IDisposable");
+    List<String> methods = new ArrayList<>();
     for (OperationShape operation : operations) {
-      writer.write("");
-      writer.writeDocs(operation);
-      writer.write(
-          "abstract $L: $L -> $L",
-          methodName(operation),
-          String.join(" * ", parameterTypes(operation)),
-          returnType(operation));
+      methods.add(
+          FSharpWriter.documented(
+              FSharpWriter.docs(operation),
+              "abstract "
+                  + methodName(operation)
+                  + ": "
+                  + String.join(" * ", parameterTypes(operation))
+                  + " -> "
+                  + returnType(operation)));
     }
-    writer.dedent().write("");
+    writer.writeTemplate(
+        """
+        ${?docs}
+        ${docs:L|}
+        ${/docs}
+        type ${interface:L} =
+            inherit global.System.IDisposable
+            ${#methods}
+
+            ${value:L|}
+            ${/methods}
+        """,
+        Map.of(
+            "docs", FSharpWriter.docs(service),
+            "interface", clientInterface,
+            "methods", methods));
   }
 
   private void writeConfig(FSharpWriter writer, String config) {
-    writer.write(
+    writer.writeTemplate(
         """
         /// <summary>Options for the client. It copies them when it is constructed.</summary>
         [<Sealed>]
-        type $1L =
-            inherit $2LSmithyClientConfig
-            new() = { inherit $2LSmithyClientConfig() }
-            new(source: $1L) = { inherit $2LSmithyClientConfig(source) }
+        type ${config:L} =
+            inherit global.NSmithy.Client.SmithyClientConfig
+            new() = { inherit global.NSmithy.Client.SmithyClientConfig() }
+            new(source: ${config:L}) = { inherit global.NSmithy.Client.SmithyClientConfig(source) }
         """,
-        config,
-        CLIENT);
+        Map.of("config", config));
   }
 
   private void writeClient(
@@ -125,60 +141,71 @@ final class ClientGenerator {
       List<OperationShape> operations,
       ProtocolInfo protocol) {
     String serviceSchema = FSharpSymbolProvider.render(symbols.schemaSymbol(service)) + ".Schema";
-    String protocolFactory =
-        "global.System.Func<global.NSmithy.Http.IProtocol>(fun () -> global."
-            + protocol.runtimeTypeName()
-            + "() :> global.NSmithy.Http.IProtocol)";
-    boolean needsIdempotency =
-        operations.stream().anyMatch(operation -> !idempotencyTokens(operation).isEmpty());
-
-    writer.writeDocs(service);
-    writer.write("[<Sealed>]");
-    writer.write(
-        "type $L private (parts: $LSmithyHttpClientEnvironment * $LSmithyClientConfig) =",
-        client,
-        CLIENT,
-        CLIENT);
-    writer.indent();
-    writer.write(
-        "static let modeledAuthSchemes: global.System.Collections.Generic.IReadOnlyList<string> ="
-            + " $L",
-        strings(modeledAuthSchemes()));
-    writer.write("let environment, config = parts");
-    writer.write("let runtime = environment.Runtime");
-    if (needsIdempotency) {
-      writer.write(
-          """
-          let idempotencyToken =
-              match global.Microsoft.FSharp.Core.Option.ofObj config.IdempotencyTokenProvider with
-              | Some provider -> fun () -> provider.Invoke()
-              | None -> fun () -> global.System.Guid.NewGuid().ToString()\
-          """);
-    }
-    writeBindings(writer, serviceSchema, operations);
-    writer.write("");
-
-    writeConstructors(writer, client, config, serviceSchema, protocolFactory, protocol);
-
+    List<String> forwards = new ArrayList<>();
     for (OperationShape operation : operations) {
-      writer.write("");
-      writeOperation(writer, operation);
+      forwards.add(
+          "member this."
+              + methodName(operation)
+              + "("
+              + parameterNames(operation)
+              + ") = this."
+              + methodName(operation)
+              + "("
+              + forwardedArguments(operation)
+              + ")");
     }
-    writer.write("");
-    writer.write("member _.Dispose() = environment.Dispose()");
-    writer.write("");
-    writer.write("interface $L with", clientInterface).indent();
-    writer.write("member _.Dispose() = environment.Dispose()");
-    for (OperationShape operation : operations) {
-      String forward = forwardedArguments(operation);
-      writer.write(
-          "member this.$L($L) = this.$L($L)",
-          methodName(operation),
-          parameterNames(operation),
-          methodName(operation),
-          forward);
-    }
-    writer.dedent().dedent().write("");
+    Map<String, Object> context = new HashMap<>();
+    context.put("docs", FSharpWriter.docs(service));
+    context.put("client", client);
+    context.put("interface", clientInterface);
+    context.put("authSchemes", strings(modeledAuthSchemes()));
+    context.put(
+        "idempotency",
+        operations.stream().anyMatch(operation -> !idempotencyTokens(operation).isEmpty()));
+    context.put("bindings", writer.consumer(w -> writeBindings(w, serviceSchema, operations)));
+    context.put(
+        "constructors",
+        writer.consumer(w -> writeConstructors(w, client, config, serviceSchema, protocol)));
+    context.put(
+        "operations",
+        writer.consumer(
+            w ->
+                operations.forEach(
+                    operation -> {
+                      w.write("");
+                      writeOperation(w, operation);
+                    })));
+    context.put("forwards", forwards);
+    writer.writeTemplate(
+        """
+        ${?docs}
+        ${docs:L|}
+        ${/docs}
+        [<Sealed>]
+        type ${client:L} private (parts: global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig) =
+            static let modeledAuthSchemes: global.System.Collections.Generic.IReadOnlyList<string> = ${authSchemes:L}
+            let environment, config = parts
+            let runtime = environment.Runtime
+            ${?idempotency}
+            let idempotencyToken =
+                match global.Microsoft.FSharp.Core.Option.ofObj config.IdempotencyTokenProvider with
+                | Some provider -> fun () -> provider.Invoke()
+                | None -> fun () -> global.System.Guid.NewGuid().ToString()
+            ${/idempotency}
+            ${bindings:C|}
+
+            ${constructors:C|}
+            ${operations:C|}
+
+            member _.Dispose() = environment.Dispose()
+
+            interface ${interface:L} with
+                member _.Dispose() = environment.Dispose()
+                ${#forwards}
+                ${value:L}
+                ${/forwards}
+        """,
+        context);
   }
 
   /**
@@ -187,15 +214,8 @@ final class ClientGenerator {
    */
   private void writeBindings(
       FSharpWriter writer, String serviceSchema, List<OperationShape> operations) {
-    List<OperationShape> bound = operations.stream().filter(this::canBind).toList();
-    if (bound.isEmpty()) {
-      return;
-    }
-    writer.write("let serviceProtocol = environment.ServiceProtocol");
-    writer.write("let bindings =").indent();
-    writer.write("try").indent();
-    writer.write("{|").indent();
-    for (OperationShape operation : bound) {
+    List<String> bindings = new ArrayList<>();
+    for (OperationShape operation : operations.stream().filter(this::canBind).toList()) {
       String operationSchema =
           FSharpSymbolProvider.render(symbols.schemaSymbol(operation)) + ".Schema";
       List<String> arguments = new ArrayList<>();
@@ -205,19 +225,37 @@ final class ClientGenerator {
       arguments.add("authSchemeIds = " + strings(operationAuthSchemes(operation)));
       hostPrefix(operation).ifPresent(prefix -> arguments.add("hostPrefix = " + prefix));
       arguments.add("operation = " + operationSchema);
-      writer.write("$L =", FSharpNaming.typeName(operation.getId().getName()));
-      writer.indent();
-      writer.write(
-          "$LSmithyOperationBinding<$L, $L>(",
-          CLIENT,
-          schemas.operationType(operation.getInputShape()),
-          schemas.operationType(operation.getOutputShape()));
-      writer.indent().write("$L)", String.join(",\n", arguments)).dedent().dedent();
+      bindings.add(
+          FSharpWriter.render(
+              """
+              ${name:L} =
+                  global.NSmithy.Client.SmithyOperationBinding<${input:L}, ${output:L}>(
+                      ${arguments:L|})\
+              """,
+              Map.of(
+                  "name", FSharpNaming.typeName(operation.getId().getName()),
+                  "input", schemas.operationType(operation.getInputShape()),
+                  "output", schemas.operationType(operation.getOutputShape()),
+                  "arguments", String.join(",\n", arguments))));
     }
-    writer.dedent().write("|}").dedent();
-    writer.write("with _ ->").indent();
-    writer.write("environment.Dispose()");
-    writer.write("reraise ()").dedent().dedent();
+    if (bindings.isEmpty()) {
+      return;
+    }
+    writer.writeTemplate(
+        """
+        let serviceProtocol = environment.ServiceProtocol
+        let bindings =
+            try
+                {|
+                    ${#bindings}
+                    ${value:L|}
+                    ${/bindings}
+                |}
+            with _ ->
+                environment.Dispose()
+                reraise ()\
+        """,
+        Map.of("bindings", bindings));
   }
 
   private void writeConstructors(
@@ -225,106 +263,107 @@ final class ClientGenerator {
       String client,
       String config,
       String serviceSchema,
-      String protocolFactory,
       ProtocolInfo protocol) {
-    String create =
-        CLIENT
-            + "SmithyHttpClientEnvironment.Create("
-            + serviceSchema
-            + ", config, "
-            + protocolFactory
-            + ", modeledAuthSchemes"
-            + httpVersionPreference(protocol).map(p -> ", modeledHttpVersion = " + p).orElse("");
-    writer.write(
+    writer.writeTemplate(
         """
         /// <summary>A client that sends requests to <c>endpoint</c>.</summary>
-        new(endpoint: global.System.Uri, ?config: $1L) = new $2L($2L.WithEndpoint(endpoint, config))
+        new(endpoint: global.System.Uri, ?config: ${config:L}) = new ${client:L}(${client:L}.WithEndpoint(endpoint, config))
 
         /// <summary>A client that owns its HTTP client, configured by <c>config</c>.</summary>
-        new(config: $1L) = new $2L($2L.Owned(config))
+        new(config: ${config:L}) = new ${client:L}(${client:L}.Owned(config))
 
         /// <summary>A client that sends requests with <c>httpClient</c>, which it does not dispose.</summary>
-        new(httpClient: global.System.Net.Http.HttpClient, ?config: $1L) =
-            new $2L($2L.WithHttpClient(httpClient, config))
+        new(httpClient: global.System.Net.Http.HttpClient, ?config: ${config:L}) =
+            new ${client:L}(${client:L}.WithHttpClient(httpClient, config))
 
         /// <summary>A client that runs on an existing runtime, which owns the transport.</summary>
-        new(runtime: $3LSmithyClientRuntime, ?config: $1L) =
-            new $2L($2L.WithRuntime(runtime, config))
+        new(runtime: global.NSmithy.Client.SmithyClientRuntime, ?config: ${config:L}) =
+            new ${client:L}(${client:L}.WithRuntime(runtime, config))
 
-        static member private Owned(config: $1L) : $3LSmithyHttpClientEnvironment * $3LSmithyClientConfig =
+        static member private Owned(config: ${config:L}) : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
             global.System.ArgumentNullException.ThrowIfNull(config)
-            $4L), config :> $3LSmithyClientConfig
+            ${create:L}), config :> global.NSmithy.Client.SmithyClientConfig
 
-        static member private WithEndpoint(endpoint: global.System.Uri, config: $1L option) : $1L =
+        static member private WithEndpoint(endpoint: global.System.Uri, config: ${config:L} option) : ${config:L} =
             global.System.ArgumentNullException.ThrowIfNull(endpoint)
             let copy =
                 match config with
-                | Some config -> $1L(config)
-                | None -> $1L()
+                | Some config -> ${config:L}(config)
+                | None -> ${config:L}()
             copy.Endpoint <- endpoint
             copy
 
-        static member private WithHttpClient(httpClient: global.System.Net.Http.HttpClient, config: $1L option) : $3LSmithyHttpClientEnvironment * $3LSmithyClientConfig =
+        static member private WithHttpClient(httpClient: global.System.Net.Http.HttpClient, config: ${config:L} option) : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
             global.System.ArgumentNullException.ThrowIfNull(httpClient)
-            let config = global.Microsoft.FSharp.Core.Option.defaultWith (fun () -> $1L()) config
-            $4L, httpClient = httpClient), config :> $3LSmithyClientConfig
+            let config = global.Microsoft.FSharp.Core.Option.defaultWith (fun () -> ${config:L}()) config
+            ${create:L}, httpClient = httpClient), config :> global.NSmithy.Client.SmithyClientConfig
 
-        static member private WithRuntime(runtime: $3LSmithyClientRuntime, config: $1L option) : $3LSmithyHttpClientEnvironment * $3LSmithyClientConfig =
-            let config = global.Microsoft.FSharp.Core.Option.defaultWith (fun () -> $1L()) config
-            $3LSmithyHttpClientEnvironment.FromRuntime($5L, runtime, config, $6L),
-            config :> $3LSmithyClientConfig\
+        static member private WithRuntime(runtime: global.NSmithy.Client.SmithyClientRuntime, config: ${config:L} option) : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
+            let config = global.Microsoft.FSharp.Core.Option.defaultWith (fun () -> ${config:L}()) config
+            global.NSmithy.Client.SmithyHttpClientEnvironment.FromRuntime(${serviceSchema:L}, runtime, config, ${protocolFactory:L}),
+            config :> global.NSmithy.Client.SmithyClientConfig\
         """,
-        config,
-        client,
-        CLIENT,
-        create,
-        serviceSchema,
-        protocolFactory);
+        Map.of(
+            "config", config,
+            "client", client,
+            "serviceSchema", serviceSchema,
+            "protocolFactory", protocolFactory(protocol),
+            "create",
+                FSharpWriter.render(
+                    "global.NSmithy.Client.SmithyHttpClientEnvironment.Create(${serviceSchema:L},"
+                        + " config, ${protocolFactory:L}, modeledAuthSchemes${?httpVersion},"
+                        + " modeledHttpVersion = ${httpVersion:L}${/httpVersion}",
+                    Map.of(
+                        "serviceSchema", serviceSchema,
+                        "protocolFactory", protocolFactory(protocol),
+                        "httpVersion", httpVersionPreference(protocol).orElse("")))));
+  }
+
+  private static String protocolFactory(ProtocolInfo protocol) {
+    return "global.System.Func<global.NSmithy.Http.IProtocol>(fun () -> global."
+        + protocol.runtimeTypeName()
+        + "() :> global.NSmithy.Http.IProtocol)";
   }
 
   private void writeOperation(FSharpWriter writer, OperationShape operation) {
-    writer.writeDocs(operation);
-    writer.write(
-        "member _.$L($L) : $L =",
-        methodName(operation),
-        typedParameters(operation),
-        returnType(operation));
-    writer.indent();
-    if (!canBind(operation)) {
-      writer.write(
-          "raise (global.System.NotSupportedException(\"Event-stream operations are not supported"
-              + " by the declared service protocols.\"))");
-      writer.dedent();
-      return;
-    }
     boolean hasInput = !ShapeSupport.isUnit(operation.getInputShape());
-    String input = hasInput ? "input" : "global.NSmithy.Core.SmithyUnit.Value";
-    if (hasInput) {
-      writer.write("global.System.ArgumentNullException.ThrowIfNull(input)");
-      List<MemberShape> tokens = idempotencyTokens(operation);
-      if (!tokens.isEmpty()) {
-        writer.write("let input =").indent().write("{ input with").indent();
-        for (MemberShape token : tokens) {
-          String field = FSharpNaming.fieldName(token);
-          writer.write(
-              "$1L = (match input.$1L with Some _ as token -> token | None -> Some(idempotencyToken"
-                  + " ()))",
-              field);
-        }
-        writer.dedent().write("}").dedent();
-      }
-    }
-    String call =
-        "runtime.InvokeAsync(bindings."
-            + FSharpNaming.typeName(operation.getId().getName())
-            + ", "
-            + input
-            + ", global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken "
-            + CANCELLATION_TOKEN
-            + ".None)";
-    writer.write(
-        ShapeSupport.isUnit(operation.getOutputShape()) ? "$L :> " + TASKS + "Task" : "$L", call);
-    writer.dedent();
+    Map<String, Object> context = new HashMap<>();
+    context.put("docs", FSharpWriter.docs(operation));
+    context.put("method", methodName(operation));
+    context.put("parameters", typedParameters(operation));
+    context.put("returns", returnType(operation));
+    context.put("canBind", canBind(operation));
+    context.put("hasInput", hasInput);
+    context.put(
+        "tokens", idempotencyTokens(operation).stream().map(FSharpNaming::fieldName).toList());
+    context.put("binding", FSharpNaming.typeName(operation.getId().getName()));
+    context.put("input", hasInput ? "input" : "global.NSmithy.Core.SmithyUnit.Value");
+    context.put("unitOutput", ShapeSupport.isUnit(operation.getOutputShape()));
+    writer.writeTemplate(
+        """
+        ${?docs}
+        ${docs:L|}
+        ${/docs}
+        member _.${method:L}(${parameters:L}) : ${returns:L} =
+            ${^canBind}
+            raise (global.System.NotSupportedException("Event-stream operations are not supported by the declared service protocols."))
+            ${/canBind}
+            ${?canBind}
+            ${?hasInput}
+            global.System.ArgumentNullException.ThrowIfNull(input)
+            ${/hasInput}
+            ${?tokens}
+            let input =
+                { input with
+                    ${#tokens}
+                    ${value:L} = (match input.${value:L} with Some _ as token -> token | None -> Some(idempotencyToken ()))
+                    ${/tokens}
+                }
+            ${/tokens}
+            runtime.InvokeAsync(bindings.${binding:L}, ${input:L}, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)${?unitOutput} :> global.System.Threading.Tasks.Task${/unitOutput}
+            ${/canBind}\
+        """,
+        context);
   }
 
   private String methodName(OperationShape operation) {
