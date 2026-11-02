@@ -27,6 +27,67 @@ Reference a contracts project with `SmithyPublish=true`:
 Set `SmithyService` in the consumer to select its service. Without an explicit
 `smithy-build.json`, NSmithy assembles the referenced sources automatically.
 
+A project generates the shapes in its own model files, so the contracts project
+generates the model's types, and it needs the runtime:
+
+```xml title="MyService.Contracts/MyService.Contracts.csproj"
+<ItemGroup>
+  <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
+</ItemGroup>
+```
+
+Its consumers reference those types instead of generating their own: a client
+and a server of the contract generate only their client or server and share one
+set of types. A contracts project that should only validate and package its
+model, for example one whose consumers are F# projects, sets
+`SmithyGenerateShapes` to `false`; its consumers then generate its shapes.
+
+### Splitting a service across projects
+
+The same rule lets the modules of one server each own their operations. A
+module's model defines its operations without a service, and the module
+generates their types, schemas, and handler interfaces. It needs only
+`NSmithy.Core`:
+
+```smithy title="Shop.Orders/model/orders.smithy"
+$version: "2"
+namespace acme.shop
+
+@http(method: "POST", uri: "/orders", code: 201)
+operation PlaceOrder {
+    input := { @required total: Money }
+    output := { @required orderId: String }
+}
+```
+
+```xml title="Shop.Orders/Shop.Orders.csproj"
+<PropertyGroup>
+  <SmithyPublish>true</SmithyPublish>
+</PropertyGroup>
+<ItemGroup>
+  <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
+  <ProjectReference Include="../Shop.Common/Shop.Common.csproj" />
+</ItemGroup>
+```
+
+The module implements `IPlaceOrderHandler`. One project defines the service,
+references the modules, and sets `SmithyService`; it generates only the
+service and gets the models of the modules' own references, such as
+`Shop.Common` with `Money`, through them:
+
+```smithy title="Shop.Api/model/service.smithy"
+@restJson1
+service Shop {
+    operations: [PlaceOrder]
+}
+```
+
+A module sets `SmithyPublish` so that its model reaches the projects that
+reference it. Every project in the solution must use the same NSmithy version.
+See the [shape ownership design](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
+
 ## Maven JAR distribution
 
 :::tip[Recommended]

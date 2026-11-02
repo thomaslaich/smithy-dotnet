@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
+    <!-- The project generates the types of its model, which consumers then share. -->
+    <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
   </ItemGroup>
 </Project>

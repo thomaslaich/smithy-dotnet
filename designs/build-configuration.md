@@ -39,7 +39,8 @@ code path, and every MSBuild property means the same thing in every project.
 | Project build file | `$(SmithyBuildFile)`, `smithy-build.json` at the project root by default. Optional. |
 | Contract build files | `SmithyContractsBuildFile` items, collected from contracts project references or set for packaged contracts. |
 | Contract sources | `SmithySource` items, collected the same way. |
-| Generation properties | `SmithyService`, `SmithyGenerateClient`, `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, `SmithyGrpc`, and `SmithyProjection`. |
+| Shape manifests | `SmithyShapeManifest` items: the `nsmithy-shapes.json` of every C# project the project references, directly or transitively. See [shape-ownership.md](shape-ownership.md). |
+| Generation properties | `SmithyService`, `SmithyGenerateShapes`, `SmithyGenerateClient`, `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, `SmithyGrpc`, and `SmithyProjection`. |
 | Contract coordinates | `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and `PackageVersion` of a contracts project. |
 
 ## The effective build file
@@ -56,7 +57,9 @@ It is assembled in this order:
    repositories, and suppressions; its plugins are not carried over.
    Repositories keep all their settings, credentials and proxies included; the
    first entry for a URL wins.
-   `SmithySource` items are added to `sources` as absolute paths.
+   `SmithySource` items are added to `sources` as absolute paths. A project
+   that generates code also gets the sources and build files of the contracts
+   its references reference, which the shapes it uses from them can target.
 3. **Repositories.** When neither the project nor a contract lists a Maven
    repository, Maven Central is listed, as the plain Smithy CLI assumes it. The
    [bundled repository](#bundled-maven-repository) is searched before any
@@ -83,7 +86,7 @@ ways fails the build.
 
 | Plugin | Enabled by | Keys from properties |
 | --- | --- | --- |
-| `csharp-codegen` | `SmithyService` | `service` ← `SmithyService`; `generateClient` ← `SmithyGenerateClient` and `generateServer` ← `SmithyGenerateServer` when `false` |
+| `csharp-codegen` | `SmithyService`, or own model files and `SmithyGenerateShapes` | `service` ← `SmithyService`; `generateClient` ← `SmithyGenerateClient` and `generateServer` ← `SmithyGenerateServer` when `false`; `ownedSources` ← the project build file's `sources` and `imports`; `providedShapes` ← the shape manifests |
 | `docgen` | `SmithyGenerateDocs` | `service` ← `SmithyService` |
 | `openapi` | `SmithyOpenApiProtocol` | `service` ← `SmithyService`, `protocol` ← `SmithyOpenApiProtocol` |
 | `proto-codegen` | `SmithyGrpc` | `service` ← `SmithyService` |
@@ -101,13 +104,18 @@ file's top-level `plugins` entry. The top-level entry stays as written, so
 other projections keep inheriting it. A projection other than `source` must
 exist in the project build file.
 
-`SmithyService` is the switch for code generation from properties. A project
-without it adds no code generation plugins from properties. Such a project either only builds
-and validates its model, as a contracts project does, or configures NSmithy's
-plugins entirely in `smithy-build.json`, for example one `csharp-codegen` per
-projection to generate several services. `docgen`, `openapi`, and
-`proto-codegen` take their service from `SmithyService`; enabling one of them
-without it fails the build.
+A C# project generates the shapes in its own model files and references the
+shapes its references generated ([shape-ownership.md](shape-ownership.md)).
+`SmithyService` adds the service on top. A project without it still gets
+`csharp-codegen` with `ownedSources` when its build file lists sources and
+does not configure `csharp-codegen` itself; with `SmithyGenerateShapes` set to
+`false`, it only validates its model. A build file that configures
+`csharp-codegen` in projections other than `SmithyProjection`, for example one
+per projection to generate several services, keeps its own settings and gets
+neither `ownedSources` nor `providedShapes`: each of those projections would
+generate the owned shapes again. `docgen`, `openapi`, and `proto-codegen` take
+their service from `SmithyService`; enabling one of them without it fails the
+build.
 
 For example, a client that generates from a contracts project and also wants
 fakes and a namespace prefix:
@@ -153,8 +161,9 @@ repositories. See [Maven dependencies](../website/src/content/docs/reference/mav
 A contracts project (`SmithyPublish=true`) publishes its own `smithy-build.json`
 in the NuGet package, never the effective build file. Its consumers therefore
 receive the model's settings and none of the contracts project's generation
-settings. Without `SmithyService`, a contracts project's build validates the
-model and generates no code.
+settings. Without `SmithyService`, a contracts project generates the shapes in
+its model, which its consumers then reference, and needs `NSmithy.Core`; with
+`SmithyGenerateShapes` set to `false`, its build only validates the model.
 
 With `SmithyMavenGroupId` set, the effective build file also runs NSmithy's
 `contracts-jar` plugin, which packages the projection's sources as a Maven JAR
@@ -175,6 +184,8 @@ left to Maven tooling.
 | `NSMITHYSERVICE` | `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, or `SmithyGrpc` is set without `SmithyService`. |
 | `NSMITHYPROJECTION` | `SmithyProjection` names a projection the project build file does not define. |
 | `NSMITHYDEPENDENCY` | Two inputs declare the same Maven artifact at different versions. |
+| `NSMITHYSHAPES` | `SmithyGenerateShapes` is `false` and `SmithyService` is set. |
+| `NSMITHYRUNTIME` | A project compiles generated code but does not reference `NSmithy.Core`. |
 | `NSMITHYMAVEN` | `SmithyMavenGroupId` is set without `SmithyMavenArtifactId`, a version, or a project build file, or `dotnet pack` finds no JAR to copy. |
 
 Each message names the property or file to change.

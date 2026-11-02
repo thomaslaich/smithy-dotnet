@@ -6,6 +6,9 @@
     <VersionPrefix>0.6.0</VersionPrefix>
     <VersionSuffix>SNAPSHOT</VersionSuffix>
     <SmithyPublish>true</SmithyPublish>
+    <!-- F# projects generate their own types from this model, so this project only validates and
+         packages it. -->
+    <SmithyGenerateShapes>false</SmithyGenerateShapes>
     <SmithyMavenGroupId>io.github.thomaslaich.nsmithy.examples</SmithyMavenGroupId>
     <SmithyMavenArtifactId>bookshelf</SmithyMavenArtifactId>
   </PropertyGroup>

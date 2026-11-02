@@ -16,7 +16,7 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **Preview: `ownedSources` setting of `csharp-codegen`.** Lists a project's own model files and
   directories. Without `closure`, the project generates the shapes defined there, operations
   included with their schemas and handler interfaces, and everything they target, also without a
-  service. MSBuild does not set it yet. See
+  service. MSBuild sets it from the `sources` of the project's `smithy-build.json`. See
   [Shape ownership](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
 - **Shape manifest.** Every `csharp-codegen` run writes `nsmithy-shapes.json` next to the generated
   files: the shapes it generated and the C# type, schema class, and handler interface of each.
@@ -25,13 +25,25 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   projects' types. A shape listed twice, a manifest from another NSmithy version, a service `rename`
   of a provided error, and a provided operation without the handler interface the server needs fail
   code generation. A service's errors apply to provided operations through
-  `OperationSchema.WithErrors`. MSBuild does not set it yet.
+  `OperationSchema.WithErrors`. MSBuild sets it from the project's references.
 
 ### Changed
 
 - **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
   `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
   or its service declares. Other failures stay exceptions.
+- **BREAKING: a C# project generates the shapes in its own model files, also without
+  `SmithyService`.** That includes their operations' schemas and handler interfaces. Projects that
+  reference it, directly or transitively, use those types instead of generating them again, so a
+  client and a server of one contract share types, and a server's modules can each own their
+  operations while one project ties them into a service. `SmithyService` adds the service on top.
+  A contracts project without `SmithyService` therefore needs a `NSmithy.Core` reference
+  (`NSMITHYRUNTIME` names it), or `SmithyGenerateCode` set to `false` to keep only validating and
+  packaging its model, for example for F# consumers. A module's model reaches the projects that
+  reference it when it sets `SmithyPublish`. Projects whose `smithy-build.json` configures
+  `csharp-codegen` in several projections keep their settings. See
+  [Distributing contracts](https://thomaslaich.github.io/smithy-dotnet/guides/distributing-contracts/).
+
 - Each operation's handler interface, `I{Operation}Handler`, is generated into a file of its own,
   `{Operation}.Handler.g.cs`, instead of `{Service}.Server.g.cs`, and in the operation's namespace.
   A project always generates the handler interfaces of the operations it owns, also with

@@ -32,7 +32,9 @@ runs the Smithy CLI on it. It combines:
 
 - the project's own `smithy-build.json`, or an empty one when there is none;
 - the model sources, Maven dependencies, repositories, and suppressions of
-  referenced contracts;
+  referenced contracts, including the contracts those reference;
+- the shape manifests of referenced projects, so the shapes they generated are
+  not generated again;
 - the plugin settings from the properties below.
 
 The properties say what the project builds: the service, and whether it gets
@@ -47,7 +49,8 @@ ways fails the build. When no Maven repository is listed, Maven Central is.
 
 | Property | Description |
 | --- | --- |
-| `SmithyService` | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Turns on code generation from properties and sets `service` for each plugin NSmithy adds. Without it, configure NSmithy's plugins in `smithy-build.json`, for example one `csharp-codegen` per projection. |
+| `SmithyService` | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Adds the service, its client and server, on top of the shapes in the project's own model files, and sets `service` for each plugin NSmithy adds. |
+| `SmithyGenerateShapes` | C# only. Whether the project generates the shapes in its own model files (the `sources` of its `smithy-build.json`), operations included with their handler interfaces, also without `SmithyService`. Shapes that referenced projects generated are referenced, not generated again. Set to `false` in a project that only validates and packages its model; its consumers then generate its shapes. A project whose `smithy-build.json` configures `csharp-codegen` in other projections keeps its own settings. Default: `true`. |
 | `SmithyGenerateServer` | Emit server stub types, in C# and F# projects. Set to `false` in client-only projects; this sets `generateServer` to `false` and leaves generated server files out of compilation. Default: `true`. |
 | `SmithyGenerateClient` | Emit client types, in C# and F# projects. Set to `false` in server-only projects; this sets `generateClient` to `false` and leaves generated client files out of compilation. Default: `true`. |
 | `SmithyBuildFile` | Path to the project's own Smithy build file, which NSmithy merges into the effective one. Optional. Default: `$(MSBuildProjectDirectory)/smithy-build.json`. |
@@ -64,8 +67,8 @@ Set these in `smithy-build.json`, under `plugins` or a projection's `plugins`:
 | Setting | Description |
 | --- | --- |
 | `closure` | Id of a `shapeClosures` metadata entry to generate. Without `SmithyService`, only the closure's types are generated; with it, the closure must contain the service. See [Types without a service](/smithy-dotnet/reference/generated-code/#types-without-a-service). |
-| `ownedSources` | Preview. The project's own model files and directories. Without `closure`, the project generates the shapes defined there, operations included with their schemas and handler interfaces, and everything they target; with `SmithyService`, also the service and everything it reaches. A service in these files generates nothing unless `SmithyService` names it. See the [shape ownership design](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md). |
-| `providedShapes` | Preview. Paths of shape manifests (`nsmithy-shapes.json`) written by referenced projects. The shapes they list are not generated again; generated code refers to the types those projects generated. Every project must use the same NSmithy version. |
+| `ownedSources` | Preview; MSBuild sets it from the project's sources (see `SmithyGenerateShapes`). The project's own model files and directories. Without `closure`, the project generates the shapes defined there, operations included with their schemas and handler interfaces, and everything they target; with `SmithyService`, also the service and everything it reaches. A service in these files generates nothing unless `SmithyService` names it. See the [shape ownership design](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md). |
+| `providedShapes` | Preview; MSBuild sets it from the project's references. Paths of shape manifests (`nsmithy-shapes.json`) written by referenced projects. The shapes they list are not generated again; generated code refers to the types those projects generated. Every project must use the same NSmithy version. |
 | `baseNamespace` | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. |
 | `defaultProtocol` | The protocol trait of the generated client's default protocol, such as `aws.protocols#restJson1`, for a service with several protocols. It must be one of the service's protocol traits. Default: the service's first protocol. |
 | `generateDependencyInjection` | Generate the `Add{Service}Client` IHttpClientFactory extension. Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). |

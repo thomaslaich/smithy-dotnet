@@ -109,6 +109,47 @@
     </ItemGroup>
   </Target>
 
+  <!--
+    Returns what a project needs from this one and everything this one references, to use the
+    shapes they generated instead of generating them again: their shape manifests
+    (SmithyKind=Manifest) and, for contracts projects (SmithyPublish=true), their model files
+    (Source) and smithy-build.json (BuildFile). Called by _CollectSmithyItemsFromProjectReferences.
+    See designs/shape-ownership.md.
+  -->
+  <Target Name="GetSmithyShapeReferences" Returns="@(_SmithyShapeReference)">
+    <MSBuild
+      Projects="@(ProjectReference)"
+      Targets="GetSmithyShapeReferences"
+      Properties="BuildProjectReferences=false"
+      SkipNonexistentTargets="true"
+      RebaseOutputs="true"
+      Condition="'@(ProjectReference)' != ''"
+    >
+      <Output TaskParameter="TargetOutputs" ItemName="_SmithyReferencedShapeReference" />
+    </MSBuild>
+    <ItemGroup>
+      <_SmithyShapeReferenceCandidate
+        Include="$(SmithyBuildOutputPath)*/csharp-codegen/nsmithy-shapes.json"
+        SmithyKind="Manifest"
+        Condition="'$(_SmithyIsFSharp)' != 'true'"
+      />
+      <_SmithyShapeReferenceCandidate
+        Include="$(SmithySources)/**/*.smithy"
+        SmithyKind="Source"
+        Condition="'$(SmithyPublish)' == 'true'"
+      />
+      <_SmithyShapeReferenceCandidate
+        Include="$(MSBuildProjectDirectory)/smithy-build.json"
+        SmithyKind="BuildFile"
+        Condition="'$(SmithyPublish)' == 'true' and Exists('$(MSBuildProjectDirectory)/smithy-build.json')"
+      />
+      <_SmithyShapeReferenceCandidate Include="@(_SmithyReferencedShapeReference)" />
+    </ItemGroup>
+    <RemoveDuplicates Inputs="@(_SmithyShapeReferenceCandidate->'%(FullPath)')">
+      <Output TaskParameter="Filtered" ItemName="_SmithyShapeReference" />
+    </RemoveDuplicates>
+  </Target>
+
   <!-- ================================================================
        Pack integration — SmithyPublish=true only
        ================================================================ -->
@@ -306,6 +347,9 @@
 
   <PropertyGroup>
     <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">true</SmithyGenerateServer>
+    <!-- Whether the project generates the shapes in its own model files, also without
+         SmithyService (C# only). See designs/shape-ownership.md. -->
+    <SmithyGenerateShapes Condition="'$(SmithyGenerateShapes)' == ''">true</SmithyGenerateShapes>
     <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''"
       >false</SmithyEmitGeneratedFiles>
     <SmithyStampFile Condition="'$(SmithyStampFile)' == ''"
@@ -357,6 +401,21 @@
     >
       <Output TaskParameter="TargetOutputs" ItemName="SmithyContractsBuildFile" />
     </MSBuild>
+    <MSBuild
+      Projects="@(ProjectReference)"
+      Targets="GetSmithyShapeReferences"
+      Properties="BuildProjectReferences=false"
+      SkipNonexistentTargets="true"
+      RebaseOutputs="true"
+    >
+      <Output TaskParameter="TargetOutputs" ItemName="_SmithyShapeReferenceFromProjects" />
+    </MSBuild>
+    <ItemGroup>
+      <SmithyShapeManifest
+        Include="@(_SmithyShapeReferenceFromProjects)"
+        Condition="'%(_SmithyShapeReferenceFromProjects.SmithyKind)' == 'Manifest'"
+      />
+    </ItemGroup>
   </Target>
 
   <!--
@@ -381,6 +440,23 @@
     <PropertyGroup Condition="'$(SmithyPublish)' == 'true'">
       <_SmithyContractsGroupId>$(SmithyMavenGroupId)</_SmithyContractsGroupId>
     </PropertyGroup>
+    <!-- A project that generates code also gets the models of the contracts its references
+         reference, which the shapes it uses from them can target. A project that generates
+         nothing is left alone. -->
+    <ItemGroup Condition="'$(_SmithyEffectiveBuildFile)' != ''">
+      <_SmithyTransitiveSource
+        Include="@(_SmithyShapeReferenceFromProjects)"
+        Condition="'%(_SmithyShapeReferenceFromProjects.SmithyKind)' == 'Source'"
+      />
+      <_SmithyTransitiveSource Remove="@(SmithySource)" />
+      <SmithySource Include="@(_SmithyTransitiveSource)" />
+      <_SmithyTransitiveBuildFile
+        Include="@(_SmithyShapeReferenceFromProjects)"
+        Condition="'%(_SmithyShapeReferenceFromProjects.SmithyKind)' == 'BuildFile'"
+      />
+      <_SmithyTransitiveBuildFile Remove="@(SmithyContractsBuildFile)" />
+      <SmithyContractsBuildFile Include="@(_SmithyTransitiveBuildFile)" />
+    </ItemGroup>
     <Error
       Code="NSMITHYMAVEN"
       Text="NSmithy: SmithyMavenGroupId needs a smithy-build.json at the project root. The contracts JAR packages its sources."
@@ -399,6 +475,8 @@
       ContractsBuildFiles="@(SmithyContractsBuildFile)"
       Sources="@(SmithySource)"
       Service="$(SmithyService)"
+      GenerateShapes="$(SmithyGenerateShapes)"
+      ShapeManifests="@(SmithyShapeManifest)"
       GenerateClient="$(SmithyGenerateClient)"
       GenerateServer="$(SmithyGenerateServer)"
       GenerateDocs="$(SmithyGenerateDocs)"
@@ -489,7 +567,7 @@
   <Target
     Name="_SmithyGenerateCode"
     Condition="'$(_SmithyEffectiveBuildFile)' != '' and Exists('$(_SmithyEffectiveBuildFile)')"
-    Inputs="@(_SmithyGeneratorInput);@(SmithySource);@(SmithyContractsBuildFile);$(_SmithyEffectiveBuildFile)"
+    Inputs="@(_SmithyGeneratorInput);@(SmithySource);@(SmithyContractsBuildFile);@(SmithyShapeManifest);$(_SmithyEffectiveBuildFile)"
     Outputs="$(SmithyStampFile)"
   >
     <MakeDir Directories="$(SmithyBuildOutputPath)" />
@@ -662,7 +740,19 @@
         Exclude="@(_SmithyExcludedGeneratedCompile)"
         Visible="$(SmithyEmitGeneratedFiles)"
       />
+      <_SmithyGeneratedCompile Include="$(SmithyAllProjectionsGlob)" />
+      <_SmithyCoreReference
+        Include="@(ReferencePath)"
+        Condition="'%(ReferencePath.Filename)' == 'NSmithy.Core'"
+      />
     </ItemGroup>
+    <!-- Generated code needs the runtime. Since every project generates the shapes in its own model
+         files, a contracts project that only referenced NSmithy.MSBuild needs it too. -->
+    <Error
+      Code="NSMITHYRUNTIME"
+      Condition="'@(_SmithyGeneratedCompile)' != '' and '@(_SmithyCoreReference)' == ''"
+      Text="NSmithy: this project compiles code generated from its Smithy model, which needs the NSmithy.Core package. Add &lt;PackageReference Include=&quot;NSmithy.Core&quot; /&gt;, or set SmithyGenerateShapes to false if the project only validates and packages its model."
+    />
   </Target>
 
   <!--
