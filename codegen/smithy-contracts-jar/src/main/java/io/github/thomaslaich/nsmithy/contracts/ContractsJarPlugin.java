@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
@@ -58,8 +59,9 @@ public final class ContractsJarPlugin implements SmithyBuildPlugin {
 
   private static final String JAR_PREFIX = "META-INF/smithy/";
 
-  // Fixed entry time so the same model always produces the same JAR bytes.
-  private static final long ENTRY_TIME = 315_532_800_000L; // 1980-01-01T00:00:00Z
+  // Fixed local entry time, so the same model produces the same JAR bytes in any time zone. Gradle's
+  // reproducible-archive time: the JDK adds a time-zone-dependent extended timestamp before it.
+  private static final LocalDateTime ENTRY_TIME = LocalDateTime.of(1980, 2, 1, 0, 0);
 
   @Override
   public String getName() {
@@ -125,7 +127,7 @@ public final class ContractsJarPlugin implements SmithyBuildPlugin {
     try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
       for (Map.Entry<String, Path> entry : entries.entrySet()) {
         ZipEntry zipEntry = new ZipEntry(entry.getKey());
-        zipEntry.setTime(ENTRY_TIME);
+        zipEntry.setTimeLocal(ENTRY_TIME);
         zip.putNextEntry(zipEntry);
         zip.write(Files.readAllBytes(entry.getValue()));
         zip.closeEntry();

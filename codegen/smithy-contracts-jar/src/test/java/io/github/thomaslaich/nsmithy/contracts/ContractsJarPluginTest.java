@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -52,12 +53,73 @@ class ContractsJarPluginTest {
   }
 
   @Test
+  void jarDoesNotDependOnTimeZone() throws Exception {
+    TimeZone original = TimeZone.getDefault();
+    try {
+      TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+      String utc = manifestJar(run(COORDINATES));
+      TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Auckland"));
+      assertEquals(utc, manifestJar(run(COORDINATES)));
+    } finally {
+      TimeZone.setDefault(original);
+    }
+  }
+
+  @Test
   void pomDeclaresExplicitDependencies() throws Exception {
     String pom = run(COORDINATES).getFileString("hello-contracts-1.2.3.pom").orElseThrow();
 
     assertTrue(pom.contains("<groupId>io.github.acme</groupId>"), pom);
     assertTrue(pom.contains("<artifactId>smithy-aws-traits</artifactId>"), pom);
     assertEquals(1, pom.split("<dependency>", -1).length - 1, pom);
+  }
+
+  @Test
+  void rendersPom() throws Exception {
+    ObjectNode settings =
+        COORDINATES.withMember(
+            "dependencies",
+            Node.fromStrings(
+                "software.amazon.smithy:smithy-aws-traits:1.74.1", "com.example:a&b:1.0"));
+    String pom = run(settings).getFileString("hello-contracts-1.2.3.pom").orElseThrow();
+
+    assertEquals(
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project xmlns="http://maven.apache.org/POM/4.0.0" \
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
+        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 \
+        https://maven.apache.org/xsd/maven-4.0.0.xsd">
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>io.github.acme</groupId>
+          <artifactId>hello-contracts</artifactId>
+          <version>1.2.3</version>
+          <packaging>jar</packaging>
+          <dependencies>
+            <dependency>
+              <groupId>com.example</groupId>
+              <artifactId>a&amp;b</artifactId>
+              <version>1.0</version>
+            </dependency>
+            <dependency>
+              <groupId>software.amazon.smithy</groupId>
+              <artifactId>smithy-aws-traits</artifactId>
+              <version>1.74.1</version>
+            </dependency>
+          </dependencies>
+        </project>
+        """,
+        pom);
+  }
+
+  @Test
+  void rendersPomWithoutDependencies() throws Exception {
+    String pom =
+        run(COORDINATES.withMember("dependencies", Node.fromStrings()))
+            .getFileString("hello-contracts-1.2.3.pom")
+            .orElseThrow();
+
+    assertTrue(pom.endsWith("  <packaging>jar</packaging>\n</project>\n"), pom);
   }
 
   @Test
