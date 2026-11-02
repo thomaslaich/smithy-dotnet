@@ -11,6 +11,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.17.0]
+
+This release packages contracts as Maven JARs with the new `contracts-jar` Smithy build plugin.
+When upgrading, a contracts project that sets `SmithyMavenGroupId` must list the POM's dependencies
+in `plugins.contracts-jar.dependencies` of its `smithy-build.json` (`[]` for none), and publish the
+JAR and POM with Maven tooling instead of `dotnet nsmithy push`.
+
 ### Added
 
 - **`contracts-jar` Smithy build plugin** (`io.github.thomaslaich.nsmithy:smithy-contracts-jar`).
@@ -20,12 +27,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
-- **Contracts JARs are built by the `contracts-jar` plugin.** With `SmithyMavenGroupId` set, the
-  contracts project's build runs the plugin and `dotnet pack` copies its output next to the
-  `.nupkg`. The POM now requires an explicit
-  `plugins.contracts-jar.dependencies` list (`[]` for no external dependencies),
-  instead of copying every entry in `maven.dependencies`. `SmithyMavenGroupId` now requires a
-  `smithy-build.json` at the project root.
+- **BREAKING: Contracts JARs are built by the `contracts-jar` plugin.** With `SmithyMavenGroupId`
+  set, the contracts project's build runs the plugin and `dotnet pack` copies its output next to the
+  `.nupkg`. The POM declares the explicit `plugins.contracts-jar.dependencies` list (`[]` for no
+  external dependencies) instead of copying every entry in `maven.dependencies`.
+  `SmithyMavenGroupId` now requires a `smithy-build.json` at the project root.
 
 ### Deprecated
 
@@ -804,7 +810,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.14.0...v0.15.0
