@@ -59,7 +59,8 @@ public final class ContractsJarPlugin implements SmithyBuildPlugin {
 
   private static final String JAR_PREFIX = "META-INF/smithy/";
 
-  // Fixed local entry time, so the same model produces the same JAR bytes in any time zone. Gradle's
+  // Fixed local entry time, so the same model produces the same JAR bytes in any time zone.
+  // Gradle's
   // reproducible-archive time: the JDK adds a time-zone-dependent extended timestamp before it.
   private static final LocalDateTime ENTRY_TIME = LocalDateTime.of(1980, 2, 1, 0, 0);
 

@@ -34,7 +34,8 @@ final class Pom {
             ${dependencies:C|}
           </dependencies>
           ${/hasDependencies}
-        </project>""");
+        </project>\
+        """);
     return writer.toString();
   }
 
@@ -50,7 +51,8 @@ final class Pom {
           <groupId>${groupId:L}</groupId>
           <artifactId>${artifactId:L}</artifactId>
           <version>${version:L}</version>
-        </dependency>""");
+        </dependency>\
+        """);
     writer.popState();
   }
 
