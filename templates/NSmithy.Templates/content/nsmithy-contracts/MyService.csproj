@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" />
+    <!-- The project generates the types of its model, which consumers then share. -->
+    <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
     <!--#if (UseSmithyCliPackage)-->
     <!-- The Smithy CLI that code generation runs. Leave it out to use your own (SmithyCliPath or PATH). -->
     <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />

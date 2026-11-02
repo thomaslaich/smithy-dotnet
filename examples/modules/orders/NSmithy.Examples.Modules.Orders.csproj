@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Orders module: owns PlaceOrder and implements its handler. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+    <!-- Lets the projects that reference this one get its model. -->
+    <SmithyPublish>true</SmithyPublish>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" PrivateAssets="all" />
+    <!-- The generated types need only the core runtime: no ASP.NET Core, no protocol. -->
+    <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
+    <ProjectReference Include="../common/NSmithy.Examples.Modules.Common.csproj" />
+  </ItemGroup>
+</Project>
