@@ -11,6 +11,27 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **`contracts-jar` Smithy build plugin** (`io.github.thomaslaich.nsmithy:smithy-contracts-jar`).
+  Packages a projection's model as a Maven JAR, POM, and checksums from any `smithy build`, so
+  projects outside .NET publish contracts the same way. See
+  [Distributing contracts](https://thomaslaich.github.io/smithy-dotnet/guides/distributing-contracts/).
+
+### Changed
+
+- **Contracts JARs are built by the `contracts-jar` plugin.** With `SmithyMavenGroupId` set, the
+  contracts project's build runs the plugin and `dotnet pack` copies its output next to the
+  `.nupkg`. The POM now requires an explicit
+  `plugins.contracts-jar.dependencies` list (`[]` for no external dependencies),
+  instead of copying every entry in `maven.dependencies`. `SmithyMavenGroupId` now requires a
+  `smithy-build.json` at the project root.
+
+### Deprecated
+
+- **`dotnet nsmithy push`.** Publish the contracts JAR and POM with `mvn deploy:deploy-file` or
+  other Maven tooling.
+
 ## [0.16.0]
 
 This release generates F# types, schemas, clients, and servers, and authorizes server operations
