@@ -15,7 +15,7 @@ NSmithy generates C# and F# clients, ASP.NET Core servers, and model types from 
 
 ## Why Smithy
 
-Smithy is a protocol-agnostic interface definition language. A model describes a service's operations, data types, and errors once, independent of programming language. AWS defines its entire API surface in Smithy and generates its SDKs from it, and models can be linted, validated, and checked for breaking changes before any code exists. Smithy also has generators for Java, TypeScript, Go, Rust, Python, Kotlin, and Scala, so a .NET service can share one model with clients in those languages.
+[Smithy](https://smithy.io) is an interface definition language developed by AWS that lets you model all your APIs in a single contract language, with built-in linting, validation, breaking-change detection for safe evolution, and code generation across languages. A model describes operations, data types, and errors independent of programming language and wire protocol, so the same contract can be served over restJson1, rpcv2Cbor, gRPC, or a custom protocol of your own and shared with clients written in Java, TypeScript, Go, Rust, Python, Kotlin, or Scala.
 
 ## Example
 
