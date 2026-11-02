@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "NSmithy",
+  "classifications": [
+    "NSmithy",
+    "Smithy",
+    "Web",
+    "Server"
+  ],
+  "identity": "NSmithy.Templates.Server.FSharp",
+  "groupIdentity": "NSmithy.Templates.Server",
+  "name": "NSmithy Server",
+  "shortName": "nsmithy-server",
+  "sourceName": "MyService",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "F#",
+    "type": "project"
+  },
+  "symbols": {
+    "Protocol": {
+      "type": "parameter",
+      "datatype": "choice",
+      "choices": [
+        {
+          "choice": "restJson1",
+          "description": "aws.protocols#restJson1 — AWS REST/JSON protocol"
+        },
+        {
+          "choice": "simpleRestJson",
+          "description": "alloy#simpleRestJson — Alloy REST/JSON protocol"
+        },
+        {
+          "choice": "rpcv2Cbor",
+          "description": "smithy.protocols#rpcv2Cbor — Smithy RPC v2 CBOR protocol"
+        },
+        {
+          "choice": "grpc",
+          "description": "alloy.proto#grpc — gRPC protocol (experimental)"
+        }
+      ],
+      "defaultValue": "restJson1",
+      "description": "The Smithy protocol the service uses"
+    },
+    "ContractsProject": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "",
+      "replaces": "ContractsName",
+      "description": "Name of the sibling contracts project to reference (e.g. HelloWorld.Contracts). Omit to own the model directly."
+    },
+    "WithContractsProject": {
+      "type": "computed",
+      "value": "(ContractsProject != \"\")"
+    },
+    "WithDocs": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Add the Smithy docs endpoint (MapSmithyDocs)"
+    },
+    "UseSmithyCliPackage": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Reference NSmithy.SmithyCli, which provides the Smithy CLI and its Java runtime, instead of using the Smithy CLI on PATH"
+    },
+    "IsRestJson1": {
+      "type": "computed",
+      "value": "(Protocol == \"restJson1\")"
+    },
+    "IsSimpleRestJson": {
+      "type": "computed",
+      "value": "(Protocol == \"simpleRestJson\")"
+    },
+    "IsRpcv2Cbor": {
+      "type": "computed",
+      "value": "(Protocol == \"rpcv2Cbor\")"
+    },
+    "IsGrpc": {
+      "type": "computed",
+      "value": "(Protocol == \"grpc\")"
+    },
+    "IsHttp": {
+      "type": "computed",
+      "value": "(Protocol == \"restJson1\" || Protocol == \"simpleRestJson\")"
+    }
+  },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./"
+    },
+    {
+      "source": "../nsmithy-server/",
+      "target": "./",
+      "include": [
+        "model/**",
+        "smithy-build.json"
+      ],
+      "condition": "(!WithContractsProject)"
+    }
+  ],
+  "specialCustomOperations": {
+    "**/smithy-build.json": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if": [
+              "//#if"
+            ],
+            "else": [
+              "//#else"
+            ],
+            "elseif": [
+              "//#elseif"
+            ],
+            "endif": [
+              "//#endif"
+            ],
+            "trim": true,
+            "wholeLine": true,
+            "evaluator": "C++"
+          }
+        }
+      ]
+    },
+    "**/*.smithy": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if": [
+              "//#if"
+            ],
+            "else": [
+              "//#else"
+            ],
+            "elseif": [
+              "//#elseif"
+            ],
+            "endif": [
+              "//#endif"
+            ],
+            "trim": true,
+            "wholeLine": true,
+            "evaluator": "C++"
+          }
+        }
+      ]
+    },
+    "**/*.fs": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if": [
+              "//#if"
+            ],
+            "else": [
+              "//#else"
+            ],
+            "elseif": [
+              "//#elseif",
+              "//#elif"
+            ],
+            "endif": [
+              "//#endif"
+            ],
+            "trim": true,
+            "wholeLine": true,
+            "evaluator": "C++"
+          }
+        }
+      ]
+    }
+  }
+}

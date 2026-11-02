@@ -48,7 +48,7 @@
       <Code Type="Fragment" Language="cs">
         <![CDATA[
         var textExt = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { ".cs", ".csproj", ".json", ".smithy", ".props", ".targets", ".md", ".txt" };
+            { ".cs", ".csproj", ".fs", ".fsproj", ".json", ".smithy", ".props", ".targets", ".md", ".txt" };
         var srcFull = Path.GetFullPath(SourceDir);
         if (Directory.Exists(StageDir))
         {

@@ -3,6 +3,7 @@
   "author": "NSmithy",
   "classifications": ["NSmithy", "Smithy", "Client"],
   "identity": "NSmithy.Templates.Client.CSharp",
+  "groupIdentity": "NSmithy.Templates.Client",
   "name": "NSmithy Client",
   "shortName": "nsmithy-client",
   "sourceName": "MyService",
