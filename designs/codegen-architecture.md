@@ -53,7 +53,8 @@ smithy build (Smithy CLI)
       │     ├── OperationSchemaGenerator → <Operation>.g.cs
       │     ├── ServiceSchemaGenerator   → <Service>.Schema.g.cs
       │     ├── ClientGenerator          → <Service>.Client.g.cs
-      │     └── ServerGenerator          → <Service>.Server.g.cs
+      │     ├── ServerGenerator          → <Service>.Server.g.cs
+      │     └── OperationHandlerGenerator → <Operation>.Handler.Server.g.cs
       │
       ▼
   obj/Smithy/<projection>/csharp-codegen/**/*.g.cs
@@ -91,7 +92,7 @@ in the generated set:
 | `generateIntEnumShape` | `IntEnumGenerator` | `<Shape>.g.cs` |
 | `generateOperation` | `OperationSchemaGenerator` | `<Operation>.g.cs` |
 | `generateService` | `ServiceSchemaGenerator` | `<Service>.Schema.g.cs` |
-| `generateService` | `ClientGenerator` + `ServerGenerator` | `<Service>.Client.g.cs`, `<Service>.Server.g.cs` |
+| `generateService` | `ClientGenerator` + `ServerGenerator` + `OperationHandlerGenerator` | `<Service>.Client.g.cs`, `<Service>.Server.g.cs`, `<Operation>.Handler.Server.g.cs` |
 
 All files are written under the Smithy projection's output directory:
 `<SmithyBuildOutputPath>/<projection>/csharp-codegen/`.
@@ -430,7 +431,11 @@ Service files contain:
   service-level traits.
 - `<Service>.Client.g.cs` — typed async methods for each operation; binds
   protocol and transport at construction time.
-- `<Service>.Server.g.cs` — handler interfaces, a DI-registered
+- `<Operation>.Handler.Server.g.cs` — the operation's handler interface,
+  `I{Operation}Handler`, one file per operation. It depends only on the
+  operation.
+- `<Service>.Server.g.cs` — `I{Service}ServiceHandler`, which combines the
+  operation handler interfaces, a DI-registered
   `IServiceDefinition` holding the service's operation table, prompt
   definitions generated from `smithy.ai#prompts`, JSON Schema 2020-12
   companions for unary operations, and `Map{Service}`.

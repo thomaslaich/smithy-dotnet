@@ -9,6 +9,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeClientGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeHandlerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.OperationHandlerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.OperationSchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServerGenerator;
@@ -42,7 +43,9 @@ import software.amazon.smithy.codegen.core.directed.GenerateResourceDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateServiceDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateStructureDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateUnionDirective;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.EnumShape;
+import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
@@ -139,6 +142,15 @@ final class DirectedCSharpCodegen
               dir + "/" + typeName + ".Server.g.cs",
               csNamespace,
               writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
+      // Each operation's handler interface depends only on the operation, so it has a file of its
+      // own. The ".Handler.Server" suffix keeps it inside the MSBuild *.Server.g.cs globs.
+      for (OperationShape op : TopDownIndex.of(ctx.model()).getContainedOperations(service)) {
+        ctx.writerDelegator()
+            .useFileWriter(
+                dir + "/" + CSharpNaming.typeName(op.getId().getName()) + ".Handler.Server.g.cs",
+                csNamespace,
+                writer -> new OperationHandlerGenerator(ctx, writer, op).run());
+      }
     }
 
     // Opt-in fakes, one per generated surface: the fake handler implements the ".Server" half's

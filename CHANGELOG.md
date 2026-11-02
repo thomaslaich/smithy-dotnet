@@ -16,6 +16,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
   `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
   or its service declares. Other failures stay exceptions.
+- Each operation's server handler interface, `I{Operation}Handler`, is generated into a file of its
+  own, `{Operation}.Handler.Server.g.cs`, instead of `{Service}.Server.g.cs`. Names, namespaces, and
+  `SmithyGenerateServer` behave as before, so handler implementations compile unchanged.
 
 ## [0.17.0]
 

@@ -147,10 +147,12 @@ or a protocol. A `service` shape in the owned sources generates nothing unless
 ### Handler interfaces
 
 `I{Operation}Handler` depends only on its operation: its input, output, errors,
-and streaming members. It moves out of `{Service}.Server.g.cs` into its own
-file, `{Operation}.Handler.g.cs`, for every project, so that it can be
-generated without the service. Its name and namespace stay the same, so
-existing handler implementations compile unchanged.
+and streaming members. It already has its own file,
+`{Operation}.Handler.Server.g.cs`, next to `{Service}.Server.g.cs`, and the
+`.Server` suffix keeps it inside the MSBuild globs that `SmithyGenerateServer`
+controls. Today it is written with the service, in the service's namespace.
+With this design it is written with the operation, so that it can be generated
+without the service, in the operation's namespace. Its name stays the same.
 `I{Service}ServiceHandler`, which combines the operation interfaces, stays with
 the service.
 
@@ -279,11 +281,14 @@ This is a breaking change:
 - **Packaged contracts no longer need hand-written items.** Consumers that add
   `SmithySource` and `SmithyContractsBuildFile` by hand remove them; the
   package's `.props` file adds them, with the manifest.
-- **Handler interfaces move to their own files.** Their names and namespaces
-  stay.
+- **Handler interfaces follow their operation's namespace.** An operation
+  defined in another Smithy namespace than its service gets its handler
+  interface in that namespace instead of the service's. Operations in the
+  service's namespace see no change.
 
 A project with `SmithyService` that references no project or package with a
-manifest generates the same code as before, apart from the handler files.
+manifest generates the same code as before, apart from the namespace of
+handler interfaces for operations outside the service's namespace.
 
 ## Alternatives Considered
 

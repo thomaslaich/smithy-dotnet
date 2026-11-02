@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import software.amazon.smithy.build.FileManifest;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.ServiceShape;
@@ -562,6 +563,11 @@ final class ServerGeneratorTest {
     var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
 
     new ServerGenerator(context, writer, service).run();
+    // The handler interfaces have files of their own; render them too, so tests see the whole
+    // server surface.
+    for (var op : TopDownIndex.of(model).getContainedOperations(service)) {
+      new OperationHandlerGenerator(context, writer, op).run();
+    }
 
     return writer.toString();
   }

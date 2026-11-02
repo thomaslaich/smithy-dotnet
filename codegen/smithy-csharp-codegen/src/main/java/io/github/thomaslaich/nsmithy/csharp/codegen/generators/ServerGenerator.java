@@ -1,7 +1,7 @@
 /*
  * Server-side code generator. Emits:
- *   - one `I{Operation}Handler` per operation (streaming surface derived from the model)
- *   - aggregate `I{Service}ServiceHandler`
+ *   - aggregate `I{Service}ServiceHandler`, combining the `I{Operation}Handler` interfaces that
+ *     OperationHandlerGenerator writes to a file per operation
  *   - a DI-registered service definition that binds each independently registered operation
  *     handler into a protocol-neutral executable catalog
  *   - `{Service}ServiceServerExtensions` with AddXxxHandler<THandler>(IServiceCollection)
@@ -24,11 +24,8 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
-import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.ServiceIndex.AuthSchemeMode;
@@ -55,7 +52,6 @@ public final class ServerGenerator implements Runnable {
 
   @Override
   public void run() {
-    SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
     TopDownIndex idx = TopDownIndex.of(model);
     List<OperationShape> ops =
@@ -79,11 +75,6 @@ public final class ServerGenerator implements Runnable {
     String contract = serviceContractName(serviceTypeName);
     String aggInterface = "I" + contract + "Handler";
 
-    // Per-operation handler interfaces (streaming surface derived from the model).
-    for (OperationShape op : ops) {
-      writeOperationHandler(sp, op);
-    }
-
     String inherits =
         ops.isEmpty()
             ? ""
@@ -100,30 +91,6 @@ public final class ServerGenerator implements Runnable {
     writeServiceDefinition(ops, prompts, contract);
     writer.write("");
     writeServerExtensions(ops, contract, aggInterface, serverProtocols);
-  }
-
-  private void writeOperationHandler(SymbolProvider sp, OperationShape op) {
-    writer.writeXmlDocs(op, operationParameterDocs(op));
-    writer.pushState();
-    try {
-      writer.putContext("handler", opHandlerName(op));
-      writer.putContext(
-          "operation",
-          writer.consumer(w -> {
-            w.writeXmlDocs(op, operationParameterDocs(op));
-            w.write("$L;", serverOperationSignature(sp, op));
-          }));
-      writer.write(
-          """
-          public interface ${handler:L}
-          {
-              ${operation:C|}
-          }
-          """);
-    } finally {
-      writer.popState();
-    }
-    writer.write("");
   }
 
   // ---------------- DI registration ----------------
@@ -527,41 +494,6 @@ public final class ServerGenerator implements Runnable {
   }
 
   private String opHandlerName(OperationShape op) {
-    return "I" + CSharpNaming.typeName(op.getId().getName()) + "Handler";
-  }
-
-  private String serverOperationSignature(SymbolProvider sp, OperationShape op) {
-    Model model = context.model();
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
-    String inputType =
-        hasInput ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) : null;
-    String outputType =
-        hasOutput ? writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))) : null;
-    String returnType =
-        hasOutput
-            ? writer.typeName(RuntimeTypes.TASK) + "<" + outputType + ">"
-            : writer.typeName(RuntimeTypes.TASK);
-    String params = hasInput ? inputType + " input, " : "";
-    return writer.format(
-        "$L $L($L$T cancellationToken = default)",
-        returnType,
-        name,
-        params,
-        RuntimeTypes.CANCELLATION_TOKEN);
-  }
-
-  private Map<String, String> operationParameterDocs(OperationShape op) {
-    Model model = context.model();
-    if (ShapeSupport.isUnit(op.getInputShape())) {
-      return Map.of();
-    }
-    Map<String, String> docs = new LinkedHashMap<>();
-    model
-        .expectShape(op.getInputShape())
-        .getTrait(DocumentationTrait.class)
-        .ifPresent(trait -> docs.put("input", trait.getValue()));
-    return docs;
+    return OperationHandlerGenerator.handlerName(op);
   }
 }

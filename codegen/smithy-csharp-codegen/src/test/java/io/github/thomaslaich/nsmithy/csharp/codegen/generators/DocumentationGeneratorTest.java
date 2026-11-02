@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import software.amazon.smithy.build.FileManifest;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.EnumShape;
@@ -258,11 +259,11 @@ final class DocumentationGeneratorTest {
     var writer =
         new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
             .apply("test.g.cs", "Example.Weather");
-    new ServerGenerator(
-            context,
-            writer,
-            model.expectShape(ShapeId.from("example.weather#Weather"), ServiceShape.class))
-        .run();
+    var service = model.expectShape(ShapeId.from("example.weather#Weather"), ServiceShape.class);
+    new ServerGenerator(context, writer, service).run();
+    for (var op : TopDownIndex.of(model).getContainedOperations(service)) {
+      new OperationHandlerGenerator(context, writer, op).run();
+    }
     return writer.toString();
   }
 
