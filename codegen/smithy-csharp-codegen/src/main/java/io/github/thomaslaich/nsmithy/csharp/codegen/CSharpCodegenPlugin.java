@@ -18,6 +18,8 @@ import software.amazon.smithy.build.SmithyBuildPlugin;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.directed.CodegenDirector;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
+import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyUnstableApi;
@@ -69,8 +71,9 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
         service
             .map(shape -> additionalShapes(model, settings, shape, integrations))
             .orElseGet(TreeSet::new);
+    Set<ShapeId> owned = OwnedShapes.of(model, settings.ownedSources());
+    checkProvidedShapes(settings, service, owned, model);
     if (settings.generatesOwnedShapes()) {
-      Set<ShapeId> owned = OwnedShapes.of(model, settings.ownedSources());
       if (!ShapeClosures.configureOwned(runner, service, owned, additionalShapes)) {
         // Nothing to generate; the empty manifest still tells consumers this project owns nothing.
         new ShapeManifest().write(manifest);
@@ -81,6 +84,58 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
     }
 
     runner.run();
+  }
+
+  /**
+   * Fails when the provided shapes cannot be used as they are: a shape this project defines itself,
+   * a service rename that would give a provided shape another name, or a provided operation without
+   * the handler interface the service's server needs.
+   */
+  private static void checkProvidedShapes(
+      CSharpSettings settings, Optional<ServiceShape> service, Set<ShapeId> owned, Model model) {
+    ProvidedShapes provided = settings.providedShapes();
+    for (ShapeId id : owned) {
+      if (provided.contains(id)) {
+        throw new CodegenException(
+            "Shape "
+                + id
+                + " is defined in this project's own model files, but the shape manifest "
+                + provided.manifest(id).orElseThrow()
+                + " provides it too. A project's own manifest must not be passed to it.");
+      }
+    }
+    if (service.isEmpty()) {
+      return;
+    }
+    for (ShapeId id : service.get().getRename().keySet()) {
+      if (provided.contains(id)) {
+        throw new CodegenException(
+            "Service "
+                + service.get().getId()
+                + " renames "
+                + id
+                + ", but the shape manifest "
+                + provided.manifest(id).orElseThrow()
+                + " provides that shape under the name its own project gave it. Rename the shape"
+                + " in its own model instead.");
+      }
+    }
+    if (settings.generateServer()) {
+      for (OperationShape op :
+          TopDownIndex.of(model).getContainedOperations(service.get())) {
+        if (provided.contains(op.getId()) && provided.handler(op.getId()).isEmpty()) {
+          throw new CodegenException(
+              "Operation "
+                  + op.getId()
+                  + " of "
+                  + service.get().getId()
+                  + " is provided by the shape manifest "
+                  + provided.manifest(op.getId()).orElseThrow()
+                  + " without a handler interface. Generate the server in the project that owns"
+                  + " the operation (SmithyGenerateServer), or turn the server off here.");
+        }
+      }
+    }
   }
 
   private static Set<ShapeId> additionalShapes(

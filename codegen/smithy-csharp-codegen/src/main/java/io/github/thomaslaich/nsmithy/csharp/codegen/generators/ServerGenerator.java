@@ -498,7 +498,8 @@ public final class ServerGenerator implements Runnable {
    * namespace, so an operation from another namespace than the service's is qualified.
    */
   private String opHandlerName(OperationShape op) {
-    if (op.getId().getNamespace().equals(service.getId().getNamespace())) {
+    if (op.getId().getNamespace().equals(service.getId().getNamespace())
+        && !context.settings().providedShapes().contains(op.getId())) {
       return OperationHandlerGenerator.handlerName(op);
     }
     return writer.typeName(OperationHandlerGenerator.handlerSymbol(context.settings(), op));

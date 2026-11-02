@@ -93,12 +93,19 @@ public final class SchemaGenerator {
 
   public static String schemaClassName(
       CSharpWriter writer, GenerationContext context, Shape shape) {
-    return writer.typeName(schemaClass(schemaOwner(context, shape)));
+    return writer.typeName(schemaClassSymbol(context, shape));
   }
 
-  /** The symbol of the class holding a shape's schema. */
+  /**
+   * The symbol of the class holding a shape's schema: the one its manifest records when another
+   * project generated the shape.
+   */
   public static Symbol schemaClassSymbol(GenerationContext context, Shape shape) {
-    return schemaClass(schemaOwner(context, shape));
+    return context
+        .settings()
+        .providedShapes()
+        .schema(shape.getId())
+        .orElseGet(() -> schemaClass(schemaOwner(context, shape)));
   }
 
   /**
@@ -127,14 +134,14 @@ public final class SchemaGenerator {
 
   public static String operationSchemaAccessor(
       CSharpWriter writer, GenerationContext context, OperationShape shape) {
-    return writer.typeName(schemaClass(context.symbolProvider().toSymbol(shape))) + ".Schema";
+    return writer.typeName(schemaClassSymbol(context, shape)) + ".Schema";
   }
 
   public static String serviceSchemaAccessor(
       CSharpWriter writer,
       GenerationContext context,
       software.amazon.smithy.model.shapes.ServiceShape service) {
-    return writer.typeName(schemaClass(context.symbolProvider().toSymbol(service))) + ".Schema";
+    return writer.typeName(schemaClassSymbol(context, service)) + ".Schema";
   }
 
   public static String operationShapeType(

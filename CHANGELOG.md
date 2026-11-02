@@ -20,6 +20,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   [Shape ownership](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
 - **Shape manifest.** Every `csharp-codegen` run writes `nsmithy-shapes.json` next to the generated
   files: the shapes it generated and the C# type, schema class, and handler interface of each.
+- **Preview: `providedShapes` setting of `csharp-codegen`.** Lists the shape manifests of referenced
+  projects. The shapes they list are not generated again; generated code refers to the referenced
+  projects' types. A shape listed twice, a manifest from another NSmithy version, a service `rename`
+  of a provided shape, and a provided operation without the handler interface the server needs fail
+  code generation. MSBuild does not set it yet.
 
 ### Changed
 

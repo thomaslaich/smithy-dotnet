@@ -114,6 +114,9 @@ With `ownedSources`, operations are generated with their handler interfaces
 even without a service, and every service other than `service` generates
 nothing. See [shape-ownership.md](shape-ownership.md). Every run records what
 it generated in the shape manifest, `nsmithy-shapes.json`, next to its output.
+With `providedShapes`, shapes listed in referenced projects' manifests are left
+out of the generated set, and the symbol provider and schema references resolve
+them to the names their manifest records.
 
 When integrations add shapes to the service (`additionalShapes`), the plugin
 gives the director a closure of its own, `nsmithy.generated`: the configured

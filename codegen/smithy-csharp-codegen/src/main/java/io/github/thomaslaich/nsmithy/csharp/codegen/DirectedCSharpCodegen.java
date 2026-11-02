@@ -88,7 +88,8 @@ final class DirectedCSharpCodegen
     ServiceShape service = directive.shape();
     // A project generates only the service it names. Other services in its model, such as one in
     // a contracts project's own model files, generate nothing.
-    if (!ctx.settings().service().map(service.getId()::equals).orElse(false)) {
+    if (!ctx.settings().service().map(service.getId()::equals).orElse(false)
+        || isProvided(ctx, service)) {
       return;
     }
     List<CSharpServiceGenerator> serviceGenerators =
@@ -197,6 +198,9 @@ final class DirectedCSharpCodegen
   @Override
   public void generateStructure(
       GenerateStructureDirective<GenerationContext, CSharpSettings> directive) {
+    if (isProvided(directive.context(), directive.shape())) {
+      return;
+    }
     // smithy.api#Unit maps to the runtime SmithyUnit type, so no record is generated for it.
     if (ShapeSupport.isUnit(directive.shape().getId())) {
       return;
@@ -221,6 +225,9 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateError(GenerateErrorDirective<GenerationContext, CSharpSettings> directive) {
+    if (isProvided(directive.context(), directive.shape())) {
+      return;
+    }
     if (ShapeSupport.isValidationException(directive.shape().getId())) {
       return;
     }
@@ -245,6 +252,9 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateUnion(GenerateUnionDirective<GenerationContext, CSharpSettings> directive) {
+    if (isProvided(directive.context(), directive.shape())) {
+      return;
+    }
     directive
         .context()
         .writerDelegator()
@@ -265,6 +275,9 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateList(GenerateListDirective<GenerationContext, CSharpSettings> directive) {
+    if (isProvided(directive.context(), directive.shape())) {
+      return;
+    }
     writeSchema(
         directive.context(),
         directive.shape(),
@@ -273,6 +286,9 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateMap(GenerateMapDirective<GenerationContext, CSharpSettings> directive) {
+    if (isProvided(directive.context(), directive.shape())) {
+      return;
+    }
     writeSchema(
         directive.context(),
         directive.shape(),
@@ -282,6 +298,9 @@ final class DirectedCSharpCodegen
   @Override
   public void generateEnumShape(
       GenerateEnumDirective<GenerationContext, CSharpSettings> directive) {
+    if (isProvided(directive.context(), directive.shape())) {
+      return;
+    }
     // A string carrying the deprecated @enum trait reaches this directive too, but it stays a
     // `string` in the generated API: the symbol provider maps every string shape to `string`, and
     // an @enum entry is not even required to carry the name a C# type would need. Its value set
@@ -306,6 +325,9 @@ final class DirectedCSharpCodegen
   @Override
   public void generateIntEnumShape(
       GenerateIntEnumDirective<GenerationContext, CSharpSettings> directive) {
+    if (isProvided(directive.context(), directive.shape())) {
+      return;
+    }
     directive
         .context()
         .writerDelegator()
@@ -323,6 +345,9 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateOperation(GenerateOperationDirective<GenerationContext, CSharpSettings> d) {
+    if (isProvided(d.context(), d.shape())) {
+      return;
+    }
     // An operation has no C# type of its own, only a schema and its server handler interface.
     writeSchema(
         d.context(),
@@ -356,6 +381,11 @@ final class DirectedCSharpCodegen
     }
     return ctx.integrations().stream()
         .noneMatch(integration -> integration.serviceGenerator(ctx, service.get()).isPresent());
+  }
+
+  /** Whether another project generated {@code shape}, so this one refers to it instead. */
+  private static boolean isProvided(GenerationContext ctx, Shape shape) {
+    return ctx.settings().providedShapes().contains(shape.getId());
   }
 
   /** Records the C# type a shape is generated as in the shape manifest. */

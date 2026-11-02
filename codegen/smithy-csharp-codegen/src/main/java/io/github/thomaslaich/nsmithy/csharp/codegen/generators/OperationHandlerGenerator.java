@@ -8,6 +8,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
@@ -45,6 +46,10 @@ public final class OperationHandlerGenerator implements Runnable {
    * MSBuild globs that {@code SmithyGenerateServer} controls.
    */
   public static Symbol handlerSymbol(CSharpSettings settings, OperationShape op) {
+    Optional<Symbol> provided = settings.providedShapes().handler(op.getId());
+    if (provided.isPresent()) {
+      return provided.get();
+    }
     String namespace = settings.csharpNamespace(op.getId().getNamespace());
     String file =
         namespace.replace('.', '/')
