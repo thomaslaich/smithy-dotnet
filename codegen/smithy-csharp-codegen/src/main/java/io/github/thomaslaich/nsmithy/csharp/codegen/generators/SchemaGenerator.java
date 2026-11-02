@@ -96,6 +96,11 @@ public final class SchemaGenerator {
     return writer.typeName(schemaClass(schemaOwner(context, shape)));
   }
 
+  /** The symbol of the class holding a shape's schema. */
+  public static Symbol schemaClassSymbol(GenerationContext context, Shape shape) {
+    return schemaClass(schemaOwner(context, shape));
+  }
+
   /**
    * The schema class for a type: generated types keep theirs in the {@code Schemas} namespace,
    * while a runtime type the model binds to (such as the framework's validation exception) brings

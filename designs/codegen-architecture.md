@@ -108,6 +108,12 @@ The settings name a `service`, a `closure`, or both. A closure is a
 | `service` | Shapes the service reaches | Yes |
 | `closure` | Shapes in the closure | No; data shapes only |
 | Both | Shapes in the closure, which must contain the service | Yes |
+| `ownedSources`, no `closure` | Shapes defined in those files, operations included, plus the service's when one is set; everything they target | Only for `service` |
+
+With `ownedSources`, operations are generated with their handler interfaces
+even without a service, and every service other than `service` generates
+nothing. See [shape-ownership.md](shape-ownership.md). Every run records what
+it generated in the shape manifest, `nsmithy-shapes.json`, next to its output.
 
 When integrations add shapes to the service (`additionalShapes`), the plugin
 gives the director a closure of its own, `nsmithy.generated`: the configured

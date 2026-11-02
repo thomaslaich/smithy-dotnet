@@ -54,6 +54,9 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
 final class DirectedCSharpCodegen
     implements DirectedCodegen<GenerationContext, CSharpSettings, CSharpIntegration> {
 
+  /** What this run generated, written as the shape manifest once generation is done. */
+  private final ShapeManifest shapeManifest = new ShapeManifest();
+
   @Override
   public SymbolProvider createSymbolProvider(
       CreateSymbolProviderDirective<CSharpSettings> directive) {
@@ -83,6 +86,11 @@ final class DirectedCSharpCodegen
       GenerateServiceDirective<GenerationContext, CSharpSettings> directive) {
     GenerationContext ctx = directive.context();
     ServiceShape service = directive.shape();
+    // A project generates only the service it names. Other services in its model, such as one in
+    // a contracts project's own model files, generate nothing.
+    if (!ctx.settings().service().map(service.getId()::equals).orElse(false)) {
+      return;
+    }
     List<CSharpServiceGenerator> serviceGenerators =
         ctx.integrations().stream()
             .map(integration -> integration.serviceGenerator(ctx, service))
@@ -108,6 +116,8 @@ final class DirectedCSharpCodegen
             dir + "/" + typeName + ".Schema.g.cs",
             SchemaGenerator.schemaNamespace(csNamespace),
             writer -> new ServiceSchemaGenerator(writer, directive.shape()).run());
+    shapeManifest.add(
+        service.getId(), ShapeManifest.SCHEMA, SchemaGenerator.schemaClassSymbol(ctx, service));
 
     // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
     // include/exclude globs (*.Client.g.cs / *.Server.g.cs) can distinguish them from
@@ -142,15 +152,6 @@ final class DirectedCSharpCodegen
               dir + "/" + typeName + ".Server.g.cs",
               csNamespace,
               writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
-      // Each operation's handler interface depends only on the operation, so it has a file of its
-      // own. The ".Handler.Server" suffix keeps it inside the MSBuild *.Server.g.cs globs.
-      for (OperationShape op : TopDownIndex.of(ctx.model()).getContainedOperations(service)) {
-        ctx.writerDelegator()
-            .useFileWriter(
-                dir + "/" + CSharpNaming.typeName(op.getId().getName()) + ".Handler.Server.g.cs",
-                csNamespace,
-                writer -> new OperationHandlerGenerator(ctx, writer, op).run());
-      }
     }
 
     // Opt-in fakes, one per generated surface: the fake handler implements the ".Server" half's
@@ -206,6 +207,7 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new StructureGenerator(directive.context(), writer, directive.shape()).run());
+    recordType(directive.context(), directive.shape());
     writeSchema(
         directive.context(),
         directive.shape(),
@@ -229,6 +231,7 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new ErrorGenerator(directive.context(), writer, directive.shape()).run());
+    recordType(directive.context(), directive.shape());
     writeSchema(
         directive.context(),
         directive.shape(),
@@ -248,6 +251,7 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new UnionGenerator(directive.context(), writer, directive.shape()).run());
+    recordType(directive.context(), directive.shape());
     writeSchema(
         directive.context(),
         directive.shape(),
@@ -292,6 +296,7 @@ final class DirectedCSharpCodegen
         .context()
         .writerDelegator()
         .useShapeWriter(enumShape, writer -> new StringEnumGenerator(writer, enumShape).run());
+    recordType(directive.context(), enumShape);
     writeSchema(
         directive.context(),
         enumShape,
@@ -307,6 +312,7 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new IntEnumGenerator(writer, directive.shape().asIntEnumShape().get()).run());
+    recordType(directive.context(), directive.shape());
     writeSchema(
         directive.context(),
         directive.shape(),
@@ -317,19 +323,53 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateOperation(GenerateOperationDirective<GenerationContext, CSharpSettings> d) {
-    // An operation has no C# type of its own, only a schema.
+    // An operation has no C# type of its own, only a schema and its server handler interface.
     writeSchema(
         d.context(),
         d.shape(),
         writer -> new OperationSchemaGenerator(d.context(), writer, d.shape()).run());
+    if (generatesHandler(d.context(), d.shape())) {
+      Symbol handler = OperationHandlerGenerator.handlerSymbol(d.context().settings(), d.shape());
+      d.context()
+          .writerDelegator()
+          .useFileWriter(
+              handler.getDefinitionFile(),
+              handler.getNamespace(),
+              writer -> new OperationHandlerGenerator(d.context(), writer, d.shape()).run());
+      shapeManifest.add(d.shape().getId(), ShapeManifest.HANDLER, handler);
+    }
+  }
+
+  /**
+   * Whether an operation gets a server handler interface: whenever the server is generated, except
+   * for an operation of a service whose surface an integration's service generator replaces.
+   */
+  private static boolean generatesHandler(GenerationContext ctx, OperationShape op) {
+    if (!ctx.settings().generateServer()) {
+      return false;
+    }
+    Optional<ServiceShape> service =
+        ctx.settings().service().map(id -> ctx.model().expectShape(id, ServiceShape.class));
+    if (service.isEmpty()
+        || !TopDownIndex.of(ctx.model()).getContainedOperations(service.get()).contains(op)) {
+      return true;
+    }
+    return ctx.integrations().stream()
+        .noneMatch(integration -> integration.serviceGenerator(ctx, service.get()).isPresent());
+  }
+
+  /** Records the C# type a shape is generated as in the shape manifest. */
+  private void recordType(GenerationContext ctx, Shape shape) {
+    shapeManifest.add(shape.getId(), ShapeManifest.TYPE, ctx.symbolProvider().toSymbol(shape));
   }
 
   /**
    * Writes a shape's schema to a file beside the shape's type: {@code Person.g.cs} holds the type a
    * consumer uses, {@code Person.Schema.g.cs} the schema the runtime serializes it with.
    */
-  private static void writeSchema(
-      GenerationContext context, Shape shape, Consumer<CSharpWriter> body) {
+  private void writeSchema(GenerationContext context, Shape shape, Consumer<CSharpWriter> body) {
+    shapeManifest.add(
+        shape.getId(), ShapeManifest.SCHEMA, SchemaGenerator.schemaClassSymbol(context, shape));
     Symbol symbol = SchemaGenerator.schemaOwner(context, shape);
     String file = symbol.getDefinitionFile().replaceFirst("\\.g\\.cs$", ".Schema.g.cs");
     context
@@ -357,5 +397,7 @@ final class DirectedCSharpCodegen
       CustomizeDirective<GenerationContext, CSharpSettings> d) {}
 
   @Override
-  public void customizeAfterIntegrations(CustomizeDirective<GenerationContext, CSharpSettings> d) {}
+  public void customizeAfterIntegrations(CustomizeDirective<GenerationContext, CSharpSettings> d) {
+    shapeManifest.write(d.context().fileManifest());
+  }
 }

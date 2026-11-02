@@ -11,14 +11,26 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Preview: `ownedSources` setting of `csharp-codegen`.** Lists a project's own model files and
+  directories. Without `closure`, the project generates the shapes defined there, operations
+  included with their schemas and handler interfaces, and everything they target, also without a
+  service. MSBuild does not set it yet. See
+  [Shape ownership](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
+- **Shape manifest.** Every `csharp-codegen` run writes `nsmithy-shapes.json` next to the generated
+  files: the shapes it generated and the C# type, schema class, and handler interface of each.
+
 ### Changed
 
 - **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
   `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
   or its service declares. Other failures stay exceptions.
 - Each operation's server handler interface, `I{Operation}Handler`, is generated into a file of its
-  own, `{Operation}.Handler.Server.g.cs`, instead of `{Service}.Server.g.cs`. Names, namespaces, and
-  `SmithyGenerateServer` behave as before, so handler implementations compile unchanged.
+  own, `{Operation}.Handler.Server.g.cs`, instead of `{Service}.Server.g.cs`, and in the operation's
+  namespace. For operations in the service's namespace nothing else changes, so handler
+  implementations compile unchanged; an operation from another Smithy namespace now has its handler
+  interface in that namespace.
 
 ## [0.17.0]
 

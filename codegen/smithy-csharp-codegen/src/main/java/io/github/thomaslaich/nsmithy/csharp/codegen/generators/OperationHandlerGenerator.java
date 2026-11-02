@@ -2,11 +2,13 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
+import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.OperationShape;
@@ -35,6 +37,25 @@ public final class OperationHandlerGenerator implements Runnable {
   /** The name of an operation's handler interface. */
   public static String handlerName(OperationShape op) {
     return "I" + CSharpNaming.typeName(op.getId().getName()) + "Handler";
+  }
+
+  /**
+   * The symbol of an operation's handler interface. It lives in the operation's namespace, in a file
+   * of its own: {@code {Operation}.Handler.Server.g.cs}, whose ".Server" suffix keeps it inside the
+   * MSBuild globs that {@code SmithyGenerateServer} controls.
+   */
+  public static Symbol handlerSymbol(CSharpSettings settings, OperationShape op) {
+    String namespace = settings.csharpNamespace(op.getId().getNamespace());
+    String file =
+        namespace.replace('.', '/')
+            + "/"
+            + CSharpNaming.typeName(op.getId().getName())
+            + ".Handler.Server.g.cs";
+    return Symbol.builder()
+        .name(handlerName(op))
+        .namespace(namespace, ".")
+        .definitionFile(file)
+        .build();
   }
 
   @Override

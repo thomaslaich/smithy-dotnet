@@ -147,14 +147,15 @@ or a protocol. A `service` shape in the owned sources generates nothing unless
 ### Handler interfaces
 
 `I{Operation}Handler` depends only on its operation: its input, output, errors,
-and streaming members. It already has its own file,
-`{Operation}.Handler.Server.g.cs`, next to `{Service}.Server.g.cs`, and the
-`.Server` suffix keeps it inside the MSBuild globs that `SmithyGenerateServer`
-controls. Today it is written with the service, in the service's namespace.
-With this design it is written with the operation, so that it can be generated
-without the service, in the operation's namespace. Its name stays the same.
+and streaming members. It is generated with the operation, so a project
+without a service gets it too, into a file of its own,
+`{Operation}.Handler.Server.g.cs`, in the operation's namespace. The `.Server`
+suffix keeps it inside the MSBuild globs that `SmithyGenerateServer` controls,
+and `generateServer: false` leaves it out. An operation of a service whose
+surface an integration's service generator replaces gets none, as before.
 `I{Service}ServiceHandler`, which combines the operation interfaces, stays with
-the service.
+the service and refers to an operation from another namespace by its qualified
+name.
 
 ### The shape manifest
 
@@ -167,7 +168,6 @@ that represent it:
   "version": 1,
   "generator": "smithy-csharp-codegen",
   "generatorVersion": "0.18.0",
-  "assembly": "Acme.Shop.Orders",
   "shapes": {
     "acme.shop#PlaceOrder": {
       "schema": "Acme.Shop.Schemas.PlaceOrderSchema",
@@ -262,7 +262,7 @@ together with `SmithyService` fails the build.
 | --- | --- |
 | A project generates shapes and does not reference `NSmithy.Core` | The build fails and names the package to add. |
 | `SmithyGenerateShapes=false` is set together with `SmithyService` | The build fails. |
-| Two manifests list the same shape | Code generation fails and names both assemblies. |
+| Two manifests list the same shape | Code generation fails and names both manifests. |
 | A model file comes from a package that has a manifest, but the manifest is not provided | Code generation fails instead of generating the package's shapes again. |
 | The service's `rename` renames a provided shape | Code generation fails. The owning project generated the shape under its own name, so the rename cannot apply. |
 | A manifest's `generatorVersion` differs from the running plugin's | Code generation fails. Generated code from different versions may not fit together. |
@@ -321,7 +321,7 @@ The consumer could compute each provided shape's names from its shape id, as
 the symbol provider does for its own shapes, and only needs to know which
 shapes to skip. That breaks as soon as the owner and the consumer differ in
 `baseNamespace` or closure renames, or a collision suffix applies in one of
-them. It also gives the plugin no record of which assembly owns a shape.
+them. It also gives the plugin no record of which project owns a shape.
 
 ### Ownership by Smithy namespace
 

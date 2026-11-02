@@ -493,7 +493,14 @@ public final class ServerGenerator implements Runnable {
     return serviceTypeName.endsWith("Service") ? serviceTypeName : serviceTypeName + "Service";
   }
 
+  /**
+   * The handler interface of an operation as this file refers to it. It lives in the operation's
+   * namespace, so an operation from another namespace than the service's is qualified.
+   */
   private String opHandlerName(OperationShape op) {
-    return OperationHandlerGenerator.handlerName(op);
+    if (op.getId().getNamespace().equals(service.getId().getNamespace())) {
+      return OperationHandlerGenerator.handlerName(op);
+    }
+    return writer.typeName(OperationHandlerGenerator.handlerSymbol(context.settings(), op));
   }
 }

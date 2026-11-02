@@ -1,6 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.GeneratedCodeFormatter;
+import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeClosures;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -68,7 +69,16 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
         service
             .map(shape -> additionalShapes(model, settings, shape, integrations))
             .orElseGet(TreeSet::new);
-    ShapeClosures.configure(runner, model, service, settings.closure(), additionalShapes);
+    if (settings.generatesOwnedShapes()) {
+      Set<ShapeId> owned = OwnedShapes.of(model, settings.ownedSources());
+      if (!ShapeClosures.configureOwned(runner, service, owned, additionalShapes)) {
+        // Nothing to generate; the empty manifest still tells consumers this project owns nothing.
+        new ShapeManifest().write(manifest);
+        return;
+      }
+    } else {
+      ShapeClosures.configure(runner, model, service, settings.closure(), additionalShapes);
+    }
 
     runner.run();
   }
