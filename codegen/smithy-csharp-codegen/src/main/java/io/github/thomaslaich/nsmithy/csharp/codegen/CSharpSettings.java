@@ -181,7 +181,8 @@ public final class CSharpSettings {
 
   /**
    * Whether {@code ownedSources} selects the generated set: no closure is set, and either owned
-   * sources are listed or there is no service (an empty {@code ownedSources} then generates nothing).
+   * sources are listed or there is no service (an empty {@code ownedSources} then generates
+   * nothing).
    */
   public boolean generatesOwnedShapes() {
     return closure == null && (!ownedSources.isEmpty() || service == null);

@@ -55,10 +55,11 @@ public final class ShapeClosures {
   }
 
   /**
-   * Points {@code runner} at the shapes a project owns, plus the service and the shapes integrations
-   * add to it when there is a service. Everything those shapes target is generated with them. Unlike
-   * a closure without a service, operations are generated too, so a project without a service still
-   * gets its operations' schemas and handlers; services other than {@code service} generate nothing.
+   * Points {@code runner} at the shapes a project owns, plus the service and the shapes
+   * integrations add to it when there is a service. Everything those shapes target is generated
+   * with them. Unlike a closure without a service, operations are generated too, so a project
+   * without a service still gets its operations' schemas and handlers; services other than {@code
+   * service} generate nothing.
    *
    * @return false when there is nothing to generate: no owned shapes and no service.
    */

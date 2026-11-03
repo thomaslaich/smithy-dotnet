@@ -57,7 +57,8 @@ class ServiceGeneratorIntegrationTest {
   void eachOperationHandlerHasAFileOfItsOwn() {
     MockManifest manifest = generate(List.of(new PlainIntegration()));
 
-    String handler = manifest.expectFileString(Path.of("Example/Messaging/Send.Handler.Server.g.cs"));
+    String handler =
+        manifest.expectFileString(Path.of("Example/Messaging/Send.Handler.Server.g.cs"));
     assertTrue(handler.contains("namespace Example.Messaging;"), handler);
     assertTrue(handler.contains("public interface ISendHandler"), handler);
     assertTrue(

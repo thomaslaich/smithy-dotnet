@@ -41,9 +41,9 @@ public final class OperationHandlerGenerator implements Runnable {
   }
 
   /**
-   * The symbol of an operation's handler interface. It lives in the operation's namespace, in a file
-   * of its own: {@code {Operation}.Handler.Server.g.cs}, whose ".Server" suffix keeps it inside the
-   * MSBuild globs that {@code SmithyGenerateServer} controls.
+   * The symbol of an operation's handler interface. It lives in the operation's namespace, in a
+   * file of its own: {@code {Operation}.Handler.Server.g.cs}, whose ".Server" suffix keeps it
+   * inside the MSBuild globs that {@code SmithyGenerateServer} controls.
    */
   public static Symbol handlerSymbol(CSharpSettings settings, OperationShape op) {
     Optional<Symbol> provided = settings.providedShapes().handler(op.getId());

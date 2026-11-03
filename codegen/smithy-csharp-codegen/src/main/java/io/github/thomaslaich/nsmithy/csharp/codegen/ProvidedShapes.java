@@ -57,7 +57,8 @@ public final class ProvidedShapes {
             .getValue()
             .expectObjectNode()
             .getMembers()
-            .forEach((role, name) -> symbols.put(role.getValue(), name.expectStringNode().getValue()));
+            .forEach(
+                (role, name) -> symbols.put(role.getValue(), name.expectStringNode().getValue()));
         Entry previous = shapes.putIfAbsent(id, new Entry(path, symbols));
         if (previous != null) {
           throw new CodegenException(

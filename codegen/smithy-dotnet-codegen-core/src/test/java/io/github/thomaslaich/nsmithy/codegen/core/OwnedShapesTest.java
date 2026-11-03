@@ -70,8 +70,7 @@ final class OwnedShapesTest {
   void acceptsFilesAndAbsolutePaths() {
     String file = Path.of("common/common.smithy").toAbsolutePath().toString();
 
-    assertEquals(
-        Set.of(ShapeId.from("acme.shop#Money")), OwnedShapes.of(model(), List.of(file)));
+    assertEquals(Set.of(ShapeId.from("acme.shop#Money")), OwnedShapes.of(model(), List.of(file)));
   }
 
   @Test

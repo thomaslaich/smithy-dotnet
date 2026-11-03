@@ -139,7 +139,10 @@ class ShapeOwnershipIntegrationTest {
     assertTrue(manifest.hasFile(Path.of("Acme/Shop/PlaceOrder.Schema.g.cs")));
     assertFalse(manifest.hasFile(Path.of("Acme/Shop/PlaceOrder.Handler.Server.g.cs")));
     assertFalse(
-        shapes(manifest).expectObjectMember("acme.shop#PlaceOrder").getMember("handler").isPresent());
+        shapes(manifest)
+            .expectObjectMember("acme.shop#PlaceOrder")
+            .getMember("handler")
+            .isPresent());
   }
 
   @Test
@@ -188,7 +191,8 @@ class ShapeOwnershipIntegrationTest {
     assertTrue(handler.contains("namespace Acme.Orders;"), handler);
     String server = manifest.expectFileString(Path.of("Acme/Api/Api.Server.g.cs"));
     assertTrue(
-        server.contains("public interface IApiServiceHandler : global::Acme.Orders.IPlaceOrderHandler"),
+        server.contains(
+            "public interface IApiServiceHandler : global::Acme.Orders.IPlaceOrderHandler"),
         server);
   }
 
@@ -196,8 +200,7 @@ class ShapeOwnershipIntegrationTest {
   void settingsNeedAServiceAClosureOrOwnedSources() {
     ExpectationNotMetException exception =
         assertThrows(
-            ExpectationNotMetException.class,
-            () -> CSharpSettings.fromNode(Node.objectNode()));
+            ExpectationNotMetException.class, () -> CSharpSettings.fromNode(Node.objectNode()));
 
     assertTrue(exception.getMessage().contains("ownedSources"), exception.getMessage());
   }

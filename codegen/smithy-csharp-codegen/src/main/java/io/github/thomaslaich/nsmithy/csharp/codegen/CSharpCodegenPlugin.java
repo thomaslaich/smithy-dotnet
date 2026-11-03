@@ -121,8 +121,7 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
       }
     }
     if (settings.generateServer()) {
-      for (OperationShape op :
-          TopDownIndex.of(model).getContainedOperations(service.get())) {
+      for (OperationShape op : TopDownIndex.of(model).getContainedOperations(service.get())) {
         if (provided.contains(op.getId()) && provided.handler(op.getId()).isEmpty()) {
           throw new CodegenException(
               "Operation "

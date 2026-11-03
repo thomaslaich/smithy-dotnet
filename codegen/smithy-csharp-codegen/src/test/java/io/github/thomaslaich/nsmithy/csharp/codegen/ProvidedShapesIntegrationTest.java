@@ -64,11 +64,13 @@ class ProvidedShapesIntegrationTest {
 
   @Test
   void theServerUsesTheModuleNamesFromTheManifest() throws Exception {
-    String server = generateApi(ordersManifest(true)).expectFileString(Path.of("Acme/Shop/Shop.Server.g.cs"));
+    String server =
+        generateApi(ordersManifest(true)).expectFileString(Path.of("Acme/Shop/Shop.Server.g.cs"));
 
     // The handler interface comes from the module's namespace, which the file imports.
     assertTrue(server.contains("using Orders.Acme.Shop;"), server);
-    assertTrue(server.contains("public interface IShopServiceHandler : IPlaceOrderHandler"), server);
+    assertTrue(
+        server.contains("public interface IShopServiceHandler : IPlaceOrderHandler"), server);
     assertTrue(server.contains("GetRequiredService<IPlaceOrderHandler>()"), server);
     assertTrue(server.contains("global::Orders.Acme.Shop.Schemas.PlaceOrderSchema.Schema"), server);
     assertFalse(server.contains("global::Acme.Shop.Schemas.PlaceOrderSchema"), server);
@@ -76,7 +78,8 @@ class ProvidedShapesIntegrationTest {
 
   @Test
   void theClientUsesTheModuleTypes() throws Exception {
-    String client = generateApi(ordersManifest(true)).expectFileString(Path.of("Acme/Shop/Shop.Client.g.cs"));
+    String client =
+        generateApi(ordersManifest(true)).expectFileString(Path.of("Acme/Shop/Shop.Client.g.cs"));
 
     assertTrue(client.contains("global::Orders.Acme.Shop.PlaceOrderInput"), client);
     assertTrue(client.contains("global::Orders.Acme.Shop.PlaceOrderOutput"), client);
@@ -137,7 +140,8 @@ class ProvidedShapesIntegrationTest {
                     settings("Orders")
                         .withMember("ownedSources", ArrayNode.fromStrings(List.of("orders.smithy")))
                         .withMember(
-                            "providedShapes", ArrayNode.fromStrings(List.of(manifest.toString())))));
+                            "providedShapes",
+                            ArrayNode.fromStrings(List.of(manifest.toString())))));
 
     assertTrue(exception.getMessage().contains("own model files"), exception.getMessage());
   }
@@ -171,7 +175,8 @@ class ProvidedShapesIntegrationTest {
                     settings("")
                         .withMember("service", "acme.shop#Shop")
                         .withMember(
-                            "providedShapes", ArrayNode.fromStrings(List.of(manifest.toString())))));
+                            "providedShapes",
+                            ArrayNode.fromStrings(List.of(manifest.toString())))));
 
     assertTrue(exception.getMessage().contains("renames acme.shop#Money"), exception.getMessage());
   }
@@ -181,7 +186,8 @@ class ProvidedShapesIntegrationTest {
     CodegenException exception =
         assertThrows(CodegenException.class, () -> generateApi(ordersManifest(false)));
 
-    assertTrue(exception.getMessage().contains("without a handler interface"), exception.getMessage());
+    assertTrue(
+        exception.getMessage().contains("without a handler interface"), exception.getMessage());
   }
 
   @Test
