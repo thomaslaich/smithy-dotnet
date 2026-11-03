@@ -20,6 +20,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   [Shape ownership](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
 - **Shape manifest.** Every `csharp-codegen` run writes `nsmithy-shapes.json` next to the generated
   files: the shapes it generated and the C# type, schema class, and handler interface of each.
+- **Contracts packages import themselves.** A package packed from a project with `SmithyPublish=true`
+  contains the shape manifest and `buildTransitive/<PackageId>.props`, which declares its model,
+  build file, and manifest. A `PackageReference` is all a consumer needs: it uses the package's types
+  and generates only its client or server. Projects that reference the package without generating
+  code are unaffected, and hand-written `SmithySource` and `SmithyContractsBuildFile` items for the
+  package keep working.
 - **Preview: `providedShapes` setting of `csharp-codegen`.** Lists the shape manifests of referenced
   projects. The shapes they list are not generated again; generated code refers to the referenced
   projects' types. A shape listed twice, a manifest from another NSmithy version, a service `rename`

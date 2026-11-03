@@ -133,15 +133,17 @@ See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for 
 | Item | Description |
 | --- | --- |
 | `SmithySource` | `.smithy` files added to the sources of the effective `smithy-build.json`. Populated automatically from a `ProjectReference` to a project with `SmithyPublish=true`, or added manually for advanced cases. |
-| `SmithyContractsBuildFile` | Contract build configuration whose Maven dependencies, repositories, and suppressions are merged into the effective `smithy-build.json`. Collected automatically from a contracts project reference; set explicitly for packaged models. |
+| `SmithyContractsBuildFile` | Contract build configuration whose Maven dependencies, repositories, and suppressions are merged into the effective `smithy-build.json`. Collected automatically from a contracts project reference or package. |
+| `SmithyShapeManifest` | Shape manifests (`nsmithy-shapes.json`) of referenced projects and packages. The shapes they list are not generated again. Collected automatically. |
+| `SmithyPackageSource`, `SmithyPackageBuildFile`, `SmithyPackageShapeManifest` | Declared by a contracts package's `buildTransitive` props. Added to the items above only in projects that generate code. |
 
 ## Contract inputs
 
-A contracts project reference supplies model sources and its `smithy-build.json`
-automatically. NuGet packages require explicit `SmithySource` and
-`SmithyContractsBuildFile` items; a package reference alone is insufficient.
-See [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/)
-for both configurations.
+A contracts project reference or package supplies model sources, its
+`smithy-build.json`, and its shape manifest automatically, including those of
+the contracts it references. Model files a project still adds as `SmithySource`
+items by hand are not added twice. See
+[Distributing contracts](/smithy-dotnet/guides/distributing-contracts/).
 
 Declare Maven dependencies in `smithy-build.json` under `maven.dependencies`;
 see [Maven dependencies](/smithy-dotnet/reference/maven-dependencies/) for
