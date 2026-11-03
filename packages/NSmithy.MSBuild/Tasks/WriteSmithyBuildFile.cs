@@ -177,7 +177,9 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             else
                 inProjection = true;
         }
-        return elsewhere ? "elsewhere" : inProjection ? "projection" : "none";
+        return elsewhere ? "elsewhere"
+            : inProjection ? "projection"
+            : "none";
     }
 
     // Owned shapes apply when NSmithy's C# generator runs in one projection only: a file that runs

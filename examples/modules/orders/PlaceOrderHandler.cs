@@ -8,5 +8,6 @@ public sealed class PlaceOrderHandler : IPlaceOrderHandler
     public Task<PlaceOrderOutput> PlaceOrderAsync(
         PlaceOrderInput input,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(new PlaceOrderOutput($"order-{input.Total.Amount}-{input.Total.Currency}"));
+    ) =>
+        Task.FromResult(new PlaceOrderOutput($"order-{input.Total.Amount}-{input.Total.Currency}"));
 }
