@@ -235,36 +235,46 @@ shapes tagged `internal`.
    dotnet pack MyService.Contracts --configuration Release
    ```
 
-   With `SmithyPublish=true`, the package contains `build/smithy/` model sources
-   and `build/smithy-build.json`. Publish the `.nupkg` to your NuGet feed.
+   With `SmithyPublish=true`, the package contains:
 
-2. **Consume.** Request the package's resolved path and supply both the model
-   sources and packaged build configuration:
+   - the assembly with the types the contracts project generated;
+   - the model sources under `build/smithy/` and `build/smithy-build.json`;
+   - the shape manifest, `build/smithy/nsmithy-shapes.json`, which lists
+     those types;
+   - `buildTransitive/<PackageId>.props`, which declares the model and the
+     manifest to the projects that reference the package.
+
+   Publish the `.nupkg` to your NuGet feed.
+
+2. **Consume.** Reference the package:
 
    ```xml title="MyService.Client/MyService.Client.csproj"
    <PropertyGroup>
      <SmithyService>example.hello#HelloService</SmithyService>
+     <SmithyGenerateServer>false</SmithyGenerateServer>
    </PropertyGroup>
 
    <ItemGroup>
      <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
      <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
-     <PackageReference Include="MyService.Contracts" Version="1.0.0" GeneratePathProperty="true" />
-     <SmithySource Include="$(PkgMyService_Contracts)/build/smithy/**/*.smithy" />
-     <SmithyContractsBuildFile Include="$(PkgMyService_Contracts)/build/smithy-build.json" />
+     <PackageReference Include="MyService.Contracts" Version="1.0.0" />
    </ItemGroup>
    ```
 
-   NuGet replaces dots with underscores in the generated package-path property.
-   Adjust `PkgMyService_Contracts` when using a different package ID.
+   The project assembles its model with the package's, uses the package's
+   types, and generates only its client or server. Projects that reference the
+   package without generating code, such as an application that references the
+   client library, are unaffected.
 
 </Steps>
 
-:::note[Current limitation]
-NuGet contract packages currently require explicit model imports. Automatic
-imports through a normal `PackageReference` are an intended improvement.
-The configuration above is the current workaround.
-:::
+Every project that consumes a package's types must use the NSmithy version
+the package was built with: generated code from different versions may not fit
+together, and the build fails with a message naming both versions. A package
+whose consumers should generate its types themselves, for example in their own
+namespace or with another NSmithy version, is packed from a project with
+`SmithyGenerateShapes` set to `false`. It contains the model only, and its
+consumers generate its shapes.
 
 Keep the runtime packages required by the generated client or server. NSmithy
 merges the contract's build file into the effective `smithy-build.json` under

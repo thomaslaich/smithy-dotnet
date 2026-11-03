@@ -172,6 +172,41 @@
     />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(SmithyPublish)' == 'true'">
+    <TargetsForTfmSpecificContentInPackage
+      >$(TargetsForTfmSpecificContentInPackage);_SmithyPackShapeManifest</TargetsForTfmSpecificContentInPackage
+    >
+  </PropertyGroup>
+
+  <!--
+    Packs buildTransitive/<PackageId>.props, which declares the package's model and shape manifest
+    to every project that references it, so that a PackageReference is all a consumer needs; and
+    the shape manifest of SmithyProjection, so that consumers refer to the types the package's
+    assembly contains instead of generating them again. It runs at pack time, after the build wrote
+    the manifest and once PackageId is known. A project that generates no shapes
+    (SmithyGenerateShapes=false) has no manifest, and its consumers generate its shapes.
+  -->
+  <Target Name="_SmithyPackShapeManifest">
+    <PropertyGroup>
+      <!-- Next to these targets in the repository, under tools/ in the NSmithy.MSBuild package. -->
+      <_SmithyContractsPackageProps>$(MSBuildThisFileDirectory)NSmithy.ContractsPackage.props</_SmithyContractsPackageProps>
+      <_SmithyContractsPackageProps Condition="!Exists('$(_SmithyContractsPackageProps)')"
+        >$(MSBuildThisFileDirectory)../tools/NSmithy.ContractsPackage.props</_SmithyContractsPackageProps
+      >
+    </PropertyGroup>
+    <ItemGroup>
+      <TfmSpecificPackageFile
+        Include="$(_SmithyContractsPackageProps)"
+        PackagePath="buildTransitive/$(PackageId).props"
+      />
+      <TfmSpecificPackageFile
+        Include="$(SmithyGeneratedOutputPath)nsmithy-shapes.json"
+        PackagePath="build/smithy/nsmithy-shapes.json"
+        Condition="Exists('$(SmithyGeneratedOutputPath)nsmithy-shapes.json')"
+      />
+    </ItemGroup>
+  </Target>
+
   <!--
     After dotnet pack, put the Maven JAR, POM, and checksums next to the NuGet package. The build
     produced them: with SmithyMavenGroupId set, the effective smithy-build.json runs the
@@ -434,7 +469,7 @@
       <_SmithyProjectBuildFile Condition="Exists('$(SmithyBuildFile)')"
         >$(SmithyBuildFile)</_SmithyProjectBuildFile>
       <_SmithyEffectiveBuildFile
-        Condition="'$(_SmithyProjectBuildFile)' != '' or '@(SmithySource)' != ''"
+        Condition="'$(_SmithyProjectBuildFile)' != '' or '@(SmithySource)' != '' or ('$(SmithyService)' != '' and '@(SmithyPackageSource)' != '')"
         >$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'smithy-build.json'))</_SmithyEffectiveBuildFile>
     </PropertyGroup>
     <PropertyGroup Condition="'$(SmithyPublish)' == 'true'">
@@ -456,6 +491,15 @@
       />
       <_SmithyTransitiveBuildFile Remove="@(SmithyContractsBuildFile)" />
       <SmithyContractsBuildFile Include="@(_SmithyTransitiveBuildFile)" />
+      <!-- The same for contracts packages, whose props declare their model and manifest. Items
+           a project still adds by hand are not added twice. -->
+      <_SmithyPackageSource Include="@(SmithyPackageSource)" />
+      <_SmithyPackageSource Remove="@(SmithySource)" />
+      <SmithySource Include="@(_SmithyPackageSource)" />
+      <_SmithyPackageBuildFile Include="@(SmithyPackageBuildFile)" />
+      <_SmithyPackageBuildFile Remove="@(SmithyContractsBuildFile)" />
+      <SmithyContractsBuildFile Include="@(_SmithyPackageBuildFile)" />
+      <SmithyShapeManifest Include="@(SmithyPackageShapeManifest)" />
     </ItemGroup>
     <Error
       Code="NSMITHYMAVEN"
