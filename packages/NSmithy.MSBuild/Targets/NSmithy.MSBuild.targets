@@ -173,9 +173,7 @@
   </ItemGroup>
 
   <PropertyGroup Condition="'$(SmithyPublish)' == 'true'">
-    <TargetsForTfmSpecificContentInPackage
-      >$(TargetsForTfmSpecificContentInPackage);_SmithyPackShapeManifest</TargetsForTfmSpecificContentInPackage
-    >
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_SmithyPackShapeManifest</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
   <!--

@@ -569,7 +569,10 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     [Fact]
     public void ProjectWithoutServiceGeneratesItsOwnShapes()
     {
-        var project = WriteFile("smithy-build.json", """{ "version": "1.0", "sources": ["model"] }""");
+        var project = WriteFile(
+            "smithy-build.json",
+            """{ "version": "1.0", "sources": ["model"] }"""
+        );
 
         var (file, errors) = Write(task => task.ProjectBuildFile = project);
 
@@ -587,7 +590,10 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     [Fact]
     public void ProjectWithoutServiceKeepsGenerateServerFalse()
     {
-        var project = WriteFile("smithy-build.json", """{ "version": "1.0", "sources": ["model"] }""");
+        var project = WriteFile(
+            "smithy-build.json",
+            """{ "version": "1.0", "sources": ["model"] }"""
+        );
 
         var (file, errors) = Write(task =>
         {
@@ -613,7 +619,10 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     [Fact]
     public void GenerateShapesFalseOnlyValidatesTheModel()
     {
-        var project = WriteFile("smithy-build.json", """{ "version": "1.0", "sources": ["model"] }""");
+        var project = WriteFile(
+            "smithy-build.json",
+            """{ "version": "1.0", "sources": ["model"] }"""
+        );
 
         var (file, errors) = Write(task =>
         {
@@ -641,7 +650,10 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     [Fact]
     public void ServiceProjectGetsOwnedSourcesAndProvidedShapes()
     {
-        var project = WriteFile("smithy-build.json", """{ "version": "1.0", "sources": ["model"] }""");
+        var project = WriteFile(
+            "smithy-build.json",
+            """{ "version": "1.0", "sources": ["model"] }"""
+        );
         var manifest = Path.Combine(_directory, "orders", "nsmithy-shapes.json");
 
         var (file, errors) = Write(task =>
@@ -671,7 +683,10 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
 
         var (file, errors) = Write(task =>
         {
-            task.Sources = [new TaskItem(Path.Combine(_directory, "contracts", "model", "a.smithy"))];
+            task.Sources =
+            [
+                new TaskItem(Path.Combine(_directory, "contracts", "model", "a.smithy")),
+            ];
             task.Service = "example#Service";
             task.ShapeManifests = [new TaskItem(manifest)];
         });
@@ -760,7 +775,10 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     [Fact]
     public void FSharpProjectGetsNoOwnedShapes()
     {
-        var project = WriteFile("smithy-build.json", """{ "version": "1.0", "sources": ["model"] }""");
+        var project = WriteFile(
+            "smithy-build.json",
+            """{ "version": "1.0", "sources": ["model"] }"""
+        );
 
         var (file, errors) = Write(task =>
         {
