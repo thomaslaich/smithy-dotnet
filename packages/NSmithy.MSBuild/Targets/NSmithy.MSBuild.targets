@@ -556,7 +556,7 @@
   <Target
     Name="_SmithyRefreshMavenCache"
     BeforeTargets="_SmithyGenerateCode"
-    Condition="Exists('$(_SmithyBundledMavenRepo)')"
+    Condition="'$(_SmithyEffectiveBuildFile)' != '' and Exists('$(_SmithyBundledMavenRepo)')"
     Inputs="@(_SmithyGeneratorInput)"
     Outputs="$(_SmithyMavenCacheStamp)"
   >
