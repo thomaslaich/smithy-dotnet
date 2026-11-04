@@ -53,12 +53,11 @@ public final class ShapeManifest {
   /** Writes the manifest to {@code manifest}'s base directory. */
   public void write(FileManifest manifest) {
     ObjectNode.Builder shapeNodes = Node.objectNodeBuilder();
-    shapes.forEach(
-        (id, symbols) -> {
-          ObjectNode.Builder entry = Node.objectNodeBuilder();
-          symbols.forEach(entry::withMember);
-          shapeNodes.withMember(id.toString(), entry.build());
-        });
+    shapes.forEach((id, symbols) -> {
+      ObjectNode.Builder entry = Node.objectNodeBuilder();
+      symbols.forEach(entry::withMember);
+      shapeNodes.withMember(id.toString(), entry.build());
+    });
     ObjectNode node =
         Node.objectNodeBuilder()
             .withMember("version", FORMAT_VERSION)

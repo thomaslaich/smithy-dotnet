@@ -72,11 +72,10 @@ public final class OperationHandlerGenerator implements Runnable {
       writer.putContext("handler", handlerName(operation));
       writer.putContext(
           "operation",
-          writer.consumer(
-              w -> {
-                w.writeXmlDocs(operation, parameterDocs);
-                w.write("$L;", signature(context.symbolProvider()));
-              }));
+          writer.consumer(w -> {
+            w.writeXmlDocs(operation, parameterDocs);
+            w.write("$L;", signature(context.symbolProvider()));
+          }));
       writer.write(
           """
           public interface ${handler:L}
