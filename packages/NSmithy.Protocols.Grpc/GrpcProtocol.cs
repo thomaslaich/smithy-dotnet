@@ -274,12 +274,12 @@ public sealed class GrpcProtocol : IProtocol
         public bool StreamsRequestBody { get; } = Schemas.HasEventStreamMember(operation.Input);
 
         private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
-            operation.Errors,
+            service.ErrorsOf(operation),
             ErrorWriter.Instance
         );
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
-            HttpOperationError.Compile(operation.Errors, ErrorReader);
+            HttpOperationError.Compile(service.ErrorsOf(operation), ErrorReader);
 
         public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
 

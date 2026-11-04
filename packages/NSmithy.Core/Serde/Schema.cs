@@ -1156,24 +1156,6 @@ public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
 
     public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
 
-    /// <summary>
-    /// A copy of this schema that also declares <paramref name="errors"/>. An error it already
-    /// declares keeps its registration. A service uses this to add its service-level errors to an
-    /// operation that another project compiled without knowing the service.
-    /// </summary>
-    public OperationSchema<TInput, TOutput> WithErrors(IEnumerable<IOperationErrorSchema> errors)
-    {
-        ArgumentNullException.ThrowIfNull(errors);
-        return new(
-            Id,
-            Input,
-            Output,
-            [.. Errors, .. errors.Where(error => Errors.All(existing => existing.Id != error.Id))],
-            Traits.Values,
-            IsStreaming
-        );
-    }
-
     // Every operation implicitly carries smithy.framework#ValidationException: the server runtime
     // returns it when input validation fails, and clients must be able to deserialize it. A model
     // that declares the error itself keeps its own registration.
@@ -1214,19 +1196,27 @@ public sealed class OperationErrorSchema<TError>(
 /// <summary>
 /// Runtime schema for a service shape. Unlike <see cref="OperationSchema{TInput, TOutput}"/> this
 /// is deliberately service-scoped: it carries the service's shape id (so protocols can derive
-/// service-named wire artifacts such as the rpcv2Cbor request path) and its service-level traits.
-/// Operations remain service-agnostic and never reference a service.
+/// service-named wire artifacts such as the rpcv2Cbor request path), its service-level traits, and
+/// the errors every operation of the service can raise. Operations remain service-agnostic and
+/// never reference a service; a protocol bound to a service combines the two with
+/// <see cref="ErrorsOf"/>.
 /// </summary>
 public sealed class ServiceSchema
 {
     internal ServiceSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         : this(id, string.Empty, traits) { }
 
-    internal ServiceSchema(ShapeId id, string version, IEnumerable<Trait>? traits = null)
+    internal ServiceSchema(
+        ShapeId id,
+        string version,
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<IOperationErrorSchema>? errors = null
+    )
     {
         Id = id;
         Version = version ?? throw new ArgumentNullException(nameof(version));
         Traits = Trait.Index(traits);
+        Errors = errors?.ToArray() ?? [];
     }
 
     public ShapeId Id { get; }
@@ -1238,11 +1228,39 @@ public sealed class ServiceSchema
     /// </summary>
     public string Version { get; }
 
+    /// <summary>The errors every operation of the service can raise.</summary>
+    public IReadOnlyList<IOperationErrorSchema> Errors { get; }
+
     public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
 
     public Trait? GetTrait(ShapeId id) => Traits.TryGetValue(id, out var trait) ? trait : null;
 
     public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
+
+    /// <summary>
+    /// The errors <paramref name="operation"/> can raise in this service: its own and the
+    /// service's. An error it declares itself keeps its registration. Protocols fall back to the
+    /// first error whose status matches a response and then to the first error, so the list is
+    /// sorted by shape id with the validation error last, as generated operation schemas have it.
+    /// </summary>
+    public IReadOnlyList<IOperationErrorSchema> ErrorsOf(IOperationSchema operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        if (Errors.Count == 0)
+        {
+            return operation.Errors;
+        }
+
+        return
+        [
+            .. operation
+                .Errors.Concat(
+                    Errors.Where(error => operation.Errors.All(own => own.Id != error.Id))
+                )
+                .OrderBy(error => error.Id == ValidationExceptionSchema.Id)
+                .ThenBy(error => error.Id.ToString(), StringComparer.Ordinal),
+        ];
+    }
 }
 
 public static class Schemas
@@ -1399,8 +1417,9 @@ public static class Schemas
     public static ServiceSchema Service(
         ShapeId id,
         string version,
-        IEnumerable<Trait>? traits = null
-    ) => new(id, version, traits);
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<IOperationErrorSchema>? errors = null
+    ) => new(id, version, traits, errors);
 
     /// <summary>The members of <paramref name="source"/> for which <paramref name="include"/> holds.</summary>
     public static StructProjection<T, TBuilder> Project<T, TBuilder>(

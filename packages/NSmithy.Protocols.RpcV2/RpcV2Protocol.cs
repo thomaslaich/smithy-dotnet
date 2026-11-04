@@ -354,12 +354,12 @@ public abstract class RpcV2Protocol : IProtocol
         public bool StreamsRequestBody { get; } = Schemas.HasEventStreamMember(operation.Input);
 
         private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
-            operation.Errors,
+            service.ErrorsOf(operation),
             new ErrorWriter(protocol)
         );
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
-            HttpOperationError.Compile(operation.Errors, protocol.errorReader);
+            HttpOperationError.Compile(service.ErrorsOf(operation), protocol.errorReader);
 
         public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
 

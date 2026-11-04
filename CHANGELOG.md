@@ -24,14 +24,18 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   projects. The shapes they list are not generated again; generated code refers to the referenced
   projects' types. A shape listed twice, a manifest from another NSmithy version, a service `rename`
   of a provided error, and a provided operation without the handler interface the server needs fail
-  code generation. A service's errors apply to provided operations through
-  `OperationSchema.WithErrors`. MSBuild does not set it yet.
+  code generation. MSBuild does not set it yet.
 
 ### Changed
 
 - **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
   `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
   or its service declares. Other failures stay exceptions.
+- **BREAKING: a service's `errors` are on its `ServiceSchema`.** They are in `Errors` instead of
+  being copied into each operation's schema, and protocols combine the two when they bind an
+  operation (`ServiceSchema.ErrorsOf`). `{Operation}Schema.Schema.Errors` lists only the errors the
+  operation declares. `RestServiceProtocol` takes the `ServiceSchema` as its first constructor
+  argument.
 - Each operation's handler interface, `I{Operation}Handler`, is generated into a file of its own,
   `{Operation}.Handler.g.cs`, instead of `{Service}.Server.g.cs`, and in the operation's namespace.
   A project always generates the handler interfaces of the operations it owns, also with

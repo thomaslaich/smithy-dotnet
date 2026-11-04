@@ -74,7 +74,10 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             requestCodec = CodecFactory.FromSchema(operation.Input);
             responseCodec = CodecFactory.FromSchema(operation.Output);
             requestTransform = SmithyRequestModifiers.Compile(operation);
-            HttpErrors = HttpOperationError.Compile(operation.Errors, ErrorReader.Instance);
+            HttpErrors = HttpOperationError.Compile(
+                service.ErrorsOf(operation),
+                ErrorReader.Instance
+            );
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }

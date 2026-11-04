@@ -211,7 +211,8 @@ property starts at its modeled default, so an absent member keeps it.
 For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
 that references the input and output schemas, the operation traits, and the
 modeled error descriptors. For each service, it emits a `ServiceSchema` with
-the service shape id, version, and service-level traits.
+the service shape id, version, service-level traits, and the errors every
+operation of the service can raise.
 
 Server generation additionally binds each unary operation to JSON Schema
 2020-12 input and output documents in its `IServerOperation`. These describe

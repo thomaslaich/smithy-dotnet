@@ -240,12 +240,11 @@ unique within a service, because Smithy does not allow renaming operations.
 
 ### Service errors
 
-A service's `errors` apply to all its operations, but a provided operation's
-schema was compiled without knowing the service. For each provided operation,
-the service's schema class holds a copy with the service's errors added,
-`{Service}Schema.{Operation}Operation`, built with `OperationSchema.WithErrors`,
-and the client and server use that copy. Operation schemas themselves stay
-service-agnostic.
+Operation schemas are service-agnostic: they list the errors their operation
+declares, in the project that owns it. A service's `errors` are on its
+`ServiceSchema`. A protocol is bound to a service, so it combines the two when it
+binds an operation, with `ServiceSchema.ErrorsOf`. Every operation of a service
+gets its errors the same way, whichever project generated it.
 
 For modules to throw a service's error, it is defined in a project they
 reference.
