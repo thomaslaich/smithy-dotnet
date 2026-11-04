@@ -41,7 +41,7 @@ code path, and every MSBuild property means the same thing in every project.
 | Contract sources | `SmithySource` items, collected the same way. |
 | Shape manifests | `SmithyShapeManifest` items: the `nsmithy-shapes.json` of every C# project the project references, directly or transitively. See [shape-ownership.md](shape-ownership.md). |
 | Package contracts | `SmithyPackageSource`, `SmithyPackageBuildFile`, and `SmithyPackageShapeManifest` items, declared by the `buildTransitive` props of contracts packages and added to the items above when the project generates code. |
-| Generation properties | `SmithyService`, `SmithyGenerateShapes`, `SmithyGenerateClient`, `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, `SmithyGrpc`, and `SmithyProjection`. |
+| Generation properties | `SmithyService`, `SmithyGenerateCode`, `SmithyGenerateClient`, `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, `SmithyGrpc`, and `SmithyProjection`. |
 | Contract coordinates | `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and `PackageVersion` of a contracts project. |
 
 ## The effective build file
@@ -87,7 +87,7 @@ ways fails the build.
 
 | Plugin | Enabled by | Keys from properties |
 | --- | --- | --- |
-| `csharp-codegen` | `SmithyService`, or own model files and `SmithyGenerateShapes` | `service` ← `SmithyService`; `generateClient` ← `SmithyGenerateClient` and `generateServer` ← `SmithyGenerateServer` when `false`; `ownedSources` ← the project build file's `sources` and `imports`; `providedShapes` ← the shape manifests |
+| `csharp-codegen` | `SmithyService`, or own model files and `SmithyGenerateCode` | `service` ← `SmithyService`; `generateClient` ← `SmithyGenerateClient` and `generateServer` ← `SmithyGenerateServer` when `false`; `ownedSources` ← the project build file's `sources` and `imports`; `providedShapes` ← the shape manifests |
 | `docgen` | `SmithyGenerateDocs` | `service` ← `SmithyService` |
 | `openapi` | `SmithyOpenApiProtocol` | `service` ← `SmithyService`, `protocol` ← `SmithyOpenApiProtocol` |
 | `proto-codegen` | `SmithyGrpc` | `service` ← `SmithyService` |
@@ -109,7 +109,7 @@ A C# project generates the shapes in its own model files and references the
 shapes its references generated ([shape-ownership.md](shape-ownership.md)).
 `SmithyService` adds the service on top. A project without it still gets
 `csharp-codegen` with `ownedSources` when its build file lists sources and
-does not configure `csharp-codegen` itself; with `SmithyGenerateShapes` set to
+does not configure `csharp-codegen` itself; with `SmithyGenerateCode` set to
 `false`, it only validates its model. A build file that configures
 `csharp-codegen` in projections other than `SmithyProjection`, for example one
 per projection to generate several services, keeps its own settings and gets
@@ -164,7 +164,7 @@ in the NuGet package, never the effective build file. Its consumers therefore
 receive the model's settings and none of the contracts project's generation
 settings. Without `SmithyService`, a contracts project generates the shapes in
 its model, which its consumers then reference, and needs `NSmithy.Core`; with
-`SmithyGenerateShapes` set to `false`, its build only validates the model.
+`SmithyGenerateCode` set to `false`, its build only validates the model.
 
 With `SmithyMavenGroupId` set, the effective build file also runs NSmithy's
 `contracts-jar` plugin, which packages the projection's sources as a Maven JAR
@@ -185,7 +185,7 @@ left to Maven tooling.
 | `NSMITHYSERVICE` | `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, or `SmithyGrpc` is set without `SmithyService`. |
 | `NSMITHYPROJECTION` | `SmithyProjection` names a projection the project build file does not define. |
 | `NSMITHYDEPENDENCY` | Two inputs declare the same Maven artifact at different versions. |
-| `NSMITHYSHAPES` | `SmithyGenerateShapes` is `false` and `SmithyService` is set. |
+| `NSMITHYCODE` | `SmithyGenerateCode` is `false` and `SmithyService` is set. |
 | `NSMITHYRUNTIME` | A project compiles generated code but does not reference `NSmithy.Core`. |
 | `NSMITHYMAVEN` | `SmithyMavenGroupId` is set without `SmithyMavenArtifactId`, a version, or a project build file, or `dotnet pack` finds no JAR to copy. |
 

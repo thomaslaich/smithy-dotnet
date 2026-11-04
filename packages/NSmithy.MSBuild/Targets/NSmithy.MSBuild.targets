@@ -182,7 +182,7 @@
     the shape manifest of SmithyProjection, so that consumers refer to the types the package's
     assembly contains instead of generating them again. It runs at pack time, after the build wrote
     the manifest and once PackageId is known. A project that generates no shapes
-    (SmithyGenerateShapes=false) has no manifest, and its consumers generate its shapes.
+    (SmithyGenerateCode=false) has no manifest, and its consumers generate its shapes.
   -->
   <Target Name="_SmithyPackShapeManifest">
     <PropertyGroup>
@@ -382,7 +382,7 @@
     <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">true</SmithyGenerateServer>
     <!-- Whether the project generates the shapes in its own model files, also without
          SmithyService (C# only). See designs/shape-ownership.md. -->
-    <SmithyGenerateShapes Condition="'$(SmithyGenerateShapes)' == ''">true</SmithyGenerateShapes>
+    <SmithyGenerateCode Condition="'$(SmithyGenerateCode)' == ''">true</SmithyGenerateCode>
     <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''"
       >false</SmithyEmitGeneratedFiles>
     <SmithyStampFile Condition="'$(SmithyStampFile)' == ''"
@@ -517,7 +517,7 @@
       ContractsBuildFiles="@(SmithyContractsBuildFile)"
       Sources="@(SmithySource)"
       Service="$(SmithyService)"
-      GenerateShapes="$(SmithyGenerateShapes)"
+      GenerateCode="$(SmithyGenerateCode)"
       ShapeManifests="@(SmithyShapeManifest)"
       GenerateClient="$(SmithyGenerateClient)"
       GenerateServer="$(SmithyGenerateServer)"
@@ -793,7 +793,7 @@
     <Error
       Code="NSMITHYRUNTIME"
       Condition="'@(_SmithyGeneratedCompile)' != '' and '@(_SmithyCoreReference)' == ''"
-      Text="NSmithy: this project compiles code generated from its Smithy model, which needs the NSmithy.Core package. Add &lt;PackageReference Include=&quot;NSmithy.Core&quot; /&gt;, or set SmithyGenerateShapes to false if the project only validates and packages its model."
+      Text="NSmithy: this project compiles code generated from its Smithy model, which needs the NSmithy.Core package. Add &lt;PackageReference Include=&quot;NSmithy.Core&quot; /&gt;, or set SmithyGenerateCode to false if the project only validates and packages its model."
     />
   </Target>
 
