@@ -189,8 +189,7 @@
       <!-- Next to these targets in the repository, under tools/ in the NSmithy.MSBuild package. -->
       <_SmithyContractsPackageProps>$(MSBuildThisFileDirectory)NSmithy.ContractsPackage.props</_SmithyContractsPackageProps>
       <_SmithyContractsPackageProps Condition="!Exists('$(_SmithyContractsPackageProps)')"
-        >$(MSBuildThisFileDirectory)../tools/NSmithy.ContractsPackage.props</_SmithyContractsPackageProps
-      >
+        >$(MSBuildThisFileDirectory)../tools/NSmithy.ContractsPackage.props</_SmithyContractsPackageProps>
     </PropertyGroup>
     <ItemGroup>
       <TfmSpecificPackageFile
