@@ -9,13 +9,9 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Quick start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)** · **[Examples](examples/README.md)** · **[Design docs](designs/README.md)** · **[Changelog](CHANGELOG.md)**
 
-NSmithy generates C# and F# clients, ASP.NET Core servers, and model types from [Smithy](https://smithy.io) models as part of `dotnet build`. There is no separate codegen step, and a client and server generated from the same model agree on routes, serialization, and errors.
+NSmithy generates clients, ASP.NET Core servers, and model types in C# and F# from [Smithy](https://smithy.io) models as part of `dotnet build`. Smithy is a language-neutral interface definition language from AWS ([why Smithy?](https://thomaslaich.github.io/smithy-dotnet/getting-started/introduction/#why-smithy)). There is no separate codegen step, and a client and server generated from the same model agree on routes, serialization, and errors.
 
 > **Preview:** expect some API changes before 1.0.
-
-## Why Smithy
-
-[Smithy](https://smithy.io) is an interface definition language developed by AWS that lets you model all your APIs in a single contract language, with built-in linting, validation, breaking-change detection for safe evolution, and code generation across languages. A model describes operations, data types, and errors independent of programming language and wire protocol, so the same contract can be served over restJson1, rpcv2Cbor, gRPC, or a custom protocol of your own and shared with clients written in Java, TypeScript, Go, Rust, Python, Kotlin, or Scala.
 
 ## Example
 
