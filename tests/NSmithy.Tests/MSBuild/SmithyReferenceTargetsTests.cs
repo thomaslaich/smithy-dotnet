@@ -40,16 +40,28 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
+    private const string ItemsProbe = """
+        <Message Importance="high" Text="SOURCE %(SmithySource.Identity)" Condition="'@(SmithySource)' != ''" />
+        <Message Importance="high" Text="BUILDFILE %(SmithyContractsBuildFile.Identity)" Condition="'@(SmithyContractsBuildFile)' != ''" />
+        <Message Importance="high" Text="EFFECTIVE $(_SmithyEffectiveBuildFile)" Condition="'$(_SmithyEffectiveBuildFile)' != ''" />
+        """;
+
+    private static readonly string[] ContractsItems =
+    [
+        "BUILDFILE contracts/smithy-build.json",
+        "SOURCE contracts/model/nested/ast.json",
+        "SOURCE contracts/model/orders.smithy",
+        "SOURCE contracts/shared/money.smithy",
+    ];
+
     [Fact]
-    public async Task DirectReferenceContributesTheModelItsBuildFileNames()
+    public async Task ServiceProjectGetsTheModelItsReferenceNames()
     {
         WriteProject(
             "server",
+            "<SmithyService>acme#Shop</SmithyService>",
             references: ["contracts", "plain"],
-            probe: """
-            <Message Importance="high" Text="SOURCE %(SmithySource.Identity)" Condition="'@(SmithySource)' != ''" />
-            <Message Importance="high" Text="BUILDFILE %(SmithyContractsBuildFile.Identity)" Condition="'@(SmithyContractsBuildFile)' != ''" />
-            """
+            probe: ItemsProbe
         );
 
         var result = await ProbeAsync("server");
@@ -57,41 +69,43 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
         Assert.Equal(0, result.ExitCode);
         Assert.DoesNotContain("MSB5029", result.Output);
         Assert.Equal(
-            [
-                "BUILDFILE contracts/smithy-build.json",
-                "SOURCE contracts/model/nested/ast.json",
-                "SOURCE contracts/model/orders.smithy",
-                "SOURCE contracts/shared/money.smithy",
-            ],
-            Lines(result, "SOURCE", "BUILDFILE")
+            [ContractsItems[0], "EFFECTIVE server/obj/smithy-build.json", .. ContractsItems[1..]],
+            Lines(result, "SOURCE", "BUILDFILE", "EFFECTIVE")
         );
     }
 
     [Fact]
-    public async Task TransitiveReferenceContributesOnlyIndirectItems()
+    public async Task ServiceProjectGetsTheModelsItsReferencesReach()
     {
         WriteProject("server", references: ["contracts"]);
         WriteProject(
-            "tests",
+            "client",
+            "<SmithyService>acme#Shop</SmithyService>",
             references: ["server"],
-            probe: """
-            <Message Importance="high" Text="SOURCE %(SmithySource.Identity)" Condition="'@(SmithySource)' != ''" />
-            <Message Importance="high" Text="INDIRECT %(_SmithyIndirectReference.SmithyKind) %(_SmithyIndirectReference.Identity)" Condition="'@(_SmithyIndirectReference)' != ''" />
-            """
+            probe: ItemsProbe
         );
+
+        var result = await ProbeAsync("client");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            [ContractsItems[0], "EFFECTIVE client/obj/smithy-build.json", .. ContractsItems[1..]],
+            Lines(result, "SOURCE", "BUILDFILE", "EFFECTIVE")
+        );
+    }
+
+    [Fact]
+    public async Task ProjectWithoutModelOrServiceGeneratesNothingFromItsReferences()
+    {
+        // An implementation or test project: it uses the shapes the contracts project generated.
+        WriteProject("server", references: ["contracts"]);
+        WriteProject("tests", references: ["contracts", "server"], probe: ItemsProbe);
 
         var result = await ProbeAsync("tests");
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal(
-            [
-                "INDIRECT BuildFile contracts/smithy-build.json",
-                "INDIRECT Source contracts/model/nested/ast.json",
-                "INDIRECT Source contracts/model/orders.smithy",
-                "INDIRECT Source contracts/shared/money.smithy",
-            ],
-            Lines(result, "SOURCE", "INDIRECT")
-        );
+        Assert.Empty(Lines(result, "SOURCE", "BUILDFILE", "EFFECTIVE"));
+        Assert.False(File.Exists(Path.Combine(_directory, "tests", "obj", "smithy-build.json")));
     }
 
     [Fact]
@@ -121,7 +135,7 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
     public async Task ProjectThatNoLongerGeneratesRemovesItsShapeManifest()
     {
         // Left over from a build that generated code: the project has since lost its model.
-        WriteFile("plain/Smithy/source/csharp-codegen/nsmithy-shapes.json", "{}");
+        WriteFile("plain/obj/Smithy/source/csharp-codegen/nsmithy-shapes.json", "{}");
 
         var result = await DotnetProcess.RunAsync(
             _directory,
@@ -140,6 +154,7 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
                 Path.Combine(
                     _directory,
                     "plain",
+                    "obj",
                     "Smithy",
                     "source",
                     "csharp-codegen",
@@ -203,7 +218,7 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
         var probeTarget = probe is null
             ? ""
             : $"""
-                <Target Name="Probe" DependsOnTargets="_CollectSmithyItemsFromProjectReferences">
+                <Target Name="Probe" DependsOnTargets="_PrepareSmithyBuildFile">
                   {probe}
                 </Target>
                 """;
@@ -213,6 +228,7 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
             <Project>
               <PropertyGroup>
                 <Configuration>{DotnetProcess.Configuration}</Configuration>
+                <IntermediateOutputPath>obj/</IntermediateOutputPath>
                 {properties}
               </PropertyGroup>
               <ItemGroup>{referenceItems}</ItemGroup>

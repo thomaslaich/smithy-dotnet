@@ -81,6 +81,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - A project that references a project using only `NSmithy.Client` no longer fails with `MSB5029`,
   a wildcard that enumerated every file on the drive.
+- A project with no model files and no `SmithyService` generates nothing, whatever its references
+  publish. Before, one that got the NSmithy targets, for example through `NSmithy.Client`, and
+  referenced a `SmithyPublish` project failed with "SmithyService must be set", although the
+  referenced project had generated the shapes it needs. `GetSmithyShapeReferences` no longer marks
+  items `SmithyDirect`: a project that generates code takes every contract its references reach.
 
 ## [0.17.0]
 

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Orders module: owns PlaceOrder, generates its handler interface, and implements it. It knows
+       nothing about the service and depends on NSmithy.Core only. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <SmithyPublish>true</SmithyPublish>
+    <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Common/Ownership.Common.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+  </ItemGroup>
+  <Import Project="../../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />
+</Project>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The service: ties the modules' operations into one restJson1 API. It generates the server
+       and the client of the service; the modules' shapes and handler interfaces come from their
+       assemblies. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <SmithyService>example.shop#Shop</SmithyService>
+    <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Orders/Ownership.Orders.csproj" />
+    <ProjectReference Include="../Payments/Ownership.Payments.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
+  </ItemGroup>
+  <Import Project="../../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />
+</Project>

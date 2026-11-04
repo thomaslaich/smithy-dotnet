@@ -59,8 +59,9 @@ It is assembled in this order:
    Repositories keep all their settings, credentials and proxies included; the
    first entry for a URL wins.
    `SmithySource` items are added to `sources` as absolute paths. A project
-   that generates code also gets the sources and build files of the contracts
-   its references reference, which the shapes it uses from them can target.
+   generates code when it has a project build file or `SmithyService` is set;
+   only then does it get the sources and build files of every contract its
+   references reach, which the shapes it uses from them can target.
 3. **Repositories.** When neither the project nor a contract lists a Maven
    repository, Maven Central is listed, as the plain Smithy CLI assumes it. The
    [bundled repository](#bundled-maven-repository) is searched before any
