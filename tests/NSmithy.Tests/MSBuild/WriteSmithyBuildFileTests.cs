@@ -624,14 +624,32 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
             """{ "version": "1.0", "sources": ["model"] }"""
         );
 
+        WriteSmithyBuildFile? written = null;
         var (file, errors) = Write(task =>
         {
             task.ProjectBuildFile = project;
             task.GenerateCode = false;
+            written = task;
         });
 
         Assert.Empty(errors);
         Assert.Null(file["projections"]?["source"]?["plugins"]?["csharp-codegen"]);
+        // The build then expects no generated files, so it does not fail for finding none.
+        Assert.False(written!.RunsCodeGenerator);
+    }
+
+    [Fact]
+    public void ServiceRunsTheCodeGenerator()
+    {
+        WriteSmithyBuildFile? written = null;
+        var (_, errors) = Write(task =>
+        {
+            task.Service = "example#Service";
+            written = task;
+        });
+
+        Assert.Empty(errors);
+        Assert.True(written!.RunsCodeGenerator);
     }
 
     [Fact]

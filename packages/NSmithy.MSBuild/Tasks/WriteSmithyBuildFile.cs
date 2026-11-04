@@ -97,6 +97,13 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     [Required]
     public string OutputFile { get; set; } = "";
 
+    /// <summary>
+    /// Whether the effective build file runs a code generator (<see cref="Plugin"/> or the
+    /// Protobuf plugin) in any projection, so that the build expects generated files.
+    /// </summary>
+    [Output]
+    public bool RunsCodeGenerator { get; private set; }
+
     public override bool Execute()
     {
         try
@@ -487,6 +494,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                     foreach (var (name, _) in plugins)
                         names.Add(name);
 
+        RunsCodeGenerator = names.Contains(Plugin) || names.Contains(ProtoPlugin);
         if (names.Contains(CSharpPlugin))
         {
             dependencies.Add(

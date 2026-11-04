@@ -130,7 +130,7 @@
     </MSBuild>
     <ItemGroup>
       <_SmithyShapeReferenceCandidate
-        Include="$(SmithyBuildOutputPath)*/csharp-codegen/nsmithy-shapes.json"
+        Include="$(_SmithyAllManifestsGlob)"
         SmithyKind="Manifest"
         SmithyDirect="true"
         Condition="'$(_SmithyIsFSharp)' != 'true'"
@@ -267,6 +267,9 @@
       >$(SmithyBuildOutputPath)$(SmithyProjection)/$(SmithyPlugin)/</SmithyGeneratedOutputPath>
     <SmithyAllProjectionsGlob Condition="'$(SmithyAllProjectionsGlob)' == ''"
       >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.$(_SmithyGeneratedExtension)</SmithyAllProjectionsGlob>
+    <!-- The shape manifests csharp-codegen writes: generated output like the code, so a run that no
+         longer writes one removes it, and consumers never see shapes the assembly does not have. -->
+    <_SmithyAllManifestsGlob>$(SmithyBuildOutputPath)*/csharp-codegen/nsmithy-shapes.json</_SmithyAllManifestsGlob>
     <SmithyProtoPlugin Condition="'$(SmithyProtoPlugin)' == ''">proto-codegen</SmithyProtoPlugin>
     <SmithyAllProtosGlob Condition="'$(SmithyAllProtosGlob)' == ''"
       >$(SmithyBuildOutputPath)*/$(SmithyProtoPlugin)/**/*.proto</SmithyAllProtosGlob>
@@ -529,7 +532,15 @@
       SmithyVersion="$(SmithyVersion)"
       OutputFile="$(_SmithyEffectiveBuildFile)"
       Condition="'$(_SmithyEffectiveBuildFile)' != ''"
-    />
+    >
+      <Output TaskParameter="RunsCodeGenerator" PropertyName="_SmithyRunsCodeGenerator" />
+    </WriteSmithyBuildFile>
+    <!-- A project that no longer generates anything runs no CLI that could remove its old shape
+         manifests, which its references and its package would otherwise still offer. -->
+    <ItemGroup Condition="'$(_SmithyEffectiveBuildFile)' == ''">
+      <_SmithyLeftoverManifest Include="$(_SmithyAllManifestsGlob)" />
+    </ItemGroup>
+    <Delete Files="@(_SmithyLeftoverManifest)" Condition="'@(_SmithyLeftoverManifest)' != ''" />
     <ItemGroup Condition="'$(_SmithyEffectiveBuildFile)' != ''">
       <FileWrites Include="$(_SmithyEffectiveBuildFile)" />
     </ItemGroup>
@@ -672,7 +683,7 @@
     <!-- What the previous run produced, and when this one starts: see the stale-output cleanup
          after the CLI. -->
     <ItemGroup>
-      <_SmithyPreviousOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob)" />
+      <_SmithyPreviousOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob);$(_SmithyAllManifestsGlob)" />
     </ItemGroup>
     <PropertyGroup>
       <_SmithyGenerationStart>$([System.DateTime]::Now.Ticks)</_SmithyGenerationStart>
@@ -733,7 +744,7 @@
          file older than this run is one it no longer produces. Removing them only after the CLI
          has finished means a failed run never leaves the project without its generated code. -->
     <ItemGroup>
-      <_SmithyCurrentOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob)" />
+      <_SmithyCurrentOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob);$(_SmithyAllManifestsGlob)" />
       <_SmithyStaleOutput
         Include="@(_SmithyCurrentOutput)"
         Condition="'%(FullPath)' != '' and $([System.IO.File]::GetLastWriteTime('%(FullPath)').Ticks) &lt; $(_SmithyGenerationStart)"
@@ -741,17 +752,17 @@
     </ItemGroup>
     <Delete Files="@(_SmithyStaleOutput)" />
     <ItemGroup>
-      <_SmithyGeneratedOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob)" />
+      <_SmithyGeneratedOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob);$(_SmithyAllManifestsGlob)" />
     </ItemGroup>
     <Error
       Code="NSMITHYGEN"
       Text="NSmithy: the Smithy CLI succeeded but produced no generated files, where the previous run produced @(_SmithyPreviousOutput->Count()). Command: &quot;$(SmithyCliPath)&quot; build --config &quot;$(_SmithyEffectiveBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
-      Condition="'@(_SmithyPreviousOutput)' != '' and '@(_SmithyGeneratedOutput)' == ''"
+      Condition="'$(_SmithyRunsCodeGenerator)' == 'true' and '@(_SmithyPreviousOutput)' != '' and '@(_SmithyGeneratedOutput)' == ''"
     />
     <Touch Files="$(SmithyStampFile)" AlwaysCreate="true" />
 
     <ItemGroup>
-      <FileWrites Include="$(SmithyAllProjectionsGlob)" />
+      <FileWrites Include="$(SmithyAllProjectionsGlob);$(_SmithyAllManifestsGlob)" />
       <FileWrites Include="$(SmithyStampFile)" />
     </ItemGroup>
   </Target>
