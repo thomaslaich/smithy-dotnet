@@ -302,9 +302,10 @@ default a client can rely on. A member with such a default is a plain value,
 which reading fills in when the input leaves it out.
 
 F# compiles files, and the declarations in a file, in order, and a declaration
-can only refer to one before it. The plugin therefore writes four files,
-`Types.g.fs`, `Schemas.g.fs`, `Client.g.fs`, and `Server.g.fs`, compiled in that
-order. Each holds one
+can only refer to one before it. The plugin therefore writes five files,
+`Types.g.fs`, `Schemas.g.fs`, `Operations.g.fs` (each operation's schema and
+handler interface), `Client.g.fs`, and `Server.g.fs`, compiled in that order
+(see [shape-ownership.md](shape-ownership.md#f)). Each holds one
 `namespace rec` section per Smithy namespace, so the shapes of a namespace can
 refer to each other, with the sections in dependency order. Namespaces whose
 shapes refer to each other fail generation.
@@ -368,7 +369,8 @@ optionally exclude client or server files.
 
 Runs instead of `_AddSmithyGeneratedCompileItems` in an F# project, where
 `SmithyPlugin` defaults to `fsharp-codegen`. Adds `Types.g.fs`, `Schemas.g.fs`,
-`Client.g.fs` (unless `SmithyGenerateClient` is `false`), then `Server.g.fs`
+`Operations.g.fs`, `Client.g.fs` (unless `SmithyGenerateClient` is `false`), then
+`Server.g.fs`
 (unless `SmithyGenerateServer` is `false`) to `<CompileBefore>` ahead of
 `FSharpSourceCodeCompileOrder`, so the project's own files come after them.
 
