@@ -20,7 +20,7 @@ tradeoffs.
 | [server-architecture.md](server-architecture.md) | Generated server dispatch, shared server runtime, host adapter |
 | [native-grpc.md](native-grpc.md) | Native proto codec + gRPC protocol (no protoc/Grpc.Tools) |
 | [streaming.md](streaming.md) | Event streams and streaming blob payloads |
-| [shape-ownership.md](shape-ownership.md) | Proposed: each project generates the shapes in its own model files and references the rest |
+| [shape-ownership.md](shape-ownership.md) | Each project generates the shapes in its own model files and references the rest |
 
 ## Background
 
