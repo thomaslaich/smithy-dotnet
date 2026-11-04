@@ -123,7 +123,7 @@ let ``A modeled error is returned as its case`` () : Task =
     }
 
 [<Fact>]
-let ``A service-level error is a case of every operation`` () : Task =
+let ``A service-level error is the Service case of every operation`` () : Task =
     task {
         let handler =
             new StubHandler(fun _ _ ->
@@ -136,7 +136,7 @@ let ``A service-level error is a case of every operation`` () : Task =
         let! result = client.OrderAsync order
 
         match result with
-        | Error(OrderError.KitchenClosed _) -> ()
+        | Error(OrderError.Service(KitchenError.KitchenClosed _)) -> ()
         | other -> failwith $"Unexpected result: {other}"
     }
 

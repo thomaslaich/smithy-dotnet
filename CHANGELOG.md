@@ -52,7 +52,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - `NSmithy.MSBuild` no longer has `build/` props; every default is in its `buildTransitive` targets.
 - **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
   `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
-  or its service declares. Other failures stay exceptions.
+  declares and, when the service declares errors, a `Service` case holding `KitchenError`, one
+  union for the whole service. Other failures stay exceptions.
 - **BREAKING: a service's `errors` are on its `ServiceSchema`.** They are in `Errors` instead of
   being copied into each operation's schema, and protocols combine the two when they bind an
   operation (`ServiceSchema.ErrorsOf`). `{Operation}Schema.Schema.Errors` lists only the errors the
