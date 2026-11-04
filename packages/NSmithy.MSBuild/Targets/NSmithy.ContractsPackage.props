@@ -2,24 +2,28 @@
   <!--
     Packed into every NSmithy contracts package (SmithyPublish=true) as
     buildTransitive/<PackageId>.props, so NuGet imports it into every project that references the
-    package, directly or transitively. It declares the package's Smithy model, the model's
-    smithy-build.json, and the manifest of the shapes the package's assembly contains.
+    package, directly or transitively. It declares the package's Smithy model (Source), the
+    model's smithy-build.json (BuildFile), and the manifest of the shapes the package's assembly
+    contains (Manifest), the same items GetSmithyShapeReferences returns for a project reference.
 
     NSmithy.MSBuild uses these items only in projects that generate code themselves: such a
     project assembles its model with the package's and refers to the package's types instead of
     generating them again. Every other project ignores them. See designs/shape-ownership.md.
   -->
   <ItemGroup>
-    <SmithyPackageSource
-      Include="$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..', 'build', 'smithy'))**/*.smithy"
+    <SmithyPackageReference
+      Include="$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..', 'build', 'smithy'))**/*.smithy;$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..', 'build', 'smithy'))**/*.json"
+      SmithyKind="Source"
     />
-    <SmithyPackageBuildFile
+    <SmithyPackageReference
       Include="$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..', 'build', 'smithy-build.json'))"
+      SmithyKind="BuildFile"
       Condition="Exists('$(MSBuildThisFileDirectory)../build/smithy-build.json')"
     />
-    <SmithyPackageShapeManifest
-      Include="$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..', 'build', 'smithy', 'nsmithy-shapes.json'))"
-      Condition="Exists('$(MSBuildThisFileDirectory)../build/smithy/nsmithy-shapes.json')"
+    <SmithyPackageReference
+      Include="$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..', 'build', 'nsmithy-shapes.json'))"
+      SmithyKind="Manifest"
+      Condition="Exists('$(MSBuildThisFileDirectory)../build/nsmithy-shapes.json')"
     />
   </ItemGroup>
 </Project>

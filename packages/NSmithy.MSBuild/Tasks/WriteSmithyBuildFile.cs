@@ -19,12 +19,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     private const string ContractsJarPlugin = "contracts-jar";
     private const string NSmithyGroup = "io.github.thomaslaich.nsmithy";
 
-    private static readonly JsonDocumentOptions ReadOptions = new()
-    {
-        CommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-    };
-
     /// <summary>The project's own smithy-build.json. Empty or missing when it has none.</summary>
     public string ProjectBuildFile { get; set; } = "";
 
@@ -109,7 +103,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         {
             var root = ReadProjectBuildFile();
             // The project's own model files, before the referenced contracts' are added.
-            _ownedSources = OwnedSources(root);
+            _ownedSources = SmithyBuildFiles.OwnSources(root);
             _configuresPlugin = ConfiguresPlugin(root);
             var dependencies = new DependencySet();
             var repositories = new List<JsonObject>();
@@ -143,17 +137,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     // Where the project build file configures the code generator itself: "none", "projection"
     // (only in the projection that gets the properties' settings), or "elsewhere".
     private string _configuresPlugin = "none";
-
-    private static List<string> OwnedSources(JsonObject root)
-    {
-        var owned = new List<string>();
-        foreach (var key in new[] { "sources", "imports" })
-            if (root[key] is JsonArray paths)
-                foreach (var path in paths)
-                    if (path?.GetValue<string>() is { } value)
-                        owned.Add(value);
-        return owned;
-    }
 
     private string ConfiguresPlugin(JsonObject root)
     {
@@ -198,7 +181,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         if (!HasProjectBuildFile)
             return new JsonObject { ["version"] = "1.0" };
 
-        var root = ParseObject(ProjectBuildFile);
+        var root = SmithyBuildFiles.Parse(ProjectBuildFile);
         var directory = Path.GetDirectoryName(Path.GetFullPath(ProjectBuildFile))!;
         ResolvePaths(root, "sources", directory);
         ResolvePaths(root, "imports", directory);
@@ -208,10 +191,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                     ResolvePaths(projectionObject, "imports", directory);
         return root;
     }
-
-    private static JsonObject ParseObject(string path) =>
-        JsonNode.Parse(File.ReadAllText(path), documentOptions: ReadOptions) as JsonObject
-        ?? throw new JsonException($"{path} is not a JSON object.");
 
     private static void ResolvePaths(JsonObject owner, string key, string directory)
     {
@@ -256,7 +235,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         foreach (var item in ContractsBuildFiles)
         {
             var path = item.GetMetadata("FullPath");
-            var contract = ParseObject(path);
+            var contract = SmithyBuildFiles.Parse(path);
             CollectMaven(contract, path, dependencies, repositories);
             if (contract["suppressions"] is JsonArray suppressions)
             {

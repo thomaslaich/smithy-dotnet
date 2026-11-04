@@ -1,7 +1,3 @@
-using System.Diagnostics;
-using System.Text;
-using System.Text.RegularExpressions;
-
 namespace NSmithy.Tests.MSBuild;
 
 public sealed class SmithyCliDiagnosticsTests
@@ -48,9 +44,9 @@ public sealed class SmithyCliDiagnosticsTests
 
     // Forces the terminal logger, which (unlike the console logger) hides the CLI's own output,
     // so only what NSmithy reports as errors is visible.
-    private static Task<ProcessResult> GenerateSmithyCodeAsync(string smithyExtraArgs)
+    private static Task<DotnetResult> GenerateSmithyCodeAsync(string smithyExtraArgs)
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = DotnetProcess.FindRepoRoot();
         var projectPath = Path.Combine(
             repoRoot,
             "tests",
@@ -63,7 +59,7 @@ public sealed class SmithyCliDiagnosticsTests
             $"nsmithy-cli-diagnostics-{Guid.NewGuid():N}.stamp"
         );
 
-        return RunDotnetBuildAsync(
+        return DotnetProcess.RunAsync(
             repoRoot,
             [
                 "build",
@@ -78,65 +74,4 @@ public sealed class SmithyCliDiagnosticsTests
             ]
         );
     }
-
-    private static async Task<ProcessResult> RunDotnetBuildAsync(
-        string workingDirectory,
-        IReadOnlyList<string> arguments
-    )
-    {
-        var output = new StringBuilder();
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo("dotnet")
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-
-        foreach (var argument in arguments)
-        {
-            process.StartInfo.ArgumentList.Add(argument);
-        }
-
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                output.AppendLine(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                output.AppendLine(e.Data);
-            }
-        };
-
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        await process.WaitForExitAsync();
-
-        var plain = Regex.Replace(output.ToString(), @"\x1B\[[0-9;?]*[A-Za-z]", "");
-        return new ProcessResult(process.ExitCode, plain);
-    }
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "NSmithy.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not find the smithy-dotnet repository root.");
-    }
-
-    private sealed record ProcessResult(int ExitCode, string Output);
 }

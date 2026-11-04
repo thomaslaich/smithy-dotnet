@@ -123,8 +123,7 @@ See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for 
 
 | Property | Description |
 | --- | --- |
-| `SmithyPublish` | Pack `.smithy` model files into the NuGet package and (when `SmithyMavenGroupId` is set) produce a Maven JAR. Default: `false`. |
-| `SmithySources` | Directory containing the `.smithy` source files to publish. Default: `$(MSBuildProjectDirectory)/model`. |
+| `SmithyPublish` | Publish the model files that `smithy-build.json` names in `sources` and `imports`, the files the project generates its own shapes from: to the projects that reference it, in the NuGet package under `build/smithy/`, and (when `SmithyMavenGroupId` is set) as a Maven JAR. Requires a `smithy-build.json`. Default: `false`. |
 | `SmithyMavenGroupId` | Maven `groupId` for the emitted JAR (e.g. `io.github.acme`). When set, the build runs the `contracts-jar` plugin and `dotnet pack` copies its JAR, POM, and checksums next to the `.nupkg`. The version is `PackageVersion`. Set `plugins.contracts-jar.dependencies` explicitly in `smithy-build.json` (`[]` for no external dependencies). |
 | `SmithyMavenArtifactId` | Maven `artifactId` for the emitted JAR (e.g. `my-service-contracts`). Required when `SmithyMavenGroupId` is set. |
 
@@ -135,7 +134,7 @@ See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for 
 | `SmithySource` | `.smithy` files added to the sources of the effective `smithy-build.json`. Populated automatically from a `ProjectReference` to a project with `SmithyPublish=true`, or added manually for advanced cases. |
 | `SmithyContractsBuildFile` | Contract build configuration whose Maven dependencies, repositories, and suppressions are merged into the effective `smithy-build.json`. Collected automatically from a contracts project reference or package. |
 | `SmithyShapeManifest` | Shape manifests (`nsmithy-shapes.json`) of referenced projects and packages. The shapes they list are not generated again. Collected automatically. |
-| `SmithyPackageSource`, `SmithyPackageBuildFile`, `SmithyPackageShapeManifest` | Declared by a contracts package's `buildTransitive` props. Added to the items above only in projects that generate code. |
+| `SmithyPackageReference` | Declared by a contracts package's `buildTransitive` props: its model files, `smithy-build.json`, and shape manifest, with `SmithyKind` set to `Source`, `BuildFile`, or `Manifest`. Added to the items above only in projects that generate code. |
 
 ## Contract inputs
 

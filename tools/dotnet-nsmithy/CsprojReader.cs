@@ -14,7 +14,6 @@ internal sealed class CsprojReader
 
     public string? GroupId => Get("SmithyMavenGroupId");
     public string? ArtifactId => Get("SmithyMavenArtifactId");
-    public string? Sources => Get("SmithySources");
 
     public string? Version
     {
