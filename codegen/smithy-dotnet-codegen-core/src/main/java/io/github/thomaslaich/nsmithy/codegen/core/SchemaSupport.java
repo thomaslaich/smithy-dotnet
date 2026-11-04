@@ -120,12 +120,11 @@ public final class SchemaSupport {
   public static List<String> internalStringEnumValues(Shape shape) {
     return shape
         .asEnumShape()
-        .map(
-            e ->
-                e.getAllMembers().values().stream()
-                    .filter(m -> m.hasTrait(InternalTrait.class))
-                    .map(m -> m.expectTrait(EnumValueTrait.class).expectStringValue())
-                    .toList())
+        .map(e ->
+            e.getAllMembers().values().stream()
+                .filter(m -> m.hasTrait(InternalTrait.class))
+                .map(m -> m.expectTrait(EnumValueTrait.class).expectStringValue())
+                .toList())
         .orElse(List.of());
   }
 
@@ -142,12 +141,11 @@ public final class SchemaSupport {
     return error
         .getTrait(HttpErrorTrait.class)
         .map(HttpErrorTrait::getCode)
-        .orElseGet(
-            () ->
-                error
-                    .getTrait(ErrorTrait.class)
-                    .map(trait -> trait.isClientError() ? 400 : 500)
-                    .orElse(500));
+        .orElseGet(() ->
+            error
+                .getTrait(ErrorTrait.class)
+                .map(trait -> trait.isClientError() ? 400 : 500)
+                .orElse(500));
   }
 
   /**

@@ -21,18 +21,17 @@ final class GeneratedNames {
           .filter(shape -> shape.getId().getNamespace().equals(namespace))
           .filter(shape -> FSharpNaming.typeName(shape.getId().getName()).equals(name))
           .findFirst()
-          .ifPresent(
-              shape -> {
-                throw new CodegenException(
-                    "Shape "
-                        + shape.getId()
-                        + " would generate an F# type named "
-                        + name
-                        + ", which the generated code for "
-                        + service.getId()
-                        + " declares. Rename the shape, for example with the renameShapes build"
-                        + " transform.");
-              });
+          .ifPresent(shape -> {
+            throw new CodegenException(
+                "Shape "
+                    + shape.getId()
+                    + " would generate an F# type named "
+                    + name
+                    + ", which the generated code for "
+                    + service.getId()
+                    + " declares. Rename the shape, for example with the renameShapes build"
+                    + " transform.");
+          });
     }
   }
 }

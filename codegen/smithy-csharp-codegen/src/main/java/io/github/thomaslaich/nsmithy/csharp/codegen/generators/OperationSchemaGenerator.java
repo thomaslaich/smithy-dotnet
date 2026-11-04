@@ -78,17 +78,16 @@ public final class OperationSchemaGenerator implements Runnable {
 
     return "["
         + errors.stream()
-            .map(
-                errorId -> {
-                  StructureShape error = context.model().expectShape(errorId, StructureShape.class);
-                  return (writer.typeName(RuntimeTypes.SCHEMAS) + ".OperationError(")
-                      + SchemaGenerator.shapeIdExpr(writer, errorId)
-                      + ", "
-                      + SchemaGenerator.shapeSchemaAccessor(writer, context, error)
-                      + ", "
-                      + SchemaSupport.errorStatusCode(error)
-                      + ")";
-                })
+            .map(errorId -> {
+              StructureShape error = context.model().expectShape(errorId, StructureShape.class);
+              return (writer.typeName(RuntimeTypes.SCHEMAS) + ".OperationError(")
+                  + SchemaGenerator.shapeIdExpr(writer, errorId)
+                  + ", "
+                  + SchemaGenerator.shapeSchemaAccessor(writer, context, error)
+                  + ", "
+                  + SchemaSupport.errorStatusCode(error)
+                  + ")";
+            })
             .collect(Collectors.joining(", "))
         + "]";
   }

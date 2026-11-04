@@ -42,13 +42,12 @@ public final class UnionGenerator implements Runnable {
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext(
           "variants",
-          writer.consumer(
-              w -> {
-                for (MemberShape member : members) {
-                  writeVariant(typeName, member);
-                  w.write("");
-                }
-              }));
+          writer.consumer(w -> {
+            for (MemberShape member : members) {
+              writeVariant(typeName, member);
+              w.write("");
+            }
+          }));
       writer.putContext("match", writer.consumer(w -> writeMatch(members)));
       writer.write(
           """
@@ -129,39 +128,36 @@ public final class UnionGenerator implements Runnable {
       writer.putContext("invalidOperationException", RuntimeTypes.INVALID_OPERATION_EXCEPTION);
       writer.putContext(
           "parameters",
-          writer.consumer(
-              w -> {
-                for (MemberShape member : members) {
-                  w.write(
-                      "$T<$L, T> $L,",
-                      RuntimeTypes.FUNC,
-                      CSharpShapeSupport.memberTypeExpr(
-                          w, context.model(), context.symbolProvider(), member, false),
-                      matchParameterName(member));
-                }
-              }));
+          writer.consumer(w -> {
+            for (MemberShape member : members) {
+              w.write(
+                  "$T<$L, T> $L,",
+                  RuntimeTypes.FUNC,
+                  CSharpShapeSupport.memberTypeExpr(
+                      w, context.model(), context.symbolProvider(), member, false),
+                  matchParameterName(member));
+            }
+          }));
       writer.putContext(
           "nullChecks",
-          writer.consumer(
-              w -> {
-                for (MemberShape member : members) {
-                  w.write(
-                      "$T.ThrowIfNull($L);",
-                      RuntimeTypes.ARGUMENT_NULL_EXCEPTION,
-                      matchParameterName(member));
-                }
-              }));
+          writer.consumer(w -> {
+            for (MemberShape member : members) {
+              w.write(
+                  "$T.ThrowIfNull($L);",
+                  RuntimeTypes.ARGUMENT_NULL_EXCEPTION,
+                  matchParameterName(member));
+            }
+          }));
       writer.putContext(
           "cases",
-          writer.consumer(
-              w -> {
-                for (MemberShape member : members) {
-                  w.write(
-                      "$L variant => $L(variant.Value),",
-                      CSharpNaming.variantName(member),
-                      matchParameterName(member));
-                }
-              }));
+          writer.consumer(w -> {
+            for (MemberShape member : members) {
+              w.write(
+                  "$L variant => $L(variant.Value),",
+                  CSharpNaming.variantName(member),
+                  matchParameterName(member));
+            }
+          }));
       writer.write(
           """
           public T Match<T>(

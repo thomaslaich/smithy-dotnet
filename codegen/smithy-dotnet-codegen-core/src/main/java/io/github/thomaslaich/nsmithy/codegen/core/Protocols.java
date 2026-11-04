@@ -114,16 +114,15 @@ public final class Protocols {
         protocols.stream()
             .filter(protocol -> protocol.trait().equals(configured.get()))
             .findFirst()
-            .orElseThrow(
-                () ->
-                    new CodegenException(
-                        "defaultProtocol "
-                            + configured.get()
-                            + " is not a protocol of service "
-                            + service.getId()
-                            + ". Its protocols: "
-                            + protocols.stream().map(p -> p.trait().toString()).toList()
-                            + ".")));
+            .orElseThrow(() ->
+                new CodegenException(
+                    "defaultProtocol "
+                        + configured.get()
+                        + " is not a protocol of service "
+                        + service.getId()
+                        + ". Its protocols: "
+                        + protocols.stream().map(p -> p.trait().toString()).toList()
+                        + ".")));
   }
 
   /** Reads the protocol trait's ordered ALPN preferences, when modeled. */

@@ -143,17 +143,16 @@ public final class ClientGenerator implements Runnable {
   static Optional<String> paginatorItemsSignature(
       CSharpWriter writer, GenerationContext context, PaginationInfo info) {
     return paginatorItemElementType(writer, context, info)
-        .map(
-            elementType ->
-                writer.format(
-                    "$T<$L> $LItemsAsync($T input, $T cancellationToken = default)",
-                    RuntimeTypes.I_ASYNC_ENUMERABLE,
-                    elementType,
-                    CSharpNaming.typeName(info.getOperation().getId().getName()),
-                    context
-                        .symbolProvider()
-                        .toSymbol(context.model().expectShape(info.getOperation().getInputShape())),
-                    RuntimeTypes.CANCELLATION_TOKEN));
+        .map(elementType ->
+            writer.format(
+                "$T<$L> $LItemsAsync($T input, $T cancellationToken = default)",
+                RuntimeTypes.I_ASYNC_ENUMERABLE,
+                elementType,
+                CSharpNaming.typeName(info.getOperation().getId().getName()),
+                context
+                    .symbolProvider()
+                    .toSymbol(context.model().expectShape(info.getOperation().getInputShape())),
+                RuntimeTypes.CANCELLATION_TOKEN));
   }
 
   /** Renders a null-safe property access chain for a member path, e.g. {@code output.A?.B}. */
@@ -171,12 +170,11 @@ public final class ClientGenerator implements Runnable {
 
   public static List<MemberShape> responseBodyMembers(StructureShape output) {
     return ShapeSupport.constructorMembers(output).stream()
-        .filter(
-            m ->
-                !ShapeSupport.isHttpHeader(m)
-                    && !ShapeSupport.isHttpPrefixHeaders(m)
-                    && !ShapeSupport.isHttpResponseCode(m)
-                    && !ShapeSupport.isHttpPayload(m))
+        .filter(m ->
+            !ShapeSupport.isHttpHeader(m)
+                && !ShapeSupport.isHttpPrefixHeaders(m)
+                && !ShapeSupport.isHttpResponseCode(m)
+                && !ShapeSupport.isHttpPayload(m))
         .collect(Collectors.toList());
   }
 
@@ -227,28 +225,25 @@ public final class ClientGenerator implements Runnable {
       writer.putContext("disposable", RuntimeTypes.I_DISPOSABLE);
       writer.putContext(
           "operations",
-          writer.consumer(
-              w -> {
-                w.write("");
-                for (OperationShape op : operations) {
-                  w.writeXmlDocs(op, operationParameterDocs(model, op));
-                  new ClientExamplesGenerator(context, w).write(op);
-                  w.write("$L;", operationSignature(w, context, op));
-                  paginationInfo(context, service, op)
-                      .ifPresent(
-                          info -> {
-                            w.writeXmlDocs(op, operationParameterDocs(model, op));
-                            w.write("$L;", paginatorPagesSignature(w, context, op));
-                            paginatorItemsSignature(w, context, info)
-                                .ifPresent(
-                                    signature -> {
-                                      w.writeXmlDocs(op, operationParameterDocs(model, op));
-                                      w.write("$L;", signature);
-                                    });
-                          });
-                  WaiterMethods.writeDeclarations(w, context, op);
-                }
-              }));
+          writer.consumer(w -> {
+            w.write("");
+            for (OperationShape op : operations) {
+              w.writeXmlDocs(op, operationParameterDocs(model, op));
+              new ClientExamplesGenerator(context, w).write(op);
+              w.write("$L;", operationSignature(w, context, op));
+              paginationInfo(context, service, op)
+                  .ifPresent(info -> {
+                    w.writeXmlDocs(op, operationParameterDocs(model, op));
+                    w.write("$L;", paginatorPagesSignature(w, context, op));
+                    paginatorItemsSignature(w, context, info)
+                        .ifPresent(signature -> {
+                          w.writeXmlDocs(op, operationParameterDocs(model, op));
+                          w.write("$L;", signature);
+                        });
+                  });
+              WaiterMethods.writeDeclarations(w, context, op);
+            }
+          }));
       writer.writeXmlDocs(service);
       writer.write(
           """
@@ -291,48 +286,45 @@ public final class ClientGenerator implements Runnable {
           "fields", writer.consumer(w -> writeFields(operations, needsRuntime, needsIdempotency)));
       writer.putContext(
           "constructors",
-          writer.consumer(
-              w ->
-                  writeConstructors(
-                      typeName,
-                      serviceSchema,
-                      primaryProtocol,
-                      modeledHttpVersionPreference,
-                      needsRuntime,
-                      needsIdempotency,
-                      operations)));
+          writer.consumer(w ->
+              writeConstructors(
+                  typeName,
+                  serviceSchema,
+                  primaryProtocol,
+                  modeledHttpVersionPreference,
+                  needsRuntime,
+                  needsIdempotency,
+                  operations)));
       writer.putContext("readOnlyList", RuntimeTypes.I_READ_ONLY_LIST);
       // Include auth schemes introduced by operation-level overrides for constructor validation.
       writer.putContext("authSchemes", modeledAuthSchemesLiteral());
       writer.putContext(
           "lifecycle",
-          writer.consumer(
-              w -> {
-                if (needsIdempotency) {
-                  w.write("");
-                  w.write(
-                      "private static string DefaultIdempotencyToken() => $T.NewGuid().ToString();",
-                      RuntimeTypes.GUID);
-                }
-                w.write("");
-                // Only dispose resources owned by the environment; injected transports stay open.
-                w.write(
-                    needsRuntime
-                        ? "public void Dispose() => environment.Dispose();"
-                        : "public void Dispose() { }");
-                w.write("");
-              }));
+          writer.consumer(w -> {
+            if (needsIdempotency) {
+              w.write("");
+              w.write(
+                  "private static string DefaultIdempotencyToken() => $T.NewGuid().ToString();",
+                  RuntimeTypes.GUID);
+            }
+            w.write("");
+            // Only dispose resources owned by the environment; injected transports stay open.
+            w.write(
+                needsRuntime
+                    ? "public void Dispose() => environment.Dispose();"
+                    : "public void Dispose() { }");
+            w.write("");
+          }));
       writer.putContext(
           "operations",
-          writer.consumer(
-              w -> {
-                for (OperationShape op : operations) {
-                  writeOperationMethod(model, op);
-                  paginationInfo(context, service, op)
-                      .ifPresent(info -> writePaginatorMethods(op, info));
-                  WaiterMethods.writeImplementations(w, context, service, op, "public ");
-                }
-              }));
+          writer.consumer(w -> {
+            for (OperationShape op : operations) {
+              writeOperationMethod(model, op);
+              paginationInfo(context, service, op)
+                  .ifPresent(info -> writePaginatorMethods(op, info));
+              WaiterMethods.writeImplementations(w, context, service, op, "public ");
+            }
+          }));
       writer.writeXmlDocs(service);
       writer.write(
           """
@@ -396,25 +388,23 @@ public final class ClientGenerator implements Runnable {
       writer.putContext("protocol", primaryProtocol);
       writer.putContext(
           "ownedInitialization",
-          writer.consumer(
-              w -> {
-                if (needsRuntime) {
-                  writeEnvironmentCreation(
-                      serviceSchema, primaryProtocol, modeledHttpVersionPreference, "null");
-                }
-                writeConstructorBindings(needsRuntime, needsIdempotency, operations);
-              }));
+          writer.consumer(w -> {
+            if (needsRuntime) {
+              writeEnvironmentCreation(
+                  serviceSchema, primaryProtocol, modeledHttpVersionPreference, "null");
+            }
+            writeConstructorBindings(needsRuntime, needsIdempotency, operations);
+          }));
       writer.putContext(
           "httpClientInitialization",
-          writer.consumer(
-              w -> {
-                if (needsRuntime) {
-                  w.write("config ??= new ${client:L}Config();");
-                  writeEnvironmentCreation(
-                      serviceSchema, primaryProtocol, modeledHttpVersionPreference, "httpClient");
-                }
-                writeConstructorBindings(needsRuntime, needsIdempotency, operations);
-              }));
+          writer.consumer(w -> {
+            if (needsRuntime) {
+              w.write("config ??= new ${client:L}Config();");
+              writeEnvironmentCreation(
+                  serviceSchema, primaryProtocol, modeledHttpVersionPreference, "httpClient");
+            }
+            writeConstructorBindings(needsRuntime, needsIdempotency, operations);
+          }));
       writer.putContext(
           "bindings",
           writer.consumer(
@@ -550,19 +540,18 @@ public final class ClientGenerator implements Runnable {
               w -> parameters.forEach(p -> w.write("$1L = source.$1L;", p.property()))));
       writer.putContext(
           "properties",
-          writer.consumer(
-              w -> {
-                for (EndpointRules.ConfigParameter parameter : parameters) {
-                  w.write("");
-                  if (parameter.documentation() != null) {
-                    w.writeXmlDocs(parameter.documentation(), Map.of());
-                  }
-                  w.write(
-                      "public $L? $L { get; set; }",
-                      endpointValueType(parameter),
-                      parameter.property());
-                }
-              }));
+          writer.consumer(w -> {
+            for (EndpointRules.ConfigParameter parameter : parameters) {
+              w.write("");
+              if (parameter.documentation() != null) {
+                w.writeXmlDocs(parameter.documentation(), Map.of());
+              }
+              w.write(
+                  "public $L? $L { get; set; }",
+                  endpointValueType(parameter),
+                  parameter.property());
+            }
+          }));
       writer.write(
           """
           public sealed class ${config:L} : ${baseConfig:T}
@@ -636,12 +625,11 @@ public final class ClientGenerator implements Runnable {
         .forEach(id -> uniqueIds.put(id.toString(), Boolean.TRUE));
     TopDownIndex.of(context.model()).getContainedOperations(service).stream()
         .sorted(Comparator.comparing(operation -> operation.getId().toString()))
-        .forEach(
-            operation ->
-                serviceIndex
-                    .getEffectiveAuthSchemes(service, operation)
-                    .keySet()
-                    .forEach(id -> uniqueIds.put(id.toString(), Boolean.TRUE)));
+        .forEach(operation ->
+            serviceIndex
+                .getEffectiveAuthSchemes(service, operation)
+                .keySet()
+                .forEach(id -> uniqueIds.put(id.toString(), Boolean.TRUE)));
     List<String> ids = uniqueIds.keySet().stream().toList();
     if (ids.isEmpty()) {
       return writer.typeName(RuntimeTypes.ARRAY) + ".Empty<string>()";
@@ -741,16 +729,15 @@ public final class ClientGenerator implements Runnable {
     StructureShape input = context.model().expectShape(op.getInputShape(), StructureShape.class);
     String labels =
         endpoint.get().getHostPrefix().getLabels().stream()
-            .map(
-                label -> {
-                  String name = label.getContent();
-                  MemberShape member = input.getMember(name).orElseThrow();
-                  return ("new " + writer.typeName(RuntimeTypes.SMITHY_HOST_LABEL) + "(")
-                      + CSharpNaming.formatString(name)
-                      + ", input."
-                      + CSharpNaming.memberName(member)
-                      + ")";
-                })
+            .map(label -> {
+              String name = label.getContent();
+              MemberShape member = input.getMember(name).orElseThrow();
+              return ("new " + writer.typeName(RuntimeTypes.SMITHY_HOST_LABEL) + "(")
+                  + CSharpNaming.formatString(name)
+                  + ", input."
+                  + CSharpNaming.memberName(member)
+                  + ")";
+            })
             .collect(Collectors.joining(", "));
     String arguments =
         labels.isEmpty()
@@ -791,14 +778,13 @@ public final class ClientGenerator implements Runnable {
           hasInput ? "input" : writer.typeName(RuntimeTypes.SMITHY_UNIT) + ".Value");
       writer.putContext(
           "prepareInput",
-          writer.consumer(
-              w -> {
-                if (hasInput) {
-                  w.write("$T.ThrowIfNull(input);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-                  writeIdempotencyTokenDefaults(
-                      model.expectShape(op.getInputShape(), StructureShape.class));
-                }
-              }));
+          writer.consumer(w -> {
+            if (hasInput) {
+              w.write("$T.ThrowIfNull(input);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+              writeIdempotencyTokenDefaults(
+                  model.expectShape(op.getInputShape(), StructureShape.class));
+            }
+          }));
       if (hasOutput) {
         writer.write(
             """
@@ -840,13 +826,12 @@ public final class ClientGenerator implements Runnable {
     try {
       writer.putContext(
           "defaults",
-          writer.consumer(
-              w -> {
-                for (MemberShape member : idempotencyMembers) {
-                  String property = CSharpNaming.memberName(member);
-                  w.write("$L = input.$L ?? this.idempotencyTokenProvider(),", property, property);
-                }
-              }));
+          writer.consumer(w -> {
+            for (MemberShape member : idempotencyMembers) {
+              String property = CSharpNaming.memberName(member);
+              w.write("$L = input.$L ?? this.idempotencyTokenProvider(),", property, property);
+            }
+          }));
       writer.write(
           """
           input = input with
@@ -909,32 +894,31 @@ public final class ClientGenerator implements Runnable {
       writer.write("");
 
       paginatorItemsSignature(writer, context, info)
-          .ifPresent(
-              signature -> {
-                writer.putContext("itemsSignature", withEnumeratorCancellation(writer, signature));
-                writer.putContext("items", memberPathExpr("page", info.getItemsMemberPath()));
-                writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
-                writer.write(
-                    """
-                      public async ${itemsSignature:L}
+          .ifPresent(signature -> {
+            writer.putContext("itemsSignature", withEnumeratorCancellation(writer, signature));
+            writer.putContext("items", memberPathExpr("page", info.getItemsMemberPath()));
+            writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
+            writer.write(
+                """
+                  public async ${itemsSignature:L}
+                  {
+                      await foreach (var page in ${operation:L}PagesAsync(input, cancellationToken)
+                .ConfigureAwait(false))
                       {
-                          await foreach (var page in ${operation:L}PagesAsync(input, cancellationToken)
-                    .ConfigureAwait(false))
+                          var items = ${items:L};
+                          if (items is null)
                           {
-                              var items = ${items:L};
-                              if (items is null)
-                              {
-                                  continue;
-                              }
-                              foreach (var item in items)
-                              {
-                                  yield return item;
-                              }
+                              continue;
+                          }
+                          foreach (var item in items)
+                          {
+                              yield return item;
                           }
                       }
-                    """);
-                writer.write("");
-              });
+                  }
+                """);
+            writer.write("");
+          });
     } finally {
       writer.popState();
     }

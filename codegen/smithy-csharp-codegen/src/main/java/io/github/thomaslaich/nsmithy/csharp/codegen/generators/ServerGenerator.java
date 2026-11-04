@@ -109,11 +109,10 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("handler", opHandlerName(op));
       writer.putContext(
           "operation",
-          writer.consumer(
-              w -> {
-                w.writeXmlDocs(op, operationParameterDocs(op));
-                w.write("$L;", serverOperationSignature(sp, op));
-              }));
+          writer.consumer(w -> {
+            w.writeXmlDocs(op, operationParameterDocs(op));
+            w.write("$L;", serverOperationSignature(sp, op));
+          }));
       writer.write(
           """
           public interface ${handler:L}
@@ -143,13 +142,12 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("operations", writer.consumer(w -> writeCatalogOperations(ops)));
       writer.putContext(
           "jsonSchemas",
-          writer.consumer(
-              w -> {
-                if (ops.stream().anyMatch(op -> !isStreaming(op))) {
-                  w.write("");
-                  writeOperationJsonSchemas(ops);
-                }
-              }));
+          writer.consumer(w -> {
+            if (ops.stream().anyMatch(op -> !isStreaming(op))) {
+              w.write("");
+              writeOperationJsonSchemas(ops);
+            }
+          }));
       writer.write(
           """
           public sealed class ${contract:L}Definition : ${serviceDefinition:T}
@@ -203,19 +201,18 @@ public final class ServerGenerator implements Runnable {
           prompt.preferWhen() == null ? "null" : CSharpNaming.formatString(prompt.preferWhen()));
       writer.putContext(
           "arguments",
-          writer.consumer(
-              w -> {
-                for (ServicePrompts.Argument argument : prompt.arguments()) {
-                  w.write(
-                      "new $T($L, $L, $L),",
-                      RuntimeTypes.SERVICE_PROMPT_ARGUMENT_DEFINITION,
-                      CSharpNaming.formatString(argument.name()),
-                      argument.description() == null
-                          ? "null"
-                          : CSharpNaming.formatString(argument.description()),
-                      argument.required() ? "true" : "false");
-                }
-              }));
+          writer.consumer(w -> {
+            for (ServicePrompts.Argument argument : prompt.arguments()) {
+              w.write(
+                  "new $T($L, $L, $L),",
+                  RuntimeTypes.SERVICE_PROMPT_ARGUMENT_DEFINITION,
+                  CSharpNaming.formatString(argument.name()),
+                  argument.description() == null
+                      ? "null"
+                      : CSharpNaming.formatString(argument.description()),
+                  argument.required() ? "true" : "false");
+            }
+          }));
       writer.write(
           """
           new ${promptDefinition:T}(
@@ -273,34 +270,32 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("serviceDefinition", RuntimeTypes.I_SERVICE_DEFINITION);
       writer.putContext(
           "registrations",
-          writer.consumer(
-              w -> {
-                if (!serverProtocols.isEmpty()) {
-                  w.write("services.AddSmithyServer();");
-                }
-                w.write(
-                    """
-                    services.Add${contract:L}();
-                    services.AddSingleton<THandler>();
-                    services.AddSingleton<${handler:L}>(serviceProvider =>
-                        serviceProvider.GetRequiredService<THandler>());\
-                    """);
-                for (OperationShape op : ops) {
-                  w.write(
-                      "services.AddSingleton<$L>(serviceProvider =>"
-                          + " serviceProvider.GetRequiredService<THandler>());",
-                      opHandlerName(op));
-                }
-              }));
+          writer.consumer(w -> {
+            if (!serverProtocols.isEmpty()) {
+              w.write("services.AddSmithyServer();");
+            }
+            w.write(
+                """
+                services.Add${contract:L}();
+                services.AddSingleton<THandler>();
+                services.AddSingleton<${handler:L}>(serviceProvider =>
+                    serviceProvider.GetRequiredService<THandler>());\
+                """);
+            for (OperationShape op : ops) {
+              w.write(
+                  "services.AddSingleton<$L>(serviceProvider =>"
+                      + " serviceProvider.GetRequiredService<THandler>());",
+                  opHandlerName(op));
+            }
+          }));
       writer.putContext(
           "endpointMapping",
-          writer.consumer(
-              w -> {
-                if (!serverProtocols.isEmpty()) {
-                  w.write("");
-                  writeEndpointMapping(contract, serverProtocols);
-                }
-              }));
+          writer.consumer(w -> {
+            if (!serverProtocols.isEmpty()) {
+              w.write("");
+              writeEndpointMapping(contract, serverProtocols);
+            }
+          }));
       writer.write(
           """
           public static class ${contract:L}ServerExtensions
@@ -350,9 +345,8 @@ public final class ServerGenerator implements Runnable {
             "outputSchema",
             CSharpNaming.formatString(JsonSchemas.generate(context.model(), op.getOutputShape())));
         op.getTrait(DocumentationTrait.class)
-            .ifPresent(
-                trait ->
-                    writer.putContext("description", CSharpNaming.formatString(trait.getValue())));
+            .ifPresent(trait ->
+                writer.putContext("description", CSharpNaming.formatString(trait.getValue())));
         writer.write(
             """
             private static class ${schemaClass:L}
@@ -411,12 +405,11 @@ public final class ServerGenerator implements Runnable {
           serverProtocols.stream().map(CSharpProtocol::name).collect(Collectors.joining(" | ")));
       writer.putContext(
           "protocols",
-          writer.consumer(
-              w -> {
-                for (int i = 0; i < serverProtocols.size(); i++) {
-                  w.write("$L = $L,", serverProtocols.get(i).name(), 1 << i);
-                }
-              }));
+          writer.consumer(w -> {
+            for (int i = 0; i < serverProtocols.size(); i++) {
+              w.write("$L = $L,", serverProtocols.get(i).name(), 1 << i);
+            }
+          }));
       writer.write(
           """
           [${flags:L}]

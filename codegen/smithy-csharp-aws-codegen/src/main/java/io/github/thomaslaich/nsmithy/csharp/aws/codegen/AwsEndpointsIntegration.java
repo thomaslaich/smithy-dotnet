@@ -57,10 +57,9 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
     if (!settings.service().filter(S3::equals).isPresent()
         || model
             .getShape(S3)
-            .filter(
-                service ->
-                    service.hasTrait(EndpointBddTrait.class)
-                        || service.hasTrait(EndpointRuleSetTrait.class))
+            .filter(service ->
+                service.hasTrait(EndpointBddTrait.class)
+                    || service.hasTrait(EndpointRuleSetTrait.class))
             .isEmpty()) {
       return model;
     }
@@ -68,10 +67,9 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
     for (OperationShape operation : TopDownIndex.of(model).getContainedOperations(S3)) {
       operation
           .getTrait(HttpTrait.class)
-          .flatMap(
-              http ->
-                  withoutBucket(http.getUri().toString())
-                      .map(uri -> http.toBuilder().uri(UriPattern.parse(uri)).build()))
+          .flatMap(http ->
+              withoutBucket(http.getUri().toString())
+                  .map(uri -> http.toBuilder().uri(UriPattern.parse(uri)).build()))
           .ifPresent(http -> updated.add(operation.toBuilder().addTrait(http).build()));
     }
     return ModelTransformer.create().replaceShapes(model, updated);
@@ -202,18 +200,15 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
         service
             .getTrait(EndpointBddTrait.class)
             .map(EndpointBddTrait::getParameters)
-            .or(
-                () ->
-                    service
-                        .getTrait(EndpointRuleSetTrait.class)
-                        .map(trait -> trait.getEndpointRuleSet().getParameters()));
+            .or(() ->
+                service
+                    .getTrait(EndpointRuleSetTrait.class)
+                    .map(trait -> trait.getEndpointRuleSet().getParameters()));
     return parameters
-        .map(
-            declared ->
-                declared.toList().stream()
-                    .anyMatch(
-                        parameter ->
-                            parameter.getBuiltIn().filter("AWS::Region"::equals).isPresent()))
+        .map(declared ->
+            declared.toList().stream()
+                .anyMatch(
+                    parameter -> parameter.getBuiltIn().filter("AWS::Region"::equals).isPresent()))
         .orElse(false);
   }
 
@@ -232,13 +227,12 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
         .findTrait(SIGV4)
         .flatMap(trait -> trait.toNode().asObjectNode())
         .flatMap(node -> node.getStringMember("name"))
-        .map(
-            name ->
-                List.of(
-                    new EndpointDefaultAuthScheme(
-                        SIGV4.toString(),
-                        Map.of("signingName", name.getValue()),
-                        Map.of("signingRegion", "AWS::Region"))))
+        .map(name ->
+            List.of(
+                new EndpointDefaultAuthScheme(
+                    SIGV4.toString(),
+                    Map.of("signingName", name.getValue()),
+                    Map.of("signingRegion", "AWS::Region"))))
         .orElse(List.of());
   }
 }

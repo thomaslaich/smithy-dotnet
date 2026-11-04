@@ -52,12 +52,11 @@ public final class SchemaGenerator {
       // Carry @timestampFormat into the schema so codecs resolve the wire format from it
       // (covers struct members, list elements, and map values uniformly).
       return SchemaSupport.timestampFormat(shape)
-          .map(
-              format ->
-                  writer.typeName(RuntimeTypes.SCHEMAS)
-                      + ".TimestampWithTraits("
-                      + traitsExpr(writer, List.of(format))
-                      + ")")
+          .map(format ->
+              writer.typeName(RuntimeTypes.SCHEMAS)
+                  + ".TimestampWithTraits("
+                  + traitsExpr(writer, List.of(format))
+                  + ")")
           .orElseGet(() -> writer.typeName(RuntimeTypes.SCHEMAS) + ".Timestamp");
     }
 
@@ -215,54 +214,52 @@ public final class SchemaGenerator {
       writer.putContext("builderDefaults", builderDefaults(writer, context, members));
       writer.putContext(
           "writes",
-          writer.consumer(
-              w -> {
-                for (int index = 0; index < members.size(); index++) {
-                  MemberShape member = members.get(index);
-                  writeValue(
-                      w,
-                      context,
-                      member,
-                      String.valueOf(index),
-                      "value." + CSharpNaming.memberName(member),
-                      "value" + index,
-                      propertyMayBeNull(context, member, isError),
-                      defaultLiteral(w, context, member),
-                      "Target" + index);
-                }
-              }));
+          writer.consumer(w -> {
+            for (int index = 0; index < members.size(); index++) {
+              MemberShape member = members.get(index);
+              writeValue(
+                  w,
+                  context,
+                  member,
+                  String.valueOf(index),
+                  "value." + CSharpNaming.memberName(member),
+                  "value" + index,
+                  propertyMayBeNull(context, member, isError),
+                  defaultLiteral(w, context, member),
+                  "Target" + index);
+            }
+          }));
       // A structure with no members has nothing to read, and an empty switch does not compile.
       writer.putContext(
           "reads",
-          writer.consumer(
-              w -> {
-                if (members.isEmpty()) {
-                  return;
-                }
-                w.openBlock(
-                    "switch (index)\n{",
-                    "}",
-                    () -> {
-                      for (int index = 0; index < members.size(); index++) {
-                        MemberShape member = members.get(index);
-                        w.write(
-                            """
-                            case $L:
-                                builder.$L = $L;
-                                break;\
-                            """,
-                            index,
-                            CSharpNaming.memberName(member),
-                            readValue(
-                                w,
-                                context,
-                                member,
-                                "value" + index,
-                                !CSharpShapeSupport.isReferenceType(context.model(), member),
-                                "Target" + index));
-                      }
-                    });
-              }));
+          writer.consumer(w -> {
+            if (members.isEmpty()) {
+              return;
+            }
+            w.openBlock(
+                "switch (index)\n{",
+                "}",
+                () -> {
+                  for (int index = 0; index < members.size(); index++) {
+                    MemberShape member = members.get(index);
+                    w.write(
+                        """
+                        case $L:
+                            builder.$L = $L;
+                            break;\
+                        """,
+                        index,
+                        CSharpNaming.memberName(member),
+                        readValue(
+                            w,
+                            context,
+                            member,
+                            "value" + index,
+                            !CSharpShapeSupport.isReferenceType(context.model(), member),
+                            "Target" + index));
+                  }
+                });
+          }));
       writer.write(
           """
           public static partial class ${schemaClass:L}
@@ -346,18 +343,17 @@ public final class SchemaGenerator {
       writer.putContext("elementTraits", memberTraitsExpr(writer, context, member));
       writer.putContext(
           "write",
-          writer.consumer(
-              w ->
-                  writeValue(
-                      w,
-                      context,
-                      member,
-                      "0",
-                      "elements[index]",
-                      "element",
-                      isReference || sparse,
-                      null,
-                      "Target0")));
+          writer.consumer(w ->
+              writeValue(
+                  w,
+                  context,
+                  member,
+                  "0",
+                  "elements[index]",
+                  "element",
+                  isReference || sparse,
+                  null,
+                  "Target0")));
       writer.putContext(
           "read", readValue(writer, context, member, "element", sparse && !isReference, "Target0"));
       writer.write(
@@ -451,18 +447,17 @@ public final class SchemaGenerator {
               writer, context, context.model().expectShape(shape.getKey().getTarget())));
       writer.putContext(
           "write",
-          writer.consumer(
-              w ->
-                  writeValue(
-                      w,
-                      context,
-                      member,
-                      "1",
-                      "entry.Value",
-                      "entryValue",
-                      isReference || sparse,
-                      null,
-                      "Target0")));
+          writer.consumer(w ->
+              writeValue(
+                  w,
+                  context,
+                  member,
+                  "1",
+                  "entry.Value",
+                  "entryValue",
+                  isReference || sparse,
+                  null,
+                  "Target0")));
       writer.putContext(
           "read",
           readValue(writer, context, member, "entryValue", sparse && !isReference, "Target0"));
@@ -573,86 +568,73 @@ public final class SchemaGenerator {
       writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
       writer.putContext(
           "caseDeclarations",
-          writer.consumer(
-              w -> {
-                for (int index = 0; index < members.size(); index++) {
-                  MemberShape member = members.get(index);
-                  String traits = memberTraitsExpr(w, context, member);
-                  w.write(
-                      "new($L, Target$L$L),",
-                      CSharpNaming.formatString(member.getMemberName()),
-                      index,
-                      "null".equals(traits) ? "" : ", traits: " + traits);
-                }
-              }));
+          writer.consumer(w -> {
+            for (int index = 0; index < members.size(); index++) {
+              MemberShape member = members.get(index);
+              String traits = memberTraitsExpr(w, context, member);
+              w.write(
+                  "new($L, Target$L$L),",
+                  CSharpNaming.formatString(member.getMemberName()),
+                  index,
+                  "null".equals(traits) ? "" : ", traits: " + traits);
+            }
+          }));
       writer.putContext(
           "targets",
-          writer.consumer(
-              w -> {
-                for (int index = 0; index < members.size(); index++) {
-                  MemberShape member = members.get(index);
-                  w.write(
-                      "private static readonly $T<$L> Target$L = $L;",
-                      RuntimeTypes.SCHEMA,
-                      CSharpShapeSupport.memberTypeExpr(
-                          w, context.model(), context.symbolProvider(), member, false),
-                      index,
-                      rawMemberTargetExpr(w, context, member));
-                }
-              }));
+          writer.consumer(w -> {
+            for (int index = 0; index < members.size(); index++) {
+              MemberShape member = members.get(index);
+              w.write(
+                  "private static readonly $T<$L> Target$L = $L;",
+                  RuntimeTypes.SCHEMA,
+                  CSharpShapeSupport.memberTypeExpr(
+                      w, context.model(), context.symbolProvider(), member, false),
+                  index,
+                  rawMemberTargetExpr(w, context, member));
+            }
+          }));
       writer.putContext(
           "caseOf",
-          writer.consumer(
-              w -> {
-                for (int index = 0; index < members.size(); index++) {
-                  w.write(
-                      "$T.$L => $L,",
-                      unionType,
-                      CSharpNaming.variantName(members.get(index)),
-                      index);
-                }
-              }));
+          writer.consumer(w -> {
+            for (int index = 0; index < members.size(); index++) {
+              w.write(
+                  "$T.$L => $L,", unionType, CSharpNaming.variantName(members.get(index)), index);
+            }
+          }));
       writer.putContext(
           "writes",
-          writer.consumer(
-              w -> {
-                for (int index = 0; index < members.size(); index++) {
-                  MemberShape member = members.get(index);
-                  w.write("case $T.$L @case:", unionType, CSharpNaming.variantName(member));
-                  w.indent();
-                  writeValue(
-                      w,
-                      context,
-                      member,
-                      String.valueOf(index),
-                      "@case.Value",
-                      "value" + index,
-                      CSharpShapeSupport.isReferenceType(context.model(), member),
-                      null,
-                      "Target" + index);
-                  w.write("break;");
-                  w.dedent();
-                }
-              }));
+          writer.consumer(w -> {
+            for (int index = 0; index < members.size(); index++) {
+              MemberShape member = members.get(index);
+              w.write("case $T.$L @case:", unionType, CSharpNaming.variantName(member));
+              w.indent();
+              writeValue(
+                  w,
+                  context,
+                  member,
+                  String.valueOf(index),
+                  "@case.Value",
+                  "value" + index,
+                  CSharpShapeSupport.isReferenceType(context.model(), member),
+                  null,
+                  "Target" + index);
+              w.write("break;");
+              w.dedent();
+            }
+          }));
       writer.putContext(
           "reads",
-          writer.consumer(
-              w -> {
-                for (int index = 0; index < members.size(); index++) {
-                  w.write(
-                      "$L => new $T.$L(($L)!),",
-                      index,
-                      unionType,
-                      CSharpNaming.variantName(members.get(index)),
-                      readValue(
-                          w,
-                          context,
-                          members.get(index),
-                          "value" + index,
-                          false,
-                          "Target" + index));
-                }
-              }));
+          writer.consumer(w -> {
+            for (int index = 0; index < members.size(); index++) {
+              w.write(
+                  "$L => new $T.$L(($L)!),",
+                  index,
+                  unionType,
+                  CSharpNaming.variantName(members.get(index)),
+                  readValue(
+                      w, context, members.get(index), "value" + index, false, "Target" + index));
+            }
+          }));
       writer.write(
           """
           public static partial class ${schemaClass:L}

@@ -33,13 +33,12 @@ class AwsEndpointsIntegrationTest {
             .collect(Collectors.toSet()));
     assertTrue(
         integration.endpointBuiltIns().stream()
-            .anyMatch(
-                builtIn ->
-                    builtIn.equals(
-                        new EndpointBuiltIn(
-                            "AWS::Region",
-                            "Region",
-                            "The AWS region requests are sent to, such as us-east-1."))));
+            .anyMatch(builtIn ->
+                builtIn.equals(
+                    new EndpointBuiltIn(
+                        "AWS::Region",
+                        "Region",
+                        "The AWS region requests are sent to, such as us-east-1."))));
     assertEquals("aws.auth#sigv4", integration.endpointAuthSchemeIds().get("sigv4"));
   }
 

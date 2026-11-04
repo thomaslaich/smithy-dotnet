@@ -111,11 +111,10 @@ final class DirectedFSharpCodegen
     directive
         .shape()
         .asEnumShape()
-        .ifPresent(
-            shape -> {
-              new TypeGenerator(directive.context()).stringEnum(shape);
-              new SchemaGenerator(directive.context()).stringEnum(shape);
-            });
+        .ifPresent(shape -> {
+          new TypeGenerator(directive.context()).stringEnum(shape);
+          new SchemaGenerator(directive.context()).stringEnum(shape);
+        });
   }
 
   @Override

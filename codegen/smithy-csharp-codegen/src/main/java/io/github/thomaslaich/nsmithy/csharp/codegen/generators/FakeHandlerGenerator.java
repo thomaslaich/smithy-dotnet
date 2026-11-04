@@ -78,19 +78,18 @@ public final class FakeHandlerGenerator implements Runnable {
       writer.putContext("handler", aggInterface);
       writer.putContext(
           "members",
-          writer.consumer(
-              w -> {
-                boolean first = true;
-                for (OperationShape op : ops) {
-                  if (!first) {
-                    w.write("");
-                  }
-                  first = false;
-                  writeOperationMethod(op);
-                }
-                matcher.writePendingMatchers(w);
-                values.writePendingIterators(w);
-              }));
+          writer.consumer(w -> {
+            boolean first = true;
+            for (OperationShape op : ops) {
+              if (!first) {
+                w.write("");
+              }
+              first = false;
+              writeOperationMethod(op);
+            }
+            matcher.writePendingMatchers(w);
+            values.writePendingIterators(w);
+          }));
       writer.write(
           """
           public class ${fakeClass:L} : ${handler:L}

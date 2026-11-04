@@ -112,10 +112,9 @@ public final class ImportDeclarations implements ImportContainer {
     if (modelTypeNames.contains(name) || modelTypeNames.contains(shortName)) return true;
     if (namespaceSegments.contains(name) || namespaceSegments.contains(shortName)) return true;
     return references.keySet().stream()
-        .anyMatch(
-            other ->
-                !other.symbol().getFullName().equals(reference.symbol().getFullName())
-                    && (other.alias().equals(name) || other.shortName().equals(shortName)));
+        .anyMatch(other ->
+            !other.symbol().getFullName().equals(reference.symbol().getFullName())
+                && (other.alias().equals(name) || other.shortName().equals(shortName)));
   }
 
   private boolean usesQualifiedName(Reference reference) {

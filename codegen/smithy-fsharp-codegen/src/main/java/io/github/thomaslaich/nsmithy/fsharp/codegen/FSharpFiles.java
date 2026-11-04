@@ -162,12 +162,11 @@ public final class FSharpFiles {
     shape.members().forEach(member -> references.add(member.getTarget()));
     shape
         .asOperationShape()
-        .ifPresent(
-            operation -> {
-              references.add(operation.getInputShape());
-              references.add(operation.getOutputShape());
-              references.addAll(operation.getErrors());
-            });
+        .ifPresent(operation -> {
+          references.add(operation.getInputShape());
+          references.add(operation.getOutputShape());
+          references.addAll(operation.getErrors());
+        });
     return references;
   }
 

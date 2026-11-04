@@ -290,35 +290,33 @@ final class ServerGenerator {
       return "global.System.Array.Empty<" + SERVER + "ServicePromptDefinition>()";
     }
     return prompts.stream()
-        .map(
-            prompt -> {
-              List<String> arguments = new ArrayList<>();
-              arguments.add(FSharpNaming.stringLiteral(prompt.name()));
-              arguments.add(FSharpNaming.stringLiteral(prompt.description()));
-              arguments.add(FSharpNaming.stringLiteral(prompt.template()));
-              if (prompt.preferWhen() != null) {
-                arguments.add("preferWhen = " + FSharpNaming.stringLiteral(prompt.preferWhen()));
-              }
-              if (!prompt.arguments().isEmpty()) {
-                arguments.add(
-                    "arguments = "
-                        + prompt.arguments().stream()
-                            .map(
-                                argument ->
-                                    SERVER
-                                        + "ServicePromptArgumentDefinition("
-                                        + FSharpNaming.stringLiteral(argument.name())
-                                        + ", "
-                                        + (argument.description() == null
-                                            ? "null"
-                                            : FSharpNaming.stringLiteral(argument.description()))
-                                        + ", "
-                                        + argument.required()
-                                        + ")")
-                            .collect(Collectors.joining("; ", "[| ", " |]")));
-              }
-              return SERVER + "ServicePromptDefinition(" + String.join(", ", arguments) + ")";
-            })
+        .map(prompt -> {
+          List<String> arguments = new ArrayList<>();
+          arguments.add(FSharpNaming.stringLiteral(prompt.name()));
+          arguments.add(FSharpNaming.stringLiteral(prompt.description()));
+          arguments.add(FSharpNaming.stringLiteral(prompt.template()));
+          if (prompt.preferWhen() != null) {
+            arguments.add("preferWhen = " + FSharpNaming.stringLiteral(prompt.preferWhen()));
+          }
+          if (!prompt.arguments().isEmpty()) {
+            arguments.add(
+                "arguments = "
+                    + prompt.arguments().stream()
+                        .map(argument ->
+                            SERVER
+                                + "ServicePromptArgumentDefinition("
+                                + FSharpNaming.stringLiteral(argument.name())
+                                + ", "
+                                + (argument.description() == null
+                                    ? "null"
+                                    : FSharpNaming.stringLiteral(argument.description()))
+                                + ", "
+                                + argument.required()
+                                + ")")
+                        .collect(Collectors.joining("; ", "[| ", " |]")));
+          }
+          return SERVER + "ServicePromptDefinition(" + String.join(", ", arguments) + ")";
+        })
         .collect(Collectors.joining("; ", "[| ", " |]"));
   }
 

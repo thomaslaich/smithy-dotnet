@@ -36,41 +36,40 @@ final class ClientExamplesGenerator {
   void write(OperationShape operation) {
     operation
         .getTrait(ExamplesTrait.class)
-        .ifPresent(
-            trait -> {
-              for (var example : trait.getExamples()) {
-                iterators.clear();
-                boolean hasInput = !ShapeSupport.isUnit(operation.getInputShape());
-                boolean hasOutput = !ShapeSupport.isUnit(operation.getOutputShape());
-                StringBuilder code = new StringBuilder();
-                if (hasInput) {
-                  code.append("var input = ")
-                      .append(value(operation.getInputShape(), example.getInput()))
-                      .append(";\n");
-                }
-                String call =
-                    "await client."
-                        + CSharpNaming.typeName(operation.getId().getName())
-                        + "Async("
-                        + (hasInput ? "input" : "")
-                        + ");";
-                if (example.getError().isPresent()) {
-                  writeErrorExample(code, call, example.getError().get());
-                } else {
-                  code.append(hasOutput ? "var output = " : "").append(call);
-                  if (hasOutput && example.getOutput().isPresent()) {
-                    code.append("\n\n// Expected output:\nvar expectedOutput = ")
-                        .append(value(operation.getOutputShape(), example.getOutput().get()))
-                        .append(";");
-                  }
-                }
-                for (String iterator : iterators) {
-                  code.append("\n\n").append(iterator);
-                }
-                writer.writeXmlExample(
-                    example.getTitle(), example.getDocumentation().orElse(null), code.toString());
+        .ifPresent(trait -> {
+          for (var example : trait.getExamples()) {
+            iterators.clear();
+            boolean hasInput = !ShapeSupport.isUnit(operation.getInputShape());
+            boolean hasOutput = !ShapeSupport.isUnit(operation.getOutputShape());
+            StringBuilder code = new StringBuilder();
+            if (hasInput) {
+              code.append("var input = ")
+                  .append(value(operation.getInputShape(), example.getInput()))
+                  .append(";\n");
+            }
+            String call =
+                "await client."
+                    + CSharpNaming.typeName(operation.getId().getName())
+                    + "Async("
+                    + (hasInput ? "input" : "")
+                    + ");";
+            if (example.getError().isPresent()) {
+              writeErrorExample(code, call, example.getError().get());
+            } else {
+              code.append(hasOutput ? "var output = " : "").append(call);
+              if (hasOutput && example.getOutput().isPresent()) {
+                code.append("\n\n// Expected output:\nvar expectedOutput = ")
+                    .append(value(operation.getOutputShape(), example.getOutput().get()))
+                    .append(";");
               }
-            });
+            }
+            for (String iterator : iterators) {
+              code.append("\n\n").append(iterator);
+            }
+            writer.writeXmlExample(
+                example.getTitle(), example.getDocumentation().orElse(null), code.toString());
+          }
+        });
   }
 
   private void writeErrorExample(
@@ -91,15 +90,13 @@ final class ClientExamplesGenerator {
       example
           .getContent()
           .getMember(member.getMemberName())
-          .ifPresent(
-              node -> {
-                String property =
-                    member.equals(message) ? "Message" : CSharpNaming.memberName(member);
-                code.append("\n    // Expected ")
-                    .append(property)
-                    .append(": ")
-                    .append(memberValue(member, node));
-              });
+          .ifPresent(node -> {
+            String property = member.equals(message) ? "Message" : CSharpNaming.memberName(member);
+            code.append("\n    // Expected ")
+                .append(property)
+                .append(": ")
+                .append(memberValue(member, node));
+          });
     }
     code.append("\n}");
   }
@@ -148,14 +145,13 @@ final class ClientExamplesGenerator {
         List<String> entries = new ArrayList<>();
         node.expectObjectNode().getStringMap().entrySet().stream()
             .sorted(java.util.Map.Entry.comparingByKey())
-            .forEach(
-                entry ->
-                    entries.add(
-                        "{ "
-                            + CSharpNaming.formatString(entry.getKey())
-                            + ", "
-                            + value(map.getValue().getTarget(), entry.getValue())
-                            + " }"));
+            .forEach(entry ->
+                entries.add(
+                    "{ "
+                        + CSharpNaming.formatString(entry.getKey())
+                        + ", "
+                        + value(map.getValue().getTarget(), entry.getValue())
+                        + " }"));
         yield "new "
             + writer.typeName(RuntimeTypes.DICTIONARY)
             + "<string, "

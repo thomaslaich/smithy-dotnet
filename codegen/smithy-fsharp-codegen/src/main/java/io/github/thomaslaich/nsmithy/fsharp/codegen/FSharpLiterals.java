@@ -98,13 +98,12 @@ final class FSharpLiterals {
       case OBJECT -> {
         String entries =
             node.expectObjectNode().getStringMap().entrySet().stream()
-                .map(
-                    e ->
-                        "("
-                            + FSharpNaming.stringLiteral(e.getKey())
-                            + ", "
-                            + document(e.getValue())
-                            + ")")
+                .map(e ->
+                    "("
+                        + FSharpNaming.stringLiteral(e.getKey())
+                        + ", "
+                        + document(e.getValue())
+                        + ")")
                 .collect(Collectors.joining("; "));
         String dictionary =
             "global.System.Collections.Generic.Dictionary<string, " + DOCUMENT + ">";

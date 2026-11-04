@@ -175,23 +175,21 @@ public final class EndpointResolverGenerator implements Runnable {
               && !ProtocolSupport.protocols(context, rules.service()).isEmpty());
       writer.putContext(
           "nodes",
-          writer.consumer(
-              w -> {
-                for (int i = 0; i < bdd.getNodeCount(); i++) {
-                  writer.write("$L, $L, $L,", bdd.getVariable(i), bdd.getHigh(i), bdd.getLow(i));
-                }
-              }));
+          writer.consumer(w -> {
+            for (int i = 0; i < bdd.getNodeCount(); i++) {
+              writer.write("$L, $L, $L,", bdd.getVariable(i), bdd.getHigh(i), bdd.getLow(i));
+            }
+          }));
       writer.putContext(
           "constructorDocs",
-          writer.consumer(
-              w ->
-                  writer.writeXmlDocs(
-                      "Creates a resolver for the given client-level parameters."
-                          + (bindsPerOperation
-                              ? ""
-                              : " They fix the endpoint for every operation, so it is resolved"
-                                  + " here."),
-                      Map.of())));
+          writer.consumer(w ->
+              writer.writeXmlDocs(
+                  "Creates a resolver for the given client-level parameters."
+                      + (bindsPerOperation
+                          ? ""
+                          : " They fix the endpoint for every operation, so it is resolved"
+                              + " here."),
+                  Map.of())));
       writer.putContext("configConstructor", writer.consumer(w -> writeConfigConstructor()));
       writer.putContext("bind", writer.consumer(w -> writeBind(bindings)));
       writer.putContext("resolve", writer.consumer(w -> writeResolve()));
@@ -261,12 +259,11 @@ public final class EndpointResolverGenerator implements Runnable {
     List<String> assignments = new ArrayList<>();
     rules
         .endpointParameter()
-        .ifPresent(
-            parameter ->
-                assignments.add(
-                    propertyName(parameter)
-                        + " = (endpoint ?? config.Endpoint)?.OriginalString"
-                        + defaultFallback(parameter)));
+        .ifPresent(parameter ->
+            assignments.add(
+                propertyName(parameter)
+                    + " = (endpoint ?? config.Endpoint)?.OriginalString"
+                    + defaultFallback(parameter)));
     for (EndpointRules.ConfigParameter config : rules.configParameters()) {
       assignments.add(
           propertyName(config.parameter())
@@ -325,32 +322,28 @@ public final class EndpointResolverGenerator implements Runnable {
     try {
       writer.putContext(
           "arms",
-          writer.consumer(
-              w -> {
-                for (Map.Entry<String, List<String>> binding : bindings.entrySet()) {
-                  writer.pushState();
-                  try {
-                    writer.putContext("pattern", binding.getKey());
-                    writer.putContext(
-                        "assignments",
-                        writer.consumer(
-                            w2 ->
-                                binding
-                                    .getValue()
-                                    .forEach(assignment -> writer.write("$L,", assignment))));
-                    writer.write(
-                        """
-                        ${pattern:L}
-                            => clientParameters with
-                            {
-                                ${assignments:C|}
-                            },\
-                        """);
-                  } finally {
-                    writer.popState();
-                  }
-                }
-              }));
+          writer.consumer(w -> {
+            for (Map.Entry<String, List<String>> binding : bindings.entrySet()) {
+              writer.pushState();
+              try {
+                writer.putContext("pattern", binding.getKey());
+                writer.putContext(
+                    "assignments",
+                    writer.consumer(w2 ->
+                        binding.getValue().forEach(assignment -> writer.write("$L,", assignment))));
+                writer.write(
+                    """
+                    ${pattern:L}
+                        => clientParameters with
+                        {
+                            ${assignments:C|}
+                        },\
+                    """);
+              } finally {
+                writer.popState();
+              }
+            }
+          }));
       writer.write(
           """
           private ${parametersType:L}? Bind(${endpointParameters:T} parameters) => parameters.OperationId.Name switch
@@ -446,23 +439,21 @@ public final class EndpointResolverGenerator implements Runnable {
               w -> declarations.forEach(declaration -> writer.write("$L", declaration))));
       writer.putContext(
           "conditions",
-          writer.consumer(
-              w -> {
-                for (int i = 0; i < conditions.size(); i++) {
-                  writer.write("// $L", comment(bdd.getConditions().get(i).toString()));
-                  writer.write("$L => $L,", i, conditions.get(i));
-                }
-              }));
+          writer.consumer(w -> {
+            for (int i = 0; i < conditions.size(); i++) {
+              writer.write("// $L", comment(bdd.getConditions().get(i).toString()));
+              writer.write("$L => $L,", i, conditions.get(i));
+            }
+          }));
       writer.putContext(
           "results",
-          writer.consumer(
-              w -> {
-                for (int i = 0; i < results.size(); i++) {
-                  if (results.get(i) != null) {
-                    writer.write("$L => $L,", i, results.get(i));
-                  }
-                }
-              }));
+          writer.consumer(w -> {
+            for (int i = 0; i < results.size(); i++) {
+              if (results.get(i) != null) {
+                writer.write("$L => $L,", i, results.get(i));
+              }
+            }
+          }));
       writer.putContext("defaultAuthSchemes", writer.consumer(w -> writeDefaultAuthSchemes()));
       writer.write(
           """
@@ -533,47 +524,43 @@ public final class EndpointResolverGenerator implements Runnable {
       List<String> entries = new ArrayList<>();
       scheme
           .properties()
-          .forEach(
-              (name, value) ->
-                  entries.add(
-                      "["
-                          + CSharpNaming.formatString(name)
-                          + "] = "
-                          + documentType
-                          + ".From("
-                          + CSharpNaming.formatString(value)
-                          + ")"));
+          .forEach((name, value) ->
+              entries.add(
+                  "["
+                      + CSharpNaming.formatString(name)
+                      + "] = "
+                      + documentType
+                      + ".From("
+                      + CSharpNaming.formatString(value)
+                      + ")"));
       scheme
           .parameterProperties()
-          .forEach(
-              (name, parameter) -> {
-                Local local = parameterLocals.get(parameter.getName());
-                if (local.type().kind() != EndpointValueType.Kind.STRING
-                    && local.type().kind() != EndpointValueType.Kind.BOOLEAN) {
-                  throw new CodegenException(
-                      "Auth scheme property "
-                          + name
-                          + " of "
-                          + scheme.schemeId()
-                          + " needs a string or boolean parameter, not "
-                          + parameter.getNameString());
-                }
-                String value =
-                    local.nullable()
-                        ? local.name()
-                            + " is null ? "
-                            + documentType
-                            + ".Null : "
-                            + documentType
-                            + ".From("
-                            + local.name()
-                            + (local.type().kind() == EndpointValueType.Kind.BOOLEAN
-                                ? ".Value"
-                                : "")
-                            + ")"
-                        : documentType + ".From(" + local.name() + ")";
-                entries.add("[" + CSharpNaming.formatString(name) + "] = " + value);
-              });
+          .forEach((name, parameter) -> {
+            Local local = parameterLocals.get(parameter.getName());
+            if (local.type().kind() != EndpointValueType.Kind.STRING
+                && local.type().kind() != EndpointValueType.Kind.BOOLEAN) {
+              throw new CodegenException(
+                  "Auth scheme property "
+                      + name
+                      + " of "
+                      + scheme.schemeId()
+                      + " needs a string or boolean parameter, not "
+                      + parameter.getNameString());
+            }
+            String value =
+                local.nullable()
+                    ? local.name()
+                        + " is null ? "
+                        + documentType
+                        + ".Null : "
+                        + documentType
+                        + ".From("
+                        + local.name()
+                        + (local.type().kind() == EndpointValueType.Kind.BOOLEAN ? ".Value" : "")
+                        + ")"
+                    : documentType + ".From(" + local.name() + ")";
+            entries.add("[" + CSharpNaming.formatString(name) + "] = " + value);
+          });
       if (entries.isEmpty()) {
         writer.write(
             "new $T($L),",
@@ -622,15 +609,14 @@ public final class EndpointResolverGenerator implements Runnable {
       EndpointExpressionRenderer renderer, Map<String, List<Expression>> headers) {
     String entries =
         headers.entrySet().stream()
-            .map(
-                header ->
-                    "["
-                        + CSharpNaming.formatString(header.getKey())
-                        + "] = new string[] { "
-                        + header.getValue().stream()
-                            .map(renderer::renderValue)
-                            .collect(Collectors.joining(", "))
-                        + " }")
+            .map(header ->
+                "["
+                    + CSharpNaming.formatString(header.getKey())
+                    + "] = new string[] { "
+                    + header.getValue().stream()
+                        .map(renderer::renderValue)
+                        .collect(Collectors.joining(", "))
+                    + " }")
             .collect(Collectors.joining(", "));
     return writer.format(
         "new $T<string, $T<string>>($T.OrdinalIgnoreCase) { $L }",
@@ -737,12 +723,11 @@ public final class EndpointResolverGenerator implements Runnable {
                 String arms =
                     rules.authSchemeIds().entrySet().stream()
                         .sorted(Map.Entry.comparingByKey())
-                        .map(
-                            entry ->
-                                CSharpNaming.formatString(entry.getKey())
-                                    + " => "
-                                    + CSharpNaming.formatString(entry.getValue())
-                                    + ", ")
+                        .map(entry ->
+                            CSharpNaming.formatString(entry.getKey())
+                                + " => "
+                                + CSharpNaming.formatString(entry.getValue())
+                                + ", ")
                         .collect(Collectors.joining());
                 return EndpointExpressionRenderer.parenthesize(computed)
                     + " switch { "
@@ -789,12 +774,11 @@ public final class EndpointResolverGenerator implements Runnable {
       EndpointExpressionRenderer renderer, Map<Identifier, Literal> members) {
     String entries =
         members.entrySet().stream()
-            .map(
-                member ->
-                    "["
-                        + CSharpNaming.formatString(member.getKey().getName().getValue())
-                        + "] = "
-                        + document(renderer, member.getValue()))
+            .map(member ->
+                "["
+                    + CSharpNaming.formatString(member.getKey().getName().getValue())
+                    + "] = "
+                    + document(renderer, member.getValue()))
             .collect(Collectors.joining(", "));
     return writer.format(
         "new $T<string, $T> { $L }", RuntimeTypes.DICTIONARY, RuntimeTypes.DOCUMENT, entries);
@@ -905,15 +889,14 @@ public final class EndpointResolverGenerator implements Runnable {
           .getStaticContextParams(operation)
           .map(StaticContextParamsTrait::getParameters)
           .orElse(Map.of())
-          .forEach(
-              (name, definition) -> {
-                Parameter parameter = parameters.get(name);
-                if (parameter != null) {
-                  assignments.put(
-                      propertyName(parameter),
-                      new ParameterBinding(staticValue(definition.getValue(), parameter), false));
-                }
-              });
+          .forEach((name, definition) -> {
+            Parameter parameter = parameters.get(name);
+            if (parameter != null) {
+              assignments.put(
+                  propertyName(parameter),
+                  new ParameterBinding(staticValue(definition.getValue(), parameter), false));
+            }
+          });
 
       if (assignments.isEmpty()) {
         continue;

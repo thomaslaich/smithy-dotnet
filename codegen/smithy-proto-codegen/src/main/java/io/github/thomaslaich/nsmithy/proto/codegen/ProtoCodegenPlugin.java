@@ -57,10 +57,8 @@ public final class ProtoCodegenPlugin implements SmithyBuildPlugin {
             settings
                 .getStringMember("service")
                 .map(s -> s.getValue())
-                .orElseThrow(
-                    () ->
-                        new IllegalArgumentException(
-                            "proto-codegen: 'service' setting is required")));
+                .orElseThrow(() ->
+                    new IllegalArgumentException("proto-codegen: 'service' setting is required")));
 
     String baseNamespace =
         settings.getStringMember("baseNamespace").map(s -> s.getValue()).orElse("");

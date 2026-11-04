@@ -104,12 +104,11 @@ final class FakeExampleMatcher {
       return List.of();
     }
     if (ShapeSupport.isUnit(op.getInputShape())) {
-      LOGGER.warning(
-          () ->
-              op.getId()
-                  + " has multiple or error @examples but no input to match; the "
-                  + values.subject()
-                  + " always returns the fallback response.");
+      LOGGER.warning(() ->
+          op.getId()
+              + " has multiple or error @examples but no input to match; the "
+              + values.subject()
+              + " always returns the fallback response.");
       return List.of();
     }
 
@@ -171,15 +170,14 @@ final class FakeExampleMatcher {
     for (Map.Entry<String, Node> entry : node.getStringMap().entrySet()) {
       MemberShape member = shape.getMember(entry.getKey()).orElse(null);
       if (member == null) {
-        LOGGER.warning(
-            () ->
-                "Example input member "
-                    + entry.getKey()
-                    + " does not exist on "
-                    + shape.getId()
-                    + "; the "
-                    + values.subject()
-                    + " ignores it when matching.");
+        LOGGER.warning(() ->
+            "Example input member "
+                + entry.getKey()
+                + " does not exist on "
+                + shape.getId()
+                + "; the "
+                + values.subject()
+                + " ignores it when matching.");
         continue;
       }
       Node valueNode = entry.getValue();
@@ -188,13 +186,12 @@ final class FakeExampleMatcher {
       }
       if (ShapeSupport.isEventStreamMember(model, member)
           || ShapeSupport.isStreamingBlobMember(model, member)) {
-        LOGGER.warning(
-            () ->
-                "Example input member "
-                    + member.getId()
-                    + " is a streaming member; the "
-                    + values.subject()
-                    + " ignores it when matching.");
+        LOGGER.warning(() ->
+            "Example input member "
+                + member.getId()
+                + " is a streaming member; the "
+                + values.subject()
+                + " ignores it when matching.");
         continue;
       }
       valueConditions(
@@ -231,13 +228,12 @@ final class FakeExampleMatcher {
                 + ")");
       }
       case DOCUMENT ->
-          LOGGER.warning(
-              () ->
-                  "Example input value for document member at "
-                      + expr
-                      + " cannot be compared; the "
-                      + values.subject()
-                      + " treats it as always matching.");
+          LOGGER.warning(() ->
+              "Example input value for document member at "
+                  + expr
+                  + " cannot be compared; the "
+                  + values.subject()
+                  + " treats it as always matching.");
       case STRUCTURE -> {
         if (ShapeSupport.isUnit(target.getId())) {
           return;
@@ -292,15 +288,14 @@ final class FakeExampleMatcher {
         }
       }
       default ->
-          LOGGER.warning(
-              () ->
-                  "Example input value at "
-                      + expr
-                      + " has unsupported shape type "
-                      + target.getType()
-                      + "; the "
-                      + values.subject()
-                      + " treats it as always matching.");
+          LOGGER.warning(() ->
+              "Example input value at "
+                  + expr
+                  + " has unsupported shape type "
+                  + target.getType()
+                  + "; the "
+                  + values.subject()
+                  + " treats it as always matching.");
     }
   }
 
@@ -343,13 +338,12 @@ final class FakeExampleMatcher {
           counter);
       return;
     }
-    LOGGER.warning(
-        () ->
-            "Example input value for union at "
-                + expr
-                + " names no known variant; the "
-                + values.subject()
-                + " treats it as always matching.");
+    LOGGER.warning(() ->
+        "Example input value for union at "
+            + expr
+            + " names no known variant; the "
+            + values.subject()
+            + " treats it as always matching.");
   }
 
   private static String nextVar(int[] counter) {

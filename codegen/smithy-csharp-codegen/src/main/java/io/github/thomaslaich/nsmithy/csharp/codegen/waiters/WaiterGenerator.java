@@ -55,14 +55,12 @@ public final class WaiterGenerator implements Runnable {
       writer.putContext("class", WaiterMethods.waitersClass(service));
       writer.putContext(
           "tables",
-          writer.consumer(
-              w ->
-                  TopDownIndex.of(model).getContainedOperations(service).stream()
-                      .sorted(Comparator.comparing(op -> op.getId().getName()))
-                      .forEach(
-                          op ->
-                              WaiterMethods.waiters(context, op)
-                                  .forEach((name, waiter) -> writeTable(op, name, waiter)))));
+          writer.consumer(w ->
+              TopDownIndex.of(model).getContainedOperations(service).stream()
+                  .sorted(Comparator.comparing(op -> op.getId().getName()))
+                  .forEach(op ->
+                      WaiterMethods.waiters(context, op)
+                          .forEach((name, waiter) -> writeTable(op, name, waiter)))));
       writer.write(
           """
           internal static class ${class:L}
@@ -84,12 +82,11 @@ public final class WaiterGenerator implements Runnable {
       writer.putContext("name", CSharpNaming.typeName(name));
       writer.putContext(
           "acceptors",
-          writer.consumer(
-              w -> {
-                for (Acceptor acceptor : waiter.getAcceptors()) {
-                  writeAcceptor(op, name, acceptor);
-                }
-              }));
+          writer.consumer(w -> {
+            for (Acceptor acceptor : waiter.getAcceptors()) {
+              writeAcceptor(op, name, acceptor);
+            }
+          }));
       writer.write(
           """
           internal static readonly ${acceptor:T}<${input:L}, ${output:L}>[] ${name:L} =
@@ -198,10 +195,9 @@ public final class WaiterGenerator implements Runnable {
     String name = errorType.substring(errorType.lastIndexOf('#') + 1);
     Optional<StructureShape> modeled =
         OperationIndex.of(model).getErrors(service, op).stream()
-            .filter(
-                error ->
-                    error.getId().toString().equals(errorType)
-                        || error.getId().getName().equals(errorType))
+            .filter(error ->
+                error.getId().toString().equals(errorType)
+                    || error.getId().getName().equals(errorType))
             .findFirst();
     if (modeled.isPresent()) {
       return "error is " + writer.typeName(context.symbolProvider().toSymbol(modeled.get()));

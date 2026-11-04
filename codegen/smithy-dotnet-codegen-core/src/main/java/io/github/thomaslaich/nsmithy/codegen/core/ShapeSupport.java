@@ -198,10 +198,9 @@ public final class ShapeSupport {
     }
 
     return shape.members().stream()
-        .anyMatch(
-            member ->
-                member.hasTrait(StreamingTrait.class)
-                    || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class));
+        .anyMatch(member ->
+            member.hasTrait(StreamingTrait.class)
+                || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class));
   }
 
   /**
@@ -216,10 +215,9 @@ public final class ShapeSupport {
     }
 
     return shape.members().stream()
-        .filter(
-            member ->
-                member.hasTrait(StreamingTrait.class)
-                    || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class))
+        .filter(member ->
+            member.hasTrait(StreamingTrait.class)
+                || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class))
         .map(MemberShape::getTarget)
         .findFirst();
   }

@@ -80,12 +80,11 @@ public final class ContractsJarPlugin implements SmithyBuildPlugin {
         settings
             .getArrayMember("dependencies")
             .map(ContractsJarPlugin::explicitDependencies)
-            .orElseThrow(
-                () ->
-                    new SmithyBuildException(
-                        "contracts-jar: `dependencies` setting is required; declare Maven"
-                            + " coordinates or use [] when the contract has no external"
-                            + " dependencies"));
+            .orElseThrow(() ->
+                new SmithyBuildException(
+                    "contracts-jar: `dependencies` setting is required; declare Maven"
+                        + " coordinates or use [] when the contract has no external"
+                        + " dependencies"));
     dependencies.remove(groupId + ":" + artifactId + ":" + version);
 
     String baseName = artifactId + "-" + version;

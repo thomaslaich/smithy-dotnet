@@ -257,14 +257,13 @@ public final class CSharpShapeSupport {
     var mapShape =
         target
             .asMapShape()
-            .orElseThrow(
-                () ->
-                    new CodegenException(
-                        "Expected map shape while rendering @default for "
-                            + target.getId()
-                            + ", but found "
-                            + target.getType()
-                            + "."));
+            .orElseThrow(() ->
+                new CodegenException(
+                    "Expected map shape while rendering @default for "
+                        + target.getId()
+                        + ", but found "
+                        + target.getType()
+                        + "."));
     Shape valueTarget = model.expectShape(mapShape.getValue().getTarget());
     String valueType = writer.typeName(sp.toSymbol(valueTarget));
     StringBuilder sb =

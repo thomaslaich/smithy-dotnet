@@ -73,13 +73,12 @@ final class FakeValueSynthesizer {
     StructureShape output = model.expectShape(op.getOutputShape(), StructureShape.class);
     ObjectNode example = firstExampleOutput(op);
     if (example == null) {
-      LOGGER.warning(
-          () ->
-              "No non-error @examples output for "
-                  + op.getId()
-                  + "; the "
-                  + subject
-                  + " returns synthesized placeholder values.");
+      LOGGER.warning(() ->
+          "No non-error @examples output for "
+              + op.getId()
+              + "; the "
+              + subject
+              + " returns synthesized placeholder values.");
     }
     String expr = structureExpr(output, example, new LinkedHashSet<>(), op);
     if (expr == null) {

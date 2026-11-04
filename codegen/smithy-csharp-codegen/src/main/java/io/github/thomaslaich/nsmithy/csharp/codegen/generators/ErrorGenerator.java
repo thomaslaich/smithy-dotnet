@@ -55,25 +55,22 @@ public final class ErrorGenerator implements Runnable {
               : "");
       writer.putContext(
           "members",
-          writer.consumer(
-              w -> {
-                retryable.ifPresent(
-                    trait -> {
-                      w.write(
-                          "bool $T.IsThrottlingError => $L;",
-                          RuntimeTypes.I_SMITHY_RETRYABLE_ERROR,
-                          trait.getThrottling() ? "true" : "false");
-                      w.write("");
-                    });
-                writeConstructor(typeName, messageMember.orElse(null));
-                messageMember.ifPresent(
-                    member -> {
-                      w.writeXmlDocs(member);
-                      w.write("public override string Message => base.Message!;");
-                      w.write("");
-                    });
-                writeProperties(sp, model, messageMember.orElse(null));
-              }));
+          writer.consumer(w -> {
+            retryable.ifPresent(trait -> {
+              w.write(
+                  "bool $T.IsThrottlingError => $L;",
+                  RuntimeTypes.I_SMITHY_RETRYABLE_ERROR,
+                  trait.getThrottling() ? "true" : "false");
+              w.write("");
+            });
+            writeConstructor(typeName, messageMember.orElse(null));
+            messageMember.ifPresent(member -> {
+              w.writeXmlDocs(member);
+              w.write("public override string Message => base.Message!;");
+              w.write("");
+            });
+            writeProperties(sp, model, messageMember.orElse(null));
+          }));
       writer.writeXmlDocs(shape);
       writer.write(
           """
@@ -118,19 +115,18 @@ public final class ErrorGenerator implements Runnable {
       } else {
         writer.putContext(
             "parameters",
-            writer.consumer(
-                w -> {
-                  w.write("string? message$L,", hasRequired ? "" : " = null");
-                  for (int i = 0; i < ctor.size(); i++) {
-                    MemberShape member = ctor.get(i);
-                    w.write(
-                        "$L $L$L$L",
-                        CSharpShapeSupport.parameterTypeExpr(w, model, sp, member),
-                        CSharpNaming.parameterName(member.getMemberName()),
-                        ShapeSupport.isOptionalParameter(member) ? " = null" : "",
-                        i + 1 == ctor.size() ? "" : ",");
-                  }
-                }));
+            writer.consumer(w -> {
+              w.write("string? message$L,", hasRequired ? "" : " = null");
+              for (int i = 0; i < ctor.size(); i++) {
+                MemberShape member = ctor.get(i);
+                w.write(
+                    "$L $L$L$L",
+                    CSharpShapeSupport.parameterTypeExpr(w, model, sp, member),
+                    CSharpNaming.parameterName(member.getMemberName()),
+                    ShapeSupport.isOptionalParameter(member) ? " = null" : "",
+                    i + 1 == ctor.size() ? "" : ",");
+              }
+            }));
         writer.putContext("assignments", writer.consumer(w -> writeAssignments(ctor)));
         writer.write(
             """
