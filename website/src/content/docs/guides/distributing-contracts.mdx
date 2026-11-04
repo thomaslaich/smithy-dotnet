@@ -41,7 +41,11 @@ Its consumers reference those types instead of generating their own: a client
 and a server of the contract generate only their client or server and share one
 set of types. A contracts project that should only validate and package its
 model, for example one whose consumers are F# projects, sets
-`SmithyGenerateShapes` to `false`; its consumers then generate its shapes.
+`SmithyGenerateCode` to `false`; its consumers then generate its shapes.
+
+A service in a contracts project's model generates no service code there. The
+project that sets `SmithyService` to that service generates its client and
+server.
 
 ### Splitting a service across projects
 
@@ -87,6 +91,13 @@ service Shop {
 A module sets `SmithyPublish` so that its model reaches the projects that
 reference it. Every project in the solution must use the same NSmithy version.
 See the [shape ownership design](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
+
+Modules in their own Smithy namespaces can define shapes with the same name for
+different concepts, and the service separates them with `rename`. Their C# types
+keep the name from the model. A concept the modules share belongs in a common
+project. A service cannot rename a provided error, because its name goes on the
+wire: give the errors distinct names or share one. Operation names must be
+unique within a service, because Smithy does not allow renaming them.
 
 ## Maven JAR distribution
 
@@ -273,7 +284,7 @@ the package was built with: generated code from different versions may not fit
 together, and the build fails with a message naming both versions. A package
 whose consumers should generate its types themselves, for example in their own
 namespace or with another NSmithy version, is packed from a project with
-`SmithyGenerateShapes` set to `false`. It contains the model only, and its
+`SmithyGenerateCode` set to `false`. It contains the model only, and its
 consumers generate its shapes.
 
 Keep the runtime packages required by the generated client or server. NSmithy

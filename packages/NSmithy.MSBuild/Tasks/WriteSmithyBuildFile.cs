@@ -36,15 +36,15 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 
     /// <summary>
     /// SmithyService. When empty, the C# generator still runs for the project's own model files
-    /// (see <see cref="GenerateShapes"/>), and contracts-jar gets its settings from properties.
+    /// (see <see cref="GenerateCode"/>), and contracts-jar gets its settings from properties.
     /// </summary>
     public string Service { get; set; } = "";
 
     /// <summary>
-    /// SmithyGenerateShapes: whether a project generates the shapes in its own model files, also
+    /// SmithyGenerateCode: whether a project generates the shapes in its own model files, also
     /// without SmithyService. Only for the C# generator.
     /// </summary>
-    public bool GenerateShapes { get; set; } = true;
+    public bool GenerateCode { get; set; } = true;
 
     /// <summary>
     /// Shape manifests (nsmithy-shapes.json) of referenced projects. The shapes they list are not
@@ -185,7 +185,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     // Owned shapes apply when NSmithy's C# generator runs in one projection only: a file that runs
     // it in several projections generates them itself, and each would generate the owned shapes.
     private bool GeneratesOwnedShapes =>
-        Plugin == CSharpPlugin && GenerateShapes && _configuresPlugin != "elsewhere";
+        Plugin == CSharpPlugin && GenerateCode && _configuresPlugin != "elsewhere";
 
     private bool HasProjectBuildFile =>
         !string.IsNullOrEmpty(ProjectBuildFile) && File.Exists(ProjectBuildFile);
@@ -286,10 +286,10 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     // sets them too; defaults apply only when it does not.
     private bool AddPropertySettings(JsonObject root)
     {
-        if (!GenerateShapes && !string.IsNullOrEmpty(Service))
+        if (!GenerateCode && !string.IsNullOrEmpty(Service))
             LogError(
-                "NSMITHYSHAPES",
-                "NSmithy: SmithyGenerateShapes=false turns off code generation for a project without SmithyService, but SmithyService is set. Remove one of them."
+                "NSMITHYCODE",
+                "NSmithy: SmithyGenerateCode=false turns off code generation for a project without SmithyService, but SmithyService is set. Remove one of them."
             );
         if (string.IsNullOrEmpty(Service))
         {
@@ -395,7 +395,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                 AddShapeSettings(shapes);
                 if (!GenerateServer)
                     shapes["generateServer"] = false;
-                yield return new PropertySettings(Plugin, "SmithyGenerateShapes", shapes, []);
+                yield return new PropertySettings(Plugin, "SmithyGenerateCode", shapes, []);
             }
             yield break;
         }
@@ -462,7 +462,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     private static string PropertyFor(PropertySettings plugin, string key) =>
         (plugin.Plugin, key) switch
         {
-            (_, "ownedSources") => "SmithyGenerateShapes",
+            (_, "ownedSources") => "SmithyGenerateCode",
             (_, "providedShapes") => "the shape manifests of the project's references",
             (_, "generateClient") => "SmithyGenerateClient",
             (_, "generateServer") => "SmithyGenerateServer",

@@ -466,7 +466,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     [Fact]
     public void ContractsJarPackagesTheModelWithoutAService()
     {
-        // With SmithyGenerateShapes=false the project only validates and packages its model.
+        // With SmithyGenerateCode=false the project only validates and packages its model.
         var project = WriteFile(
             "smithy-build.json",
             """
@@ -485,7 +485,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
             task.ContractsGroupId = "io.github.acme";
             task.ContractsArtifactId = "hello-contracts";
             task.ContractsVersion = "1.2.3";
-            task.GenerateShapes = false;
+            task.GenerateCode = false;
         });
 
         Assert.Empty(errors);
@@ -617,7 +617,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     }
 
     [Fact]
-    public void GenerateShapesFalseOnlyValidatesTheModel()
+    public void GenerateCodeFalseOnlyValidatesTheModel()
     {
         var project = WriteFile(
             "smithy-build.json",
@@ -627,7 +627,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         var (file, errors) = Write(task =>
         {
             task.ProjectBuildFile = project;
-            task.GenerateShapes = false;
+            task.GenerateCode = false;
         });
 
         Assert.Empty(errors);
@@ -635,16 +635,16 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     }
 
     [Fact]
-    public void GenerateShapesFalseWithServiceFails()
+    public void GenerateCodeFalseWithServiceFails()
     {
         var (_, errors) = Write(task =>
         {
             task.Service = "example#Service";
-            task.GenerateShapes = false;
+            task.GenerateCode = false;
         });
 
         var error = Assert.Single(errors);
-        Assert.Equal("NSMITHYSHAPES", error.Code);
+        Assert.Equal("NSMITHYCODE", error.Code);
     }
 
     [Fact]
@@ -769,7 +769,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
 
         var error = Assert.Single(errors);
         Assert.Equal("NSMITHYPLUGIN", error.Code);
-        Assert.Contains("SmithyGenerateShapes", error.Message, StringComparison.Ordinal);
+        Assert.Contains("SmithyGenerateCode", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
