@@ -127,6 +127,12 @@ See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for 
 | `SmithyMavenGroupId` | Maven `groupId` for the emitted JAR (e.g. `io.github.acme`). When set, the build runs the `contracts-jar` plugin and `dotnet pack` copies its JAR, POM, and checksums next to the `.nupkg`. The version is `PackageVersion`. Set `plugins.contracts-jar.dependencies` explicitly in `smithy-build.json` (`[]` for no external dependencies). |
 | `SmithyMavenArtifactId` | Maven `artifactId` for the emitted JAR (e.g. `my-service-contracts`). Required when `SmithyMavenGroupId` is set. |
 
+A project takes the model, build file, and shape manifest of every project it references, and of
+everything they reference. `<ProjectReference Include="..." SmithyModel="false" />` leaves a
+reference out, for a project whose model this one does not build on, such as the client of another
+service. A project that packs its model fails to pack when a referenced project whose model it
+takes does not pack its own (`NSMITHYPUBLISH`).
+
 ## Items
 
 | Item | Description |

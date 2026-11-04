@@ -109,32 +109,65 @@
   </Target>
 
   <!--
+    The project references whose Smithy model, build file, and shape manifest this project takes,
+    with everything they reach. A reference with SmithyModel="false" contributes none of them: for
+    a project whose model this one does not build on, such as the client of another service.
+    A target, because a condition on custom metadata is not allowed outside one.
+  -->
+  <Target Name="_SmithyModelReferences">
+    <ItemGroup>
+      <_SmithyModelReference
+        Include="@(ProjectReference)"
+        Condition="'%(ProjectReference.SmithyModel)' != 'false'"
+      />
+    </ItemGroup>
+  </Target>
+
+  <!--
     Returns what a project needs from this one and everything this one references, to build its
     model with theirs and use the shapes they generated instead of generating them again:
     their shape manifests (SmithyKind=Manifest) and, for projects with a smithy-build.json, its
-    model files (Source) and the build file itself (BuildFile). Called by
+    model files (Source) and the build file itself (BuildFile). Each item names the project it
+    comes from (SmithyProject) and whether that project packs its model (SmithyPacked), so that
+    a packing project can check that its package stands on packed models. Called by
     _CollectSmithyItemsFromProjectReferences. See designs/shape-ownership.md.
   -->
   <Target
     Name="GetSmithyShapeReferences"
-    DependsOnTargets="_SmithyResolveOwnSources"
+    DependsOnTargets="_SmithyModelReferences;_SmithyResolveOwnSources"
     Returns="@(_SmithyShapeReference)"
   >
     <MSBuild
-      Projects="@(ProjectReference)"
+      Projects="@(_SmithyModelReference)"
       Targets="GetSmithyShapeReferences"
       Properties="BuildProjectReferences=false"
       SkipNonexistentTargets="true"
-      Condition="'@(ProjectReference)' != ''"
+      Condition="'@(_SmithyModelReference)' != ''"
     >
       <Output TaskParameter="TargetOutputs" ItemName="_SmithyReferencedShapeReference" />
     </MSBuild>
+    <PropertyGroup>
+      <_SmithyPacked>false</_SmithyPacked>
+      <_SmithyPacked Condition="'$(SmithyPublish)' == 'true'">true</_SmithyPacked>
+    </PropertyGroup>
     <ItemGroup>
-      <_SmithyShapeReferenceCandidate Include="$(_SmithyAllManifestsGlob)" SmithyKind="Manifest" />
-      <_SmithyShapeReferenceCandidate Include="@(_SmithyOwnSource)" SmithyKind="Source" />
+      <_SmithyShapeReferenceCandidate
+        Include="$(_SmithyAllManifestsGlob)"
+        SmithyKind="Manifest"
+        SmithyProject="$(MSBuildProjectName)"
+        SmithyPacked="$(_SmithyPacked)"
+      />
+      <_SmithyShapeReferenceCandidate
+        Include="@(_SmithyOwnSource)"
+        SmithyKind="Source"
+        SmithyProject="$(MSBuildProjectName)"
+        SmithyPacked="$(_SmithyPacked)"
+      />
       <_SmithyShapeReferenceCandidate
         Include="$(SmithyBuildFile)"
         SmithyKind="BuildFile"
+        SmithyProject="$(MSBuildProjectName)"
+        SmithyPacked="$(_SmithyPacked)"
         Condition="Exists('$(SmithyBuildFile)')"
       />
       <_SmithyShapeReferenceCandidate Include="@(_SmithyReferencedShapeReference)" />
@@ -171,12 +204,24 @@
     all a consumer needs. It runs at pack time, after the build wrote the manifest and once
     PackageId is known. A project that generates no shapes (SmithyGenerateCode=false) has no
     manifest, and its consumers generate its shapes.
+
+    The model this project packs may build on the models of the projects it references, which
+    reach consumers only through those projects' own packages. A referenced model that no package
+    carries would fail in every consumer of this package, so packing fails here instead.
   -->
-  <Target Name="_SmithyPackContracts" DependsOnTargets="_SmithyResolveOwnSources">
+  <Target
+    Name="_SmithyPackContracts"
+    DependsOnTargets="_SmithyResolveOwnSources;_CollectSmithyItemsFromProjectReferences"
+  >
     <Error
       Code="NSMITHYPUBLISH"
       Text="NSmithy: the model source %(_SmithyOwnSource.Identity) is outside the project directory, so it has no place in the package. Move it into the project, or into a contracts project of its own."
       Condition="'%(_SmithyOwnSource.Identity)' != '' and '%(_SmithyOwnSource.PackagePath)' == ''"
+    />
+    <Error
+      Code="NSMITHYPUBLISH"
+      Text="NSmithy: this project's model builds on the model of %(_SmithyProjectReferenceItem.SmithyProject), which does not pack it, so no package would carry the shapes this package's model refers to. Set SmithyPublish=true in %(_SmithyProjectReferenceItem.SmithyProject), or SmithyModel=&quot;false&quot; on the reference to it if this project's model does not use its shapes."
+      Condition="'%(_SmithyProjectReferenceItem.SmithyKind)' == 'Source' and '%(_SmithyProjectReferenceItem.SmithyPacked)' != 'true'"
     />
     <PropertyGroup>
       <!-- Next to these targets in the repository, under tools/ in the NSmithy.MSBuild package. -->
@@ -404,23 +449,25 @@
   </ItemGroup>
 
   <!--
-    Collect what the project's references publish (see GetSmithyShapeReferences), directly or
-    through their own references, together with what contracts packages declare (their props add
-    SmithyPackageReference items). _PrepareSmithyBuildFile uses them only when the project
-    generates code.
+    Collect what the project's references offer (see GetSmithyShapeReferences), directly or
+    through their own references. _PrepareSmithyBuildFile adds what contracts packages declare
+    (their props add SmithyPackageReference items) and uses them only when the project generates
+    code; _SmithyPackContracts checks them when the project packs its model.
   -->
   <Target
     Name="_CollectSmithyItemsFromProjectReferences"
+    DependsOnTargets="_SmithyModelReferences"
     BeforeTargets="_PrepareSmithyBuildFile"
     Condition="'@(ProjectReference)' != ''"
   >
     <MSBuild
-      Projects="@(ProjectReference)"
+      Projects="@(_SmithyModelReference)"
       Targets="GetSmithyShapeReferences"
       Properties="BuildProjectReferences=false"
       SkipNonexistentTargets="true"
+      Condition="'@(_SmithyModelReference)' != ''"
     >
-      <Output TaskParameter="TargetOutputs" ItemName="_SmithyReference" />
+      <Output TaskParameter="TargetOutputs" ItemName="_SmithyProjectReferenceItem" />
     </MSBuild>
   </Target>
 
@@ -442,7 +489,7 @@
     DependsOnTargets="_CollectSmithyItemsFromProjectReferences;_SmithyResolveOwnSources"
   >
     <ItemGroup>
-      <_SmithyReference Include="@(SmithyPackageReference->'%(FullPath)')" />
+      <_SmithyReference Include="@(_SmithyProjectReferenceItem);@(SmithyPackageReference->'%(FullPath)')" />
     </ItemGroup>
     <!-- Two references that reach the same contract contribute its files once. -->
     <RemoveDuplicates Inputs="@(_SmithyReference)">
