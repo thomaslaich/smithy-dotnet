@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FSharp.Core" Version="10.1.201" />
+    <PackageReference Include="FSharp.Core" Version="10.1.403" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
     <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
