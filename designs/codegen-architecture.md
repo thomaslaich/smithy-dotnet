@@ -325,8 +325,16 @@ over as a pair of functions. A sparse collection's `option` elements go through
 
 The client is `I{Service}Client`, `{Service}ClientConfig`, and `{Service}Client`,
 as in C#. Each operation is a method that takes the input record and an optional
-`CancellationToken` and returns a `Task`; modeled errors are raised as their
-exception classes. The client binds each operation to the service's default
+`CancellationToken` and returns a `Task`. An operation whose model declares
+errors returns `Task<Result<Output, {Operation}Error>>`: the union has one case
+per error the operation declares and, when the service declares errors, a
+`Service` case holding `{Service}Error`, one union for the whole service, so a
+caller handles the service's errors once. The client catches the error
+exceptions the runtime raises and returns them as those cases; every other
+failure stays an exception, including a modeled error the operation does not
+declare. Server handlers raise modeled errors as in C#: a handler produces one
+error per call and the runtime writes it to the wire either way. The client
+binds each operation to the service's default
 protocol when it is constructed and calls `SmithyClientRuntime`, so transport,
 retries, auth, and serialization are the C# client's. It fills in a missing
 `@idempotencyToken` member and expands `@endpoint` host prefixes. It has no

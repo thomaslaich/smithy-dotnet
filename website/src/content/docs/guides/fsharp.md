@@ -102,7 +102,7 @@ C# and F# projects do not share generated types.
 | Enums | Discriminated unions with an `Unknown of string` case. `FromValue` and `.Value` convert to and from the wire value. |
 | Int enums | F# enums. |
 | Lists and maps | `'T list` and `Map<string, 'T>`, with `option` elements when `@sparse`. |
-| The service, when `SmithyGenerateClient` is on | `IWeatherClient`, `WeatherClient`, and `WeatherClientConfig`, plus a union such as `GetCityError` for each operation that declares errors. |
+| The service, when `SmithyGenerateClient` is on | `IWeatherClient`, `WeatherClient`, and `WeatherClientConfig`, plus a union such as `GetCityError` for each operation that declares errors and `WeatherError` for the errors the service declares. |
 | The service, when `SmithyGenerateServer` is on | A handler interface `IWeatherServiceHandler` composed of one interface per operation, plus `AddWeatherServiceHandler` and `MapWeatherService` extensions for ASP.NET Core. |
 | Every shape | A runtime schema in the child `Schemas` namespace, such as `Example.Weather.Schemas.GetCityOutputSchema`. |
 
@@ -154,9 +154,8 @@ builder.Services.AddMcpServer().WithSmithyService<WeatherServiceDefinition>()
 ## Call the service
 
 Each operation is a method that takes the input record and an optional
-`CancellationToken`, and returns a `Task`. An operation that declares errors,
-directly or through its service, returns its output as a `Result` with a union
-of those errors:
+`CancellationToken`, and returns a `Task`. An operation that declares errors
+returns its output as a `Result` with a union of those errors:
 
 ```fsharp title="Program.fs"
 open System
@@ -174,8 +173,23 @@ let run () =
 run().Wait()
 ```
 
+Errors the service declares for every operation are a `Service` case holding
+one union for the whole service, so one function handles them for every call:
+
+```fsharp
+let handleServiceError =
+    function
+    | WeatherError.Unavailable error -> printfn "Try again: %s" error.Message
+
+match! client.GetCityAsync { CityId = "SEA" } with
+| Ok city -> printfn "%s" city.Name
+| Error(GetCityError.NoSuchResource error) -> printfn "No such %s" error.ResourceType
+| Error(GetCityError.Service error) -> handleServiceError error
+```
+
 Other failures are exceptions: transport failures, cancellation, and error
-responses the model does not declare for the operation.
+responses the model does not declare for the operation. Server handlers raise
+modeled errors, as in C#.
 
 The client runs on the same runtime as the C# client, so
 [authentication](/smithy-dotnet/guides/client-configuration/authentication/),
