@@ -37,9 +37,9 @@ code path, and every MSBuild property means the same thing in every project.
 | Input | Source |
 | --- | --- |
 | Project build file | `$(SmithyBuildFile)`, `smithy-build.json` at the project root by default. Optional. |
-| Contract build files | `SmithyContractsBuildFile` items, collected from contracts project references or set for packaged contracts. |
+| Contract build files | `SmithyContractsBuildFile` items: the `smithy-build.json` of every referenced project that has one, directly or transitively, or set by hand for packaged contracts. |
 | Contract sources | `SmithySource` items, collected the same way. |
-| Shape manifests | `SmithyShapeManifest` items: the `nsmithy-shapes.json` of every C# project the project references, directly or transitively. See [shape-ownership.md](shape-ownership.md). |
+| Shape manifests | `SmithyShapeManifest` items: the `nsmithy-shapes.json` of every C# or F# project the project references, directly or transitively. See [shape-ownership.md](shape-ownership.md). |
 | Package contracts | `SmithyPackageReference` items with `SmithyKind` `Source`, `BuildFile`, or `Manifest`, declared by the `buildTransitive` props of contracts packages and added to the items above when the project generates code. |
 | Generation properties | `SmithyService`, `SmithyGenerateCode`, `SmithyGenerateClient`, `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, `SmithyGrpc`, and `SmithyProjection`. |
 | Contract coordinates | `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and `PackageVersion` of a contracts project. |
@@ -160,10 +160,11 @@ repositories. See [Maven dependencies](../website/src/content/docs/reference/mav
 
 ## Contracts projects
 
-A contracts project (`SmithyPublish=true`) publishes its own `smithy-build.json`
-in the NuGet package, never the effective build file. Its consumers therefore
-receive the model's settings and none of the contracts project's generation
-settings. Without `SmithyService`, a contracts project generates the shapes in
+A project with a `smithy-build.json` offers it, and the model files it names,
+to the projects that reference it. A contracts project (`SmithyPublish=true`)
+also packs them into the NuGet package. In both cases consumers get the
+project's own build file, never the effective one, so they receive the model's
+settings and none of the project's generation settings. Without `SmithyService`, a contracts project generates the shapes in
 its model, which its consumers then reference, and needs `NSmithy.Core`; with
 `SmithyGenerateCode` set to `false`, its build only validates the model.
 

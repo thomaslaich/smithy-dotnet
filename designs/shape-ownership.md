@@ -191,14 +191,14 @@ The `GetSmithyShapeReferences` target returns what a project needs from a
 reference and everything that reference references:
 
 - **Their manifests**, from every project that generated code.
-- **Their model files and build files**, from contracts projects
-  (`SmithyPublish=true`): Api needs Common's model, because the operations it
-  gets from Orders target `Money`. A module therefore sets `SmithyPublish`, so
-  that its model reaches the projects that reference it.
+- **Their model files and build files**, from every project with a
+  `smithy-build.json`: Api needs Common's model, because the operations it gets
+  from Orders target `Money`.
 
-A project publishes the model files its `smithy-build.json` names in `sources`
-and `imports`, the same files it passes as `ownedSources`, so the model its
-consumers get is the one its generated types come from.
+A project offers the model files its `smithy-build.json` names in `sources` and
+`imports`, the same files it passes as `ownedSources`, so the model its
+consumers get is the one its generated types come from. It offers them whether
+or not it is packed: `SmithyPublish` only decides what goes into its package.
 
 A project generates code when it has model files of its own or `SmithyService`
 is set. Only then do its references' model files, build files, and manifests

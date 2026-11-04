@@ -5,7 +5,6 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
-    <SmithyPublish>true</SmithyPublish>
   </PropertyGroup>
 
   <ItemGroup>

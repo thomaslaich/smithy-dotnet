@@ -3,7 +3,6 @@
        nothing about the service and depends on NSmithy.Core only. -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <SmithyPublish>true</SmithyPublish>
     <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>

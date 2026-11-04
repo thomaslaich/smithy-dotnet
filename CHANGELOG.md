@@ -77,6 +77,14 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   implementations compile unchanged; an operation from another Smithy namespace now has its handler
   interface in that namespace.
 
+- **A project with a `smithy-build.json` offers its model to the projects that reference it.**
+  `SmithyPublish` no longer gates that; it only packs the model, the shape manifest, and the props
+  file into the NuGet package, and the Maven JAR with `SmithyMavenGroupId`. A module of a service
+  therefore needs no property at all, and a client project can generate from a server project's
+  model. A project that generates code and references a project with a `smithy-build.json` now
+  gets its model and Maven dependencies, which it did not when that project left `SmithyPublish`
+  unset.
+
 ### Fixed
 
 - A project that references a project using only `NSmithy.Client` no longer fails with `MSB5029`,

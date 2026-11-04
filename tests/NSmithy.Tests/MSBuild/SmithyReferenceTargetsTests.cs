@@ -23,8 +23,9 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
     public SmithyReferenceTargetsTests()
     {
         Directory.CreateDirectory(_directory);
-        // A contracts project whose smithy-build.json names model/ and one file of shared/.
-        WriteProject("contracts", "<SmithyPublish>true</SmithyPublish>");
+        // A contracts project whose smithy-build.json names model/ and one file of shared/. It does
+        // not set SmithyPublish: a project offers its model to its references either way.
+        WriteProject("contracts");
         WriteFile(
             "contracts/smithy-build.json",
             """{ "version": "1.0", "sources": ["model"], "imports": ["shared/money.smithy"] }"""
@@ -117,6 +118,7 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
                 "msbuild",
                 Path.Combine(_directory, "contracts", "contracts.proj"),
                 "-t:_SmithyPackContracts",
+                "-p:SmithyPublish=true",
                 "-p:PackageId=Acme.Contracts",
                 "-getItem:TfmSpecificPackageFile",
                 "-nologo",

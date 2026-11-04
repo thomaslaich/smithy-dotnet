@@ -6,7 +6,7 @@ using MsBuildTask = Microsoft.Build.Utilities.Task;
 namespace NSmithy.Contracts;
 
 /// <summary>
-/// Lists the model files of a project that publishes its model (SmithyPublish=true): the files
+/// Lists a project's own model files: the files
 /// that its smithy-build.json names in <c>sources</c> and <c>imports</c>, with directories
 /// expanded to the <c>.smithy</c> and <c>.json</c> files Smithy loads from them. These are the
 /// same files the project generates its own shapes from, so the model it publishes, to project

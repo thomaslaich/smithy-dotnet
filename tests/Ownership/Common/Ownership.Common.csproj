@@ -2,7 +2,6 @@
   <!-- Shapes the modules share: generated here, referenced everywhere else. -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <SmithyPublish>true</SmithyPublish>
     <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
