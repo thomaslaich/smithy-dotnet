@@ -11,12 +11,15 @@ copying model files. NSmithy supports two packaging paths:
 - **Maven JAR**: any Smithy-based toolchain (Java, TypeScript, Python, .NET,
   and others) can consume it from a Maven registry. This is the more portable
   option.
-- **NuGet package**: contains model files and their Smithy build configuration.
-  Consumers currently need explicit MSBuild items to import them.
+- **NuGet package**: contains the generated types, the model files, their
+  Smithy build configuration, and a manifest of the types. A `PackageReference`
+  is all a consumer needs.
 
 ## Within a solution
 
-Reference a contracts project with `SmithyPublish=true`:
+Reference the project that holds the model. Any project with a
+`smithy-build.json` offers the model it names to the projects that reference
+it:
 
 ```xml title="MyService.Client/MyService.Client.csproj"
 <ItemGroup>
@@ -67,9 +70,6 @@ operation PlaceOrder {
 ```
 
 ```xml title="Shop.Orders/Shop.Orders.csproj"
-<PropertyGroup>
-  <SmithyPublish>true</SmithyPublish>
-</PropertyGroup>
 <ItemGroup>
   <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
   <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
@@ -89,8 +89,7 @@ service Shop {
 }
 ```
 
-A module sets `SmithyPublish` so that its model reaches the projects that
-reference it. Every project in the solution must use the same NSmithy version.
+Every project in the solution must use the same NSmithy version.
 F# projects split a service the same way, as in the
 [F# modules example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/fsharp-modules).
 See the [shape ownership design](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
@@ -249,7 +248,7 @@ shapes tagged `internal`.
    dotnet pack MyService.Contracts --configuration Release
    ```
 
-   With `SmithyPublish=true`, the package contains:
+   `SmithyPublish=true` puts the model into the package, which then contains:
 
    - the assembly with the types the contracts project generated;
    - the model files that `smithy-build.json` names, under `build/smithy/`,

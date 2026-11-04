@@ -16,8 +16,8 @@ own model files and uses the types the projects it references generated.
 
 `orders` and `payments` reference `common`, and `api` references the two
 modules. The modules reference only `NSmithy.Core`: no ASP.NET Core, no protocol
-package, and nothing about the service. They set `SmithyPublish` so that their
-models reach `api`, which gets `common`'s model through them.
+package, and nothing about the service. Their models reach `api` through the
+project references, and `common`'s model through them.
 
 See [Splitting a service across projects](https://thomaslaich.github.io/smithy-dotnet/guides/distributing-contracts/#splitting-a-service-across-projects).
 

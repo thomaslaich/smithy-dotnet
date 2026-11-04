@@ -191,14 +191,23 @@ The `GetSmithyShapeReferences` target returns what a project needs from a
 reference and everything that reference references:
 
 - **Their manifests**, from every project that generated code.
-- **Their model files and build files**, from contracts projects
-  (`SmithyPublish=true`): Api needs Common's model, because the operations it
-  gets from Orders target `Money`. A module therefore sets `SmithyPublish`, so
-  that its model reaches the projects that reference it.
+- **Their model files and build files**, from every project with a
+  `smithy-build.json`: Api needs Common's model, because the operations it gets
+  from Orders target `Money`.
 
-A project publishes the model files its `smithy-build.json` names in `sources`
-and `imports`, the same files it passes as `ownedSources`, so the model its
-consumers get is the one its generated types come from.
+A project offers the model files its `smithy-build.json` names in `sources` and
+`imports`, the same files it passes as `ownedSources`, so the model its
+consumers get is the one its generated types come from. It offers them whether
+or not it is packed: `SmithyPublish` only decides what goes into its package.
+
+A project takes the model of every reference, because it cannot tell which of
+them its own model builds on. A reference whose model it does not build on,
+such as the client of another service, is marked
+`<ProjectReference ... SmithyModel="false" />` and contributes nothing, nor
+does anything it reaches. Without that, the other service's model is loaded
+and validated with this one, its Maven dependencies are combined with this
+project's, and a shape both define differently fails the build, as it would in
+any build that loads both models.
 
 A project generates code when it has model files of its own or `SmithyService`
 is set. Only then do its references' model files, build files, and manifests
@@ -347,6 +356,7 @@ are written in the other language. Its consumers generate its shapes. Setting it
 | A project would generate a shape that a manifest of the other generator lists | Code generation fails and names the manifest. C# and F# projects do not share generated types. |
 | The service's `rename` renames a provided error | Code generation fails. NSmithy does not apply a rename to the error names it sends and matches. |
 | A manifest's `generatorVersion` differs from the running plugin's | Code generation fails. Generated code from different versions may not fit together. |
+| A project packs its model (`SmithyPublish`) and a referenced project whose model it takes does not pack its own | `dotnet pack` fails (`NSMITHYPUBLISH`) and names the project. Its consumers would get a model that refers to shapes no package carries. |
 
 ## Alternatives Considered
 

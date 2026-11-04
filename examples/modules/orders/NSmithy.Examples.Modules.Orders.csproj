@@ -6,7 +6,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
-    <SmithyPublish>true</SmithyPublish>
   </PropertyGroup>
 
   <ItemGroup>

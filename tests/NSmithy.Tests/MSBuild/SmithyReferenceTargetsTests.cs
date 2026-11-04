@@ -23,8 +23,9 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
     public SmithyReferenceTargetsTests()
     {
         Directory.CreateDirectory(_directory);
-        // A contracts project whose smithy-build.json names model/ and one file of shared/.
-        WriteProject("contracts", "<SmithyPublish>true</SmithyPublish>");
+        // A contracts project whose smithy-build.json names model/ and one file of shared/. It does
+        // not set SmithyPublish: a project offers its model to its references either way.
+        WriteProject("contracts");
         WriteFile(
             "contracts/smithy-build.json",
             """{ "version": "1.0", "sources": ["model"], "imports": ["shared/money.smithy"] }"""
@@ -109,19 +110,76 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReferenceWithSmithyModelFalseContributesNothing()
+    {
+        WriteProject(
+            "server",
+            "<SmithyService>acme#Shop</SmithyService>",
+            references: ["contracts SmithyModel=\"false\""],
+            probe: ItemsProbe
+        );
+
+        var result = await ProbeAsync("server");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(Lines(result, "SOURCE", "BUILDFILE", "EFFECTIVE"));
+    }
+
+    [Fact]
+    public async Task SmithyModelFalseAlsoDropsWhatTheReferenceReaches()
+    {
+        // The client of another service: its contracts are not part of this project's model.
+        WriteProject("otherclient", references: ["contracts SmithyModel=\"false\""]);
+        WriteProject(
+            "server",
+            "<SmithyService>acme#Shop</SmithyService>",
+            references: ["otherclient"],
+            probe: ItemsProbe
+        );
+
+        var result = await ProbeAsync("server");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(Lines(result, "SOURCE", "BUILDFILE", "EFFECTIVE"));
+    }
+
+    [Fact]
+    public async Task PackingAModelBuiltOnAnUnpackedReferenceFails()
+    {
+        // Orders' model uses contracts' shapes, but contracts does not pack its model, so no
+        // package would carry them to a consumer of the Orders package.
+        WriteProject("orders", "<SmithyPublish>true</SmithyPublish>", references: ["contracts"]);
+        WriteFile("orders/smithy-build.json", """{ "version": "1.0", "sources": ["model"] }""");
+        WriteFile("orders/model/orders.smithy");
+
+        var result = await PackContractsAsync("orders");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("error NSMITHYPUBLISH", result.Output);
+        Assert.Contains("model of contracts", result.Output);
+    }
+
+    [Fact]
+    public async Task PackingNextToAnOptedOutReferencePasses()
+    {
+        WriteProject(
+            "orders",
+            "<SmithyPublish>true</SmithyPublish>",
+            references: ["contracts SmithyModel=\"false\""]
+        );
+        WriteFile("orders/smithy-build.json", """{ "version": "1.0", "sources": ["model"] }""");
+        WriteFile("orders/model/orders.smithy");
+
+        var result = await PackContractsAsync("orders");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("\"PackagePath\": \"build/smithy/model/orders.smithy\"", result.Output);
+    }
+
+    [Fact]
     public async Task ContractsPackageCarriesTheModelItsBuildFileNames()
     {
-        var result = await DotnetProcess.RunAsync(
-            _directory,
-            [
-                "msbuild",
-                Path.Combine(_directory, "contracts", "contracts.proj"),
-                "-t:_SmithyPackContracts",
-                "-p:PackageId=Acme.Contracts",
-                "-getItem:TfmSpecificPackageFile",
-                "-nologo",
-            ]
-        );
+        var result = await PackContractsAsync("contracts", "-p:SmithyPublish=true");
 
         Assert.Equal(0, result.ExitCode);
         Assert.Contains("\"PackagePath\": \"build/smithy/model/orders.smithy\"", result.Output);
@@ -176,6 +234,20 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
         Assert.Contains("error NSMITHYPUBLISH", result.Output);
     }
 
+    private Task<DotnetResult> PackContractsAsync(string project, params string[] properties) =>
+        DotnetProcess.RunAsync(
+            _directory,
+            [
+                "msbuild",
+                Path.Combine(_directory, project, $"{project}.proj"),
+                "-t:_SmithyPackContracts",
+                "-p:PackageId=Acme.Contracts",
+                .. properties,
+                "-getItem:TfmSpecificPackageFile",
+                "-nologo",
+            ]
+        );
+
     private Task<DotnetResult> ProbeAsync(string project) =>
         DotnetProcess.RunAsync(
             _directory,
@@ -209,11 +281,15 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
         string? probe = null
     )
     {
+        // A reference is a project name, optionally followed by item metadata as attributes.
         var referenceItems = string.Join(
             "",
             (references ?? []).Select(reference =>
-                $"""<ProjectReference Include="../{reference}/{reference}.proj" />"""
-            )
+            {
+                var parts = reference.Split(' ', 2);
+                var metadata = parts.Length > 1 ? " " + parts[1] : "";
+                return $"""<ProjectReference Include="../{parts[0]}/{parts[0]}.proj"{metadata} />""";
+            })
         );
         var probeTarget = probe is null
             ? ""
