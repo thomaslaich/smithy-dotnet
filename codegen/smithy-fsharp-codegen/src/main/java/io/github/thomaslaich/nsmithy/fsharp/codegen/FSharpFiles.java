@@ -194,6 +194,8 @@ public final class FSharpFiles {
           references.add(operation.getOutputShape());
           references.addAll(operation.getErrors());
         });
+    // A service's schema lists the errors every operation of the service can raise.
+    shape.asServiceShape().ifPresent(service -> references.addAll(service.getErrors()));
     return references;
   }
 

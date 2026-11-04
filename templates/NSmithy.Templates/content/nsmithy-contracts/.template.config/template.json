@@ -3,6 +3,7 @@
   "author": "NSmithy",
   "classifications": ["NSmithy", "Smithy", "Contracts"],
   "identity": "NSmithy.Templates.Contracts.CSharp",
+  "groupIdentity": "NSmithy.Templates.Contracts",
   "name": "NSmithy Contracts",
   "shortName": "nsmithy-contracts",
   "sourceName": "MyService",

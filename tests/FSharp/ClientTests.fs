@@ -123,6 +123,24 @@ let ``A modeled error is returned as its case`` () : Task =
     }
 
 [<Fact>]
+let ``A service-level error is a case of every operation`` () : Task =
+    task {
+        let handler =
+            new StubHandler(fun _ _ ->
+                let response = json HttpStatusCode.ServiceUnavailable """{"message":"closed"}"""
+                response.Headers.Add("x-amzn-errortype", "KitchenClosed")
+                response)
+
+        use client = client handler
+
+        let! result = client.OrderAsync order
+
+        match result with
+        | Error(OrderError.KitchenClosed _) -> ()
+        | other -> failwith $"Unexpected result: {other}"
+    }
+
+[<Fact>]
 let ``A failure the model does not declare stays an exception`` () : Task =
     task {
         let handler =

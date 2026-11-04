@@ -26,6 +26,7 @@ use smithy.ai#prompts
 service Kitchen {
     version: "2024-01-01"
     operations: [CloseTable, Order, Ping]
+    errors: [example.staff#KitchenClosed]
 }
 
 /// Orders a dish for a table.

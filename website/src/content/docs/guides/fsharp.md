@@ -18,8 +18,8 @@ has a server and a client that share a contracts project.
 
 ## Set up a project
 
-To start from a template, pass `-lang F#` to `dotnet new nsmithy-server` or
-`dotnet new nsmithy-client`; see [Quick start](/smithy-dotnet/getting-started/quick-start/).
+To start from a template, pass `-lang F#` to `dotnet new nsmithy-contracts`,
+`nsmithy-server`, or `nsmithy-client`; see [Quick start](/smithy-dotnet/getting-started/quick-start/).
 
 Name the service with `SmithyService`. NSmithy sees that the project is an F#
 project and generates F#. A client project references `NSmithy.Client` and the

@@ -413,11 +413,27 @@ final class SchemaGenerator {
       arguments.add(
           "errors = " + array(errorSchemas(shape.getErrors()), SERDE + "IOperationErrorSchema"));
     }
-    writeHolder(
-        context.files().schemas(shape),
-        shape,
-        SERDE + "ServiceSchema",
-        SCHEMAS + ".Service(" + String.join(", ", arguments) + ")");
+    // One argument per line, indented as a block: the errors are a multiline array.
+    context
+        .files()
+        .schemas(shape)
+        .writeTemplate(
+            """
+            [<AbstractClass; Sealed>]
+            type ${name:L} =
+                static member val Schema: ${schemaType:L} =
+                    ${schemas:L}.Service(
+                        ${arguments:L|})
+            """,
+            Map.of(
+                "name",
+                symbols.schemaSymbol(shape).getName(),
+                "schemaType",
+                SERDE + "ServiceSchema",
+                "schemas",
+                SCHEMAS,
+                "arguments",
+                String.join(",\n", arguments)));
   }
 
   /**
