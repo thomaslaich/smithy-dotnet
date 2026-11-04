@@ -34,6 +34,7 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- `NSmithy.MSBuild` no longer has `build/` props; every default is in its `buildTransitive` targets.
 - **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
   `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
   or its service declares. Other failures stay exceptions.
