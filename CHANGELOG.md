@@ -16,18 +16,34 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **Preview: `ownedSources` setting of `csharp-codegen`.** Lists a project's own model files and
   directories. Without `closure`, the project generates the shapes defined there, operations
   included with their schemas and handler interfaces, and everything they target, also without a
-  service. MSBuild does not set it yet. See
+  service. MSBuild sets it from the `sources` of the project's `smithy-build.json`. See
   [Shape ownership](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
 - **Shape manifest.** Every `csharp-codegen` run writes `nsmithy-shapes.json` next to the generated
   files: the shapes it generated and the C# type, schema class, and handler interface of each.
+- **Contracts packages import themselves.** A package packed from a project with `SmithyPublish=true`
+  contains the shape manifest and `buildTransitive/<PackageId>.props`, which declares its model,
+  build file, and manifest. A `PackageReference` is all a consumer needs: it uses the package's types
+  and generates only its client or server. Projects that reference the package without generating
+  code are unaffected, and hand-written `SmithySource` and `SmithyContractsBuildFile` items for the
+  package keep working.
 - **Preview: `providedShapes` setting of `csharp-codegen`.** Lists the shape manifests of referenced
   projects. The shapes they list are not generated again; generated code refers to the referenced
   projects' types. A shape listed twice, a manifest from another NSmithy version, a service `rename`
   of a provided error, and a provided operation without the handler interface the server needs fail
-  code generation. MSBuild does not set it yet.
+  code generation. MSBuild sets it from the project's references.
 
 ### Changed
 
+- **BREAKING: a contracts project publishes the model files its `smithy-build.json` names.**
+  `SmithyPublish` publishes the `sources` and `imports` of the project's `smithy-build.json`, the
+  files it generates its own shapes from, to project references and in the package, instead of
+  `$(SmithySources)/**/*.smithy`. The `SmithySources` property is gone, and the model files move
+  from `build/smithy/` to their paths under it, for example `build/smithy/model/`. A model file
+  outside the project directory fails `dotnet pack`.
+- **BREAKING: one MSBuild target returns what a project reference contributes.**
+  `GetSmithyShapeReferences` returns its model files, build file, and shape manifest, and those of
+  the contracts it references. `GetSmithyContractItems` and `GetSmithyBuildFile` are gone.
+- `NSmithy.MSBuild` no longer has `build/` props; every default is in its `buildTransitive` targets.
 - **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
   `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
   or its service declares. Other failures stay exceptions.
@@ -36,12 +52,29 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   operation (`ServiceSchema.ErrorsOf`). `{Operation}Schema.Schema.Errors` lists only the errors the
   operation declares. `RestServiceProtocol` takes the `ServiceSchema` as its first constructor
   argument.
+- **BREAKING: a C# project generates the shapes in its own model files, also without
+  `SmithyService`.** That includes their operations' schemas and handler interfaces. Projects that
+  reference it, directly or transitively, use those types instead of generating them again, so a
+  client and a server of one contract share types, and a server's modules can each own their
+  operations while one project ties them into a service. `SmithyService` adds the service on top.
+  A contracts project without `SmithyService` therefore needs a `NSmithy.Core` reference
+  (`NSMITHYRUNTIME` names it), or `SmithyGenerateCode` set to `false` to keep only validating and
+  packaging its model, for example for F# consumers. A module's model reaches the projects that
+  reference it when it sets `SmithyPublish`. Projects whose `smithy-build.json` configures
+  `csharp-codegen` in several projections keep their settings. See
+  [Distributing contracts](https://thomaslaich.github.io/smithy-dotnet/guides/distributing-contracts/).
+
 - Each operation's handler interface, `I{Operation}Handler`, is generated into a file of its own,
   `{Operation}.Handler.g.cs`, instead of `{Service}.Server.g.cs`, and in the operation's namespace.
   A project always generates the handler interfaces of the operations it owns, also with
   `generateServer` set to `false`. For operations in the service's namespace nothing else changes, so handler
   implementations compile unchanged; an operation from another Smithy namespace now has its handler
   interface in that namespace.
+
+### Fixed
+
+- A project that references a project using only `NSmithy.Client` no longer fails with `MSB5029`,
+  a wildcard that enumerated every file on the drive.
 
 ## [0.17.0]
 

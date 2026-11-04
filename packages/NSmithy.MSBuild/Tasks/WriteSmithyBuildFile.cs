@@ -19,12 +19,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     private const string ContractsJarPlugin = "contracts-jar";
     private const string NSmithyGroup = "io.github.thomaslaich.nsmithy";
 
-    private static readonly JsonDocumentOptions ReadOptions = new()
-    {
-        CommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-    };
-
     /// <summary>The project's own smithy-build.json. Empty or missing when it has none.</summary>
     public string ProjectBuildFile { get; set; } = "";
 
@@ -34,8 +28,23 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     /// <summary>Model files of the referenced contracts, added to the sources.</summary>
     public ITaskItem[] Sources { get; set; } = [];
 
-    /// <summary>SmithyService. When empty, only the contracts-jar plugin gets settings from properties.</summary>
+    /// <summary>
+    /// SmithyService. When empty, the C# generator still runs for the project's own model files
+    /// (see <see cref="GenerateCode"/>), and contracts-jar gets its settings from properties.
+    /// </summary>
     public string Service { get; set; } = "";
+
+    /// <summary>
+    /// SmithyGenerateCode: whether a project generates the shapes in its own model files, also
+    /// without SmithyService. Only for the C# generator.
+    /// </summary>
+    public bool GenerateCode { get; set; } = true;
+
+    /// <summary>
+    /// Shape manifests (nsmithy-shapes.json) of referenced projects. The shapes they list are not
+    /// generated again.
+    /// </summary>
+    public ITaskItem[] ShapeManifests { get; set; } = [];
 
     /// <summary>SmithyGenerateClient; written as generateClient only when false.</summary>
     public bool GenerateClient { get; set; } = true;
@@ -88,11 +97,21 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     [Required]
     public string OutputFile { get; set; } = "";
 
+    /// <summary>
+    /// Whether the effective build file runs a code generator (<see cref="Plugin"/> or the
+    /// Protobuf plugin) in any projection, so that the build expects generated files.
+    /// </summary>
+    [Output]
+    public bool RunsCodeGenerator { get; private set; }
+
     public override bool Execute()
     {
         try
         {
             var root = ReadProjectBuildFile();
+            // The project's own model files, before the referenced contracts' are added.
+            _ownedSources = SmithyBuildFiles.OwnSources(root);
+            _configuresPlugin = ConfiguresPlugin(root);
             var dependencies = new DependencySet();
             var repositories = new List<JsonObject>();
 
@@ -120,6 +139,44 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         }
     }
 
+    private List<string> _ownedSources = [];
+
+    // Where the project build file configures the code generator itself: "none", "projection"
+    // (only in the projection that gets the properties' settings), or "elsewhere".
+    private string _configuresPlugin = "none";
+
+    private string ConfiguresPlugin(JsonObject root)
+    {
+        var projections = root["projections"] as JsonObject;
+        var elsewhere = false;
+        var inProjection = false;
+        if (projections is not null)
+            foreach (var (name, projection) in projections)
+                if (projection?["plugins"]?[Plugin] is not null)
+                {
+                    if (name == Projection)
+                        inProjection = true;
+                    else
+                        elsewhere = true;
+                }
+        // A top-level entry runs in every projection, including others the file defines.
+        if (root["plugins"]?[Plugin] is not null)
+        {
+            if (projections?.Any(projection => projection.Key != Projection) == true)
+                elsewhere = true;
+            else
+                inProjection = true;
+        }
+        return elsewhere ? "elsewhere"
+            : inProjection ? "projection"
+            : "none";
+    }
+
+    // Owned shapes apply when NSmithy's C# generator runs in one projection only: a file that runs
+    // it in several projections generates them itself, and each would generate the owned shapes.
+    private bool GeneratesOwnedShapes =>
+        Plugin == CSharpPlugin && GenerateCode && _configuresPlugin != "elsewhere";
+
     private bool HasProjectBuildFile =>
         !string.IsNullOrEmpty(ProjectBuildFile) && File.Exists(ProjectBuildFile);
 
@@ -131,7 +188,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         if (!HasProjectBuildFile)
             return new JsonObject { ["version"] = "1.0" };
 
-        var root = ParseObject(ProjectBuildFile);
+        var root = SmithyBuildFiles.Parse(ProjectBuildFile);
         var directory = Path.GetDirectoryName(Path.GetFullPath(ProjectBuildFile))!;
         ResolvePaths(root, "sources", directory);
         ResolvePaths(root, "imports", directory);
@@ -141,10 +198,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                     ResolvePaths(projectionObject, "imports", directory);
         return root;
     }
-
-    private static JsonObject ParseObject(string path) =>
-        JsonNode.Parse(File.ReadAllText(path), documentOptions: ReadOptions) as JsonObject
-        ?? throw new JsonException($"{path} is not a JSON object.");
 
     private static void ResolvePaths(JsonObject owner, string key, string directory)
     {
@@ -189,7 +242,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         foreach (var item in ContractsBuildFiles)
         {
             var path = item.GetMetadata("FullPath");
-            var contract = ParseObject(path);
+            var contract = SmithyBuildFiles.Parse(path);
             CollectMaven(contract, path, dependencies, repositories);
             if (contract["suppressions"] is JsonArray suppressions)
             {
@@ -219,6 +272,11 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     // sets them too; defaults apply only when it does not.
     private bool AddPropertySettings(JsonObject root)
     {
+        if (!GenerateCode && !string.IsNullOrEmpty(Service))
+            LogError(
+                "NSMITHYCODE",
+                "NSmithy: SmithyGenerateCode=false turns off code generation for a project without SmithyService, but SmithyService is set. Remove one of them."
+            );
         if (string.IsNullOrEmpty(Service))
         {
             foreach (
@@ -314,13 +372,27 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                 []
             );
         if (string.IsNullOrEmpty(Service))
+        {
+            // Without a service, the C# generator runs for the project's own shapes, unless the
+            // project build file configures it itself.
+            if (GeneratesOwnedShapes && _configuresPlugin == "none" && _ownedSources.Count > 0)
+            {
+                var shapes = new JsonObject();
+                AddShapeSettings(shapes);
+                if (!GenerateServer)
+                    shapes["generateServer"] = false;
+                yield return new PropertySettings(Plugin, "SmithyGenerateCode", shapes, []);
+            }
             yield break;
+        }
 
         var codegen = new JsonObject { ["service"] = Service };
         if (!GenerateClient)
             codegen["generateClient"] = false;
         if (!GenerateServer)
             codegen["generateServer"] = false;
+        if (GeneratesOwnedShapes)
+            AddShapeSettings(codegen);
         yield return new PropertySettings(Plugin, "SmithyService", codegen, []);
 
         if (GenerateDocs)
@@ -356,9 +428,28 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             );
     }
 
+    // The project's own model files, and the manifests of the shapes its references generated.
+    private void AddShapeSettings(JsonObject settings)
+    {
+        if (_ownedSources.Count > 0)
+            settings["ownedSources"] = new JsonArray(
+                _ownedSources.Select(path => (JsonNode)JsonValue.Create(path)!).ToArray()
+            );
+        var manifests = ShapeManifests
+            .Select(item => item.GetMetadata("FullPath"))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (manifests.Count > 0)
+            settings["providedShapes"] = new JsonArray(
+                manifests.Select(path => (JsonNode)JsonValue.Create(path)!).ToArray()
+            );
+    }
+
     private static string PropertyFor(PropertySettings plugin, string key) =>
         (plugin.Plugin, key) switch
         {
+            (_, "ownedSources") => "SmithyGenerateCode",
+            (_, "providedShapes") => "the shape manifests of the project's references",
             (_, "generateClient") => "SmithyGenerateClient",
             (_, "generateServer") => "SmithyGenerateServer",
             ("openapi", "protocol") => "SmithyOpenApiProtocol",
@@ -403,6 +494,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                     foreach (var (name, _) in plugins)
                         names.Add(name);
 
+        RunsCodeGenerator = names.Contains(Plugin) || names.Contains(ProtoPlugin);
         if (names.Contains(CSharpPlugin))
         {
             dependencies.Add(

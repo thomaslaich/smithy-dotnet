@@ -190,16 +190,20 @@ The `GetSmithyShapeReferences` target returns what a project needs from a
 reference and everything that reference references:
 
 - **Their manifests**, from every C# project that generated code.
-- **Their model sources and build files**, from contracts projects
+- **Their model files and build files**, from contracts projects
   (`SmithyPublish=true`): Api needs Common's model, because the operations it
   gets from Orders target `Money`. A module therefore sets `SmithyPublish`, so
   that its model reaches the projects that reference it.
 
-Only a project that generates code itself adds the transitive model sources
-and build files. A project that generates nothing, such as a test project that
-references a server, is left as it is: a model it does not use must not make it
-fail. Direct references are collected through `GetSmithyContractItems` and
-`GetSmithyBuildFile`.
+A project publishes the model files its `smithy-build.json` names in `sources`
+and `imports`, the same files it passes as `ownedSources`, so the model its
+consumers get is the one its generated types come from.
+
+The model files and build files of a direct reference make a project generate
+code. Those a reference only passes on from its own references are added only
+to a project that generates code anyway. A project that generates nothing, such
+as a test project that references a server, is left as it is: a model it does
+not use must not make it fail.
 
 MSBuild passes the manifests as the `csharp-codegen` setting `providedShapes`,
 a list of manifest paths. The plugin then:
@@ -256,17 +260,18 @@ source: its assembly contains the generated types, as any library's does.
 `dotnet pack`, with `SmithyPublish=true`, puts three things in the package:
 
 - the assembly with the generated types;
-- the model sources and `smithy-build.json` under `build/smithy/`;
-- the manifest at `build/smithy/nsmithy-shapes.json`.
+- the model files that `smithy-build.json` names, under `build/smithy/`, and
+  `build/smithy-build.json`;
+- the manifest at `build/nsmithy-shapes.json`.
 
 It also packs `buildTransitive/<PackageId>.props`, a fixed file from
 `NSmithy.MSBuild` (`tools/NSmithy.ContractsPackage.props`). NuGet imports it
 into every project that references the package, directly or transitively. It
-declares the package's model sources, build file, and manifest as
-`SmithyPackageSource`, `SmithyPackageBuildFile`, and
-`SmithyPackageShapeManifest` items, which MSBuild adds to `SmithySource`,
-`SmithyContractsBuildFile`, and `SmithyShapeManifest` only in projects that
-generate code, under the same rule as transitive project references. An
+declares the package's model files, build file, and manifest as
+`SmithyPackageReference` items, the same kinds `GetSmithyShapeReferences`
+returns, which MSBuild adds to `SmithySource`, `SmithyContractsBuildFile`, and
+`SmithyShapeManifest` only in projects that generate code, under the same rule
+as transitive project references. An
 application that references a client library gets the props too, and must not
 start generating, or fail, because of them. A `PackageReference` is all a
 consumer needs, and model files a project adds by hand are not added twice. The

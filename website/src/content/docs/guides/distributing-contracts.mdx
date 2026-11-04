@@ -27,6 +27,78 @@ Reference a contracts project with `SmithyPublish=true`:
 Set `SmithyService` in the consumer to select its service. Without an explicit
 `smithy-build.json`, NSmithy assembles the referenced sources automatically.
 
+A project generates the shapes in its own model files, so the contracts project
+generates the model's types, and it needs the runtime:
+
+```xml title="MyService.Contracts/MyService.Contracts.csproj"
+<ItemGroup>
+  <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
+</ItemGroup>
+```
+
+Its consumers reference those types instead of generating their own: a client
+and a server of the contract generate only their client or server and share one
+set of types. A contracts project that should only validate and package its
+model, for example one whose consumers are F# projects, sets
+`SmithyGenerateCode` to `false`; its consumers then generate its shapes.
+
+A service in a contracts project's model generates no service code there. The
+project that sets `SmithyService` to that service generates its client and
+server.
+
+### Splitting a service across projects
+
+The same rule lets the modules of one server each own their operations. A
+module's model defines its operations without a service, and the module
+generates their types, schemas, and handler interfaces. It needs only
+`NSmithy.Core`:
+
+```smithy title="Shop.Orders/model/orders.smithy"
+$version: "2"
+namespace acme.shop
+
+@http(method: "POST", uri: "/orders", code: 201)
+operation PlaceOrder {
+    input := { @required total: Money }
+    output := { @required orderId: String }
+}
+```
+
+```xml title="Shop.Orders/Shop.Orders.csproj"
+<PropertyGroup>
+  <SmithyPublish>true</SmithyPublish>
+</PropertyGroup>
+<ItemGroup>
+  <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
+  <ProjectReference Include="../Shop.Common/Shop.Common.csproj" />
+</ItemGroup>
+```
+
+The module implements `IPlaceOrderHandler`. One project defines the service,
+references the modules, and sets `SmithyService`; it generates only the
+service and gets the models of the modules' own references, such as
+`Shop.Common` with `Money`, through them:
+
+```smithy title="Shop.Api/model/service.smithy"
+@restJson1
+service Shop {
+    operations: [PlaceOrder]
+}
+```
+
+A module sets `SmithyPublish` so that its model reaches the projects that
+reference it. Every project in the solution must use the same NSmithy version.
+See the [shape ownership design](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
+
+Modules in their own Smithy namespaces can define shapes with the same name for
+different concepts, and the service separates them with `rename`. Their C# types
+keep the name from the model. A concept the modules share belongs in a common
+project. A service cannot rename a provided error, because its name goes on the
+wire: give the errors distinct names or share one. Operation names must be
+unique within a service, because Smithy does not allow renaming them.
+
 ## Maven JAR distribution
 
 :::tip[Recommended]
@@ -174,36 +246,47 @@ shapes tagged `internal`.
    dotnet pack MyService.Contracts --configuration Release
    ```
 
-   With `SmithyPublish=true`, the package contains `build/smithy/` model sources
-   and `build/smithy-build.json`. Publish the `.nupkg` to your NuGet feed.
+   With `SmithyPublish=true`, the package contains:
 
-2. **Consume.** Request the package's resolved path and supply both the model
-   sources and packaged build configuration:
+   - the assembly with the types the contracts project generated;
+   - the model files that `smithy-build.json` names, under `build/smithy/`,
+     and `build/smithy-build.json`;
+   - the shape manifest, `build/nsmithy-shapes.json`, which lists those
+     types;
+   - `buildTransitive/<PackageId>.props`, which declares the model and the
+     manifest to the projects that reference the package.
+
+   Publish the `.nupkg` to your NuGet feed.
+
+2. **Consume.** Reference the package:
 
    ```xml title="MyService.Client/MyService.Client.csproj"
    <PropertyGroup>
      <SmithyService>example.hello#HelloService</SmithyService>
+     <SmithyGenerateServer>false</SmithyGenerateServer>
    </PropertyGroup>
 
    <ItemGroup>
      <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
      <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
-     <PackageReference Include="MyService.Contracts" Version="1.0.0" GeneratePathProperty="true" />
-     <SmithySource Include="$(PkgMyService_Contracts)/build/smithy/**/*.smithy" />
-     <SmithyContractsBuildFile Include="$(PkgMyService_Contracts)/build/smithy-build.json" />
+     <PackageReference Include="MyService.Contracts" Version="1.0.0" />
    </ItemGroup>
    ```
 
-   NuGet replaces dots with underscores in the generated package-path property.
-   Adjust `PkgMyService_Contracts` when using a different package ID.
+   The project assembles its model with the package's, uses the package's
+   types, and generates only its client or server. Projects that reference the
+   package without generating code, such as an application that references the
+   client library, are unaffected.
 
 </Steps>
 
-:::note[Current limitation]
-NuGet contract packages currently require explicit model imports. Automatic
-imports through a normal `PackageReference` are an intended improvement.
-The configuration above is the current workaround.
-:::
+Every project that consumes a package's types must use the NSmithy version
+the package was built with: generated code from different versions may not fit
+together, and the build fails with a message naming both versions. A package
+whose consumers should generate its types themselves, for example in their own
+namespace or with another NSmithy version, is packed from a project with
+`SmithyGenerateCode` set to `false`. It contains the model only, and its
+consumers generate its shapes.
 
 Keep the runtime packages required by the generated client or server. NSmithy
 merges the contract's build file into the effective `smithy-build.json` under

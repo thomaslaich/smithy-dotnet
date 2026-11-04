@@ -42,23 +42,17 @@
   </ItemGroup>
 
   <!--
-    build/ props and buildTransitive/ targets:
-      - build/ props are auto-imported for direct consumers only (projects that
-        explicitly reference NSmithy.MSBuild). Sets SmithySources default and
-        other opt-in defaults.
-      - buildTransitive/ targets are auto-imported for every project that has
-        NSmithy.MSBuild anywhere in its NuGet dependency tree — including
-        server/client projects that get it transitively via NSmithy.Server or
-        NSmithy.Client.
+    buildTransitive/ targets: NuGet imports them into every project that has NSmithy.MSBuild
+    anywhere in its dependency tree, including projects that get it through NSmithy.Client. The
+    package has no build/ props, so every default lives in the targets.
 
-    Both files default SmithyCSharpCodegenVersion to the -SNAPSHOT dev version so
-    that in-repo consumers (conformance tests import Targets/ directly) resolve the
-    codegen JAR staged by `just codegen` in tools/maven-repo. The published package
-    must instead reference the JAR version released to Maven Central, which matches
-    the package version. So the files are packed via copies under obj/ with the dev
-    version substituted by $(Version) — a no-op for local `just pack` (where
-    $(Version) IS the dev version) and the release version on tag builds (where the
-    workflow passes -p:Version).
+    The targets default SmithyCSharpCodegenVersion to the -SNAPSHOT dev version so that in-repo
+    consumers (conformance tests import Targets/ directly) resolve the codegen JAR staged by
+    `just codegen` in tools/maven-repo. The published package must instead reference the JAR
+    version released to Maven Central, which matches the package version. So the file is packed
+    via a copy under obj/ with the dev version substituted by $(Version) — a no-op for local
+    `just pack` (where $(Version) IS the dev version) and the release version on tag builds
+    (where the workflow passes -p:Version).
   -->
   <UsingTask
     TaskName="_NSmithySubstituteInFile"
@@ -101,18 +95,12 @@
       <_NSmithySmithyVersionDefault>&lt;SmithyVersion Condition="'%24(SmithyVersion)' == ''"&gt;$(_NSmithySmithyCliVersion)&lt;/SmithyVersion&gt;</_NSmithySmithyVersionDefault>
     </PropertyGroup>
     <Error
-      Condition="!$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/Targets/NSmithy.MSBuild.props').Contains('$(_NSmithySmithyVersionDefault)')) or !$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/Targets/NSmithy.MSBuild.targets').Contains('$(_NSmithySmithyVersionDefault)'))"
-      Text="NSmithy: the SmithyVersion default in Targets/NSmithy.MSBuild.props and .targets must equal SMITHY_VERSION ($(_NSmithySmithyCliVersion)) in packages/NSmithy.SmithyCli/download-smithy-cli.sh; bump them together."
+      Condition="!$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/Targets/NSmithy.MSBuild.targets').Contains('$(_NSmithySmithyVersionDefault)'))"
+      Text="NSmithy: the SmithyVersion default in Targets/NSmithy.MSBuild.targets must equal SMITHY_VERSION ($(_NSmithySmithyCliVersion)) in packages/NSmithy.SmithyCli/download-smithy-cli.sh; bump them together."
     />
     <PropertyGroup>
       <_NSmithyPackObjDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'nupkg'))</_NSmithyPackObjDir>
     </PropertyGroup>
-    <_NSmithySubstituteInFile
-      InputFile="$(MSBuildProjectDirectory)/Targets/NSmithy.MSBuild.props"
-      OutputFile="$(_NSmithyPackObjDir)NSmithy.MSBuild.props"
-      Find="$(VersionPrefix)-SNAPSHOT"
-      ReplaceWith="$(Version)"
-    />
     <_NSmithySubstituteInFile
       InputFile="$(MSBuildProjectDirectory)/Targets/NSmithy.MSBuild.targets"
       OutputFile="$(_NSmithyPackObjDir)NSmithy.MSBuild.targets"
@@ -121,12 +109,14 @@
     />
     <ItemGroup>
       <TfmSpecificPackageFile
-        Include="$(_NSmithyPackObjDir)NSmithy.MSBuild.props"
-        PackagePath="build/NSmithy.MSBuild.props"
-      />
-      <TfmSpecificPackageFile
         Include="$(_NSmithyPackObjDir)NSmithy.MSBuild.targets"
         PackagePath="buildTransitive/NSmithy.MSBuild.targets"
+      />
+      <!-- The targets pack it into every contracts package. Under tools/, so NuGet does not
+           treat it as a build file of NSmithy.MSBuild itself. -->
+      <TfmSpecificPackageFile
+        Include="$(MSBuildProjectDirectory)/Targets/NSmithy.ContractsPackage.props"
+        PackagePath="tools/NSmithy.ContractsPackage.props"
       />
     </ItemGroup>
   </Target>
