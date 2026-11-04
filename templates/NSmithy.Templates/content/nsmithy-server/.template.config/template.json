@@ -3,6 +3,7 @@
   "author": "NSmithy",
   "classifications": ["NSmithy", "Smithy", "Web", "Server"],
   "identity": "NSmithy.Templates.Server.CSharp",
+  "groupIdentity": "NSmithy.Templates.Server",
   "name": "NSmithy Server",
   "shortName": "nsmithy-server",
   "sourceName": "MyService",
