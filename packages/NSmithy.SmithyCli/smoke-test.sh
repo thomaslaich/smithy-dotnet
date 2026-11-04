@@ -82,6 +82,8 @@ project() {
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- Model only: the CLI validates and builds it, without generating code. -->
+    <SmithyGenerateCode>false</SmithyGenerateCode>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NSmithy.MSBuild" Version="$LOCAL" />
@@ -89,7 +91,6 @@ project() {
   </ItemGroup>
 </Project>
 XML
-  # Contracts-style: the CLI validates the model and builds it, which is all this test needs.
   local maven=""
   if [[ -n "${3:-}" ]]; then
     maven=", \"maven\": { \"dependencies\": [\"$3\"] }"
