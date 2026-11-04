@@ -133,7 +133,6 @@
         Include="$(_SmithyAllManifestsGlob)"
         SmithyKind="Manifest"
         SmithyDirect="true"
-        Condition="'$(_SmithyIsFSharp)' != 'true'"
       />
       <_SmithyShapeReferenceCandidate
         Include="@(_SmithyPublishedSource)"
@@ -267,9 +266,9 @@
       >$(SmithyBuildOutputPath)$(SmithyProjection)/$(SmithyPlugin)/</SmithyGeneratedOutputPath>
     <SmithyAllProjectionsGlob Condition="'$(SmithyAllProjectionsGlob)' == ''"
       >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.$(_SmithyGeneratedExtension)</SmithyAllProjectionsGlob>
-    <!-- The shape manifests csharp-codegen writes: generated output like the code, so a run that no
-         longer writes one removes it, and consumers never see shapes the assembly does not have. -->
-    <_SmithyAllManifestsGlob>$(SmithyBuildOutputPath)*/csharp-codegen/nsmithy-shapes.json</_SmithyAllManifestsGlob>
+    <!-- The shape manifests the code generator writes: generated output like the code, so a run that
+         no longer writes one removes it, and consumers never see shapes the assembly does not have. -->
+    <_SmithyAllManifestsGlob>$(SmithyBuildOutputPath)*/$(SmithyPlugin)/nsmithy-shapes.json</_SmithyAllManifestsGlob>
     <SmithyProtoPlugin Condition="'$(SmithyProtoPlugin)' == ''">proto-codegen</SmithyProtoPlugin>
     <SmithyAllProtosGlob Condition="'$(SmithyAllProtosGlob)' == ''"
       >$(SmithyBuildOutputPath)*/$(SmithyProtoPlugin)/**/*.proto</SmithyAllProtosGlob>
@@ -392,7 +391,7 @@
   <PropertyGroup>
     <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">true</SmithyGenerateServer>
     <!-- Whether the project generates the shapes in its own model files, also without
-         SmithyService (C# only). See designs/shape-ownership.md. -->
+         SmithyService. See designs/shape-ownership.md. -->
     <SmithyGenerateCode Condition="'$(SmithyGenerateCode)' == ''">true</SmithyGenerateCode>
     <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''"
       >false</SmithyEmitGeneratedFiles>
@@ -805,8 +804,8 @@
 
   <!--
     F# compiles files in order, and a file can only use what the files before it declare. The
-    generated files come first: types, the schemas that read and write them, then the client and
-    the server. The project's own files come after them and can use all of them. CoreCompile compiles @(Compile) in
+    generated files come first: types, the schemas that read and write them, each operation's schema
+    and handler interface, then the client and the server. The project's own files come after them and can use all of them. CoreCompile compiles @(Compile) in
     the order FSharpSourceCodeCompileOrder leaves it, so the files are added before that target
     runs.
   -->
@@ -824,6 +823,10 @@
       />
       <CompileBefore
         Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/Schemas.g.fs"
+        Visible="$(SmithyEmitGeneratedFiles)"
+      />
+      <CompileBefore
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/Operations.g.fs"
         Visible="$(SmithyEmitGeneratedFiles)"
       />
       <CompileBefore

@@ -15,6 +15,7 @@ import software.amazon.smithy.model.node.ObjectNode;
 class ServerGeneratorTest {
 
   private static final Path SERVER = Path.of("Server.g.fs");
+  private static final Path OPERATIONS = Path.of("Operations.g.fs");
 
   /** Stand-ins for the AWS and protocol traits packages, which define the real traits. */
   private static final String PROTOCOLS =
@@ -56,16 +57,23 @@ class ServerGeneratorTest {
 
   @Test
   void generatesHandlersADefinitionAndExtensions() {
-    String server = generate(MODEL, true).expectFileString(SERVER);
+    MockManifest manifest = generate(MODEL, true);
+    String server = manifest.expectFileString(SERVER);
+    // An operation's handler interface is in Operations.g.fs, which every project compiles.
+    String operations = manifest.expectFileString(OPERATIONS);
 
-    assertTrue(server.contains("namespace Example.Cafe"), server);
+    assertTrue(operations.contains("namespace Example.Cafe\n"), operations);
     assertTrue(
-        server.contains(
+        operations.contains(
             "abstract OrderAsync: input: global.Example.Cafe.OrderInput * cancellationToken:"
                 + " global.System.Threading.CancellationToken ->"
                 + " global.System.Threading.Tasks.Task<global.Example.Cafe.OrderOutput>"),
+        operations);
+    assertTrue(server.contains("namespace Example.Cafe"), server);
+    assertTrue(
+        server.contains(
+            "type ICafeServiceHandler =\n    inherit global.Example.Cafe.IOrderHandler"),
         server);
-    assertTrue(server.contains("type ICafeServiceHandler =\n    inherit IOrderHandler"), server);
     assertTrue(server.contains("type CafeServiceDefinition() ="), server);
     assertTrue(server.contains("global.NSmithy.Server.OperationJsonSchemas("), server);
     assertTrue(server.contains("static member AddCafeServiceHandler<'THandler"), server);
@@ -147,7 +155,11 @@ class ServerGeneratorTest {
 
   @Test
   void generateServerFalseLeavesTheServerOut() {
-    assertFalse(generate(MODEL, false).hasFile(SERVER));
+    MockManifest manifest = generate(MODEL, false);
+
+    assertFalse(manifest.hasFile(SERVER));
+    // The service's operations are not this project's own, so they get no handler interfaces.
+    assertFalse(manifest.expectFileString(OPERATIONS).contains("IOrderHandler"));
   }
 
   private static MockManifest generate(String model, boolean generateServer) {

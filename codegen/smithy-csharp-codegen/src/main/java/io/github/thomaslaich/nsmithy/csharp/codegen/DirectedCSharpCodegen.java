@@ -1,6 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointResolverGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointRules;
@@ -58,7 +59,7 @@ final class DirectedCSharpCodegen
     implements DirectedCodegen<GenerationContext, CSharpSettings, CSharpIntegration> {
 
   /** What this run generated, written as the shape manifest once generation is done. */
-  private final ShapeManifest shapeManifest = new ShapeManifest();
+  private final ShapeManifest shapeManifest = new ShapeManifest(ShapeManifest.CSHARP_GENERATOR);
 
   /** The shapes defined in this project's own model files, read on first use. */
   private Set<ShapeId> ownedShapes;
@@ -439,6 +440,6 @@ final class DirectedCSharpCodegen
 
   @Override
   public void customizeAfterIntegrations(CustomizeDirective<GenerationContext, CSharpSettings> d) {
-    shapeManifest.write(d.context().fileManifest());
+    shapeManifest.write(d.context().fileManifest(), d.settings().providedShapes());
   }
 }

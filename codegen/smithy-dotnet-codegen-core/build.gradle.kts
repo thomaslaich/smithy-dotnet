@@ -29,6 +29,15 @@ tasks.test {
     useJUnitPlatform()
 }
 
+// The generators record their version in the shape manifests they write (see ShapeManifest).
+tasks.processResources {
+    val codegenVersion = project.version.toString()
+    inputs.property("version", codegenVersion)
+    filesMatching("**/codegen-version.properties") {
+        expand("version" to codegenVersion)
+    }
+}
+
 mavenPublishing {
     publishToMavenCentral()
     if (providers.environmentVariable("ORG_GRADLE_PROJECT_signingInMemoryKey").isPresent) {

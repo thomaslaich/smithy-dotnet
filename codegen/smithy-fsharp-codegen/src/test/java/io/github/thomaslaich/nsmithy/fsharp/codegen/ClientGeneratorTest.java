@@ -18,6 +18,7 @@ class ClientGeneratorTest {
 
   private static final Path CLIENT = Path.of("Client.g.fs");
   private static final Path SCHEMAS = Path.of("Schemas.g.fs");
+  private static final Path OPERATIONS = Path.of("Operations.g.fs");
 
   private static final String MODEL =
       """
@@ -111,14 +112,18 @@ class ClientGeneratorTest {
 
   @Test
   void anOperationSchemaListsItsErrorsWithTheirStatusCodes() {
-    String schemas = generate(MODEL, true).expectFileString(SCHEMAS);
+    MockManifest manifest = generate(MODEL, true);
+    String operations = manifest.expectFileString(OPERATIONS);
 
-    assertTrue(schemas.contains("type OrderSchema ="), schemas);
+    assertTrue(operations.contains("namespace rec Example.Cafe.Schemas"), operations);
+    assertTrue(operations.contains("type OrderSchema ="), operations);
     assertTrue(
-        schemas.contains("global.NSmithy.Core.ShapeId.Parse(\"example.cafe#SoldOut\")"), schemas);
+        operations.contains("global.NSmithy.Core.ShapeId.Parse(\"example.cafe#SoldOut\")"),
+        operations);
     assertTrue(
-        schemas.contains(", 409) :> global.NSmithy.Core.Serde.IOperationErrorSchema"), schemas);
-    assertTrue(schemas.contains("type CafeSchema ="), schemas);
+        operations.contains(", 409) :> global.NSmithy.Core.Serde.IOperationErrorSchema"),
+        operations);
+    assertTrue(manifest.expectFileString(SCHEMAS).contains("type CafeSchema ="));
   }
 
   @Test
@@ -155,10 +160,13 @@ class ClientGeneratorTest {
             "type OrderError =\n    | Busy of global.Example.Cafe.Busy\n"
                 + "    | SoldOut of global.Example.Cafe.SoldOut"),
         client);
-    // The runtime only decodes an error its operation's schema lists.
+    // The service schema lists the service's errors once; the protocols add them to every
+    // operation (ServiceSchema.ErrorsOf), so operation schemas list only their own.
     String schemas = manifest.expectFileString(SCHEMAS);
     assertEquals(
-        3, schemas.split("OperationError<global.Example.Cafe.Busy", -1).length - 1, schemas);
+        1, schemas.split("OperationError<global.Example.Cafe.Busy", -1).length - 1, schemas);
+    assertTrue(schemas.contains("errors ="), schemas);
+    assertFalse(manifest.expectFileString(OPERATIONS).contains("Busy"));
   }
 
   @Test

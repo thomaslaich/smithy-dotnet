@@ -1,11 +1,14 @@
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.GeneratedCodeFormatter;
+import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeClosures;
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.TreeSet;
 import software.amazon.smithy.build.FileManifest;
 import software.amazon.smithy.build.PluginContext;
@@ -13,6 +16,8 @@ import software.amazon.smithy.build.SmithyBuildPlugin;
 import software.amazon.smithy.codegen.core.directed.CodegenDirector;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.transform.ModelTransformer;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 /**
@@ -43,10 +48,13 @@ public final class FSharpCodegenPlugin implements SmithyBuildPlugin {
   }
 
   static void generate(
-      Model model,
+      Model sourceModel,
       FSharpSettings settings,
       FileManifest manifest,
       List<FSharpIntegration> integrations) {
+    // Not performDefaultCodegenTransforms: it also copies a service's errors onto its operations,
+    // but operation schemas are service-agnostic. The service schema carries those errors.
+    Model model = ModelTransformer.create().flattenAndRemoveMixins(sourceModel);
     CodegenDirector<FSharpWriter, FSharpIntegration, FSharpContext, FSharpSettings> runner =
         new CodegenDirector<>();
     runner.settings(settings);
@@ -55,11 +63,21 @@ public final class FSharpCodegenPlugin implements SmithyBuildPlugin {
     runner.model(model);
     runner.integrationClass(FSharpIntegration.class);
     runner.integrationFinder(() -> integrations);
-    runner.performDefaultCodegenTransforms();
     runner.createDedicatedInputsAndOutputs();
     Optional<ServiceShape> service =
         settings.service().map(id -> model.expectShape(id, ServiceShape.class));
-    ShapeClosures.configure(runner, model, service, settings.closure(), new TreeSet<>());
+    Set<ShapeId> owned = OwnedShapes.of(model, settings.ownedSources());
+    settings.providedShapes().check(model, service, owned, settings.generateServer());
+    if (settings.generatesOwnedShapes()) {
+      if (!ShapeClosures.configureOwned(runner, service, owned, new TreeSet<>())) {
+        // Nothing to generate; the empty manifest still tells consumers this project owns nothing.
+        new ShapeManifest(ShapeManifest.FSHARP_GENERATOR)
+            .write(manifest, settings.providedShapes());
+        return;
+      }
+    } else {
+      ShapeClosures.configure(runner, model, service, settings.closure(), new TreeSet<>());
+    }
     runner.run();
   }
 

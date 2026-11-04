@@ -14,6 +14,7 @@ All .NET example projects are collected in [`examples.slnx`](examples.slnx).
 | [simplerestjson](simplerestjson/) | `alloy#simpleRestJson` | Pizza Admin service: unions, enums, maps, errors, API-key auth |
 | [modules](modules/) | `aws.protocols#restJson1` | One service whose operations live in separate modules: each project generates only its own shapes and handlers |
 | [fsharp](fsharp/) | `aws.protocols#restJson1` | Bookshelf service with an F# server and client: records, options, unions, errors |
+| [fsharp-modules](fsharp-modules/) | `aws.protocols#restJson1` | The modules example in F#: each module owns its shapes and handlers |
 | [rpcv2cbor/unary](rpcv2cbor/unary/) | `smithy.protocols#rpcv2Cbor` | The restJson1 Weather service over CBOR: resources, pagination, errors, retries |
 | [rpcv2cbor/streaming](rpcv2cbor/streaming/) | `smithy.protocols#rpcv2Cbor` | Bidirectional rpcv2Cbor event streaming (chat service) |
 | [grpc/unary](grpc/unary/) | `alloy.proto#grpc` | Library service over native gRPC (no protoc): proto codec features like sparse maps, oneOf unions, enums |

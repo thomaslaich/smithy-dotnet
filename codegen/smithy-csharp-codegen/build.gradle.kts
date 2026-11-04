@@ -87,12 +87,3 @@ mavenPublishing {
         }
     }
 }
-
-// The plugin records its version in the shape manifests it writes (see ShapeManifest).
-tasks.processResources {
-    val codegenVersion = project.version.toString()
-    inputs.property("version", codegenVersion)
-    filesMatching("**/codegen-version.properties") {
-        expand("version" to codegenVersion)
-    }
-}

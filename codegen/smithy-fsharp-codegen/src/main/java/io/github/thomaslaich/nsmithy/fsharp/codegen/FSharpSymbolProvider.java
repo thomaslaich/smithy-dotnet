@@ -7,6 +7,7 @@
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
+import java.util.Optional;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
@@ -216,10 +217,30 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
           .namespace("NSmithy.Core.Validation", ".")
           .build();
     }
+    // A shape another project generated keeps the name its manifest records.
+    Optional<Symbol> provided = settings.providedShapes().schema(shape.getId());
+    if (provided.isPresent()) {
+      return provided.get();
+    }
     return Symbol.builder()
         .name(FSharpNaming.typeName(shape.getId().getName()) + "Schema")
         .namespace(schemaNamespace(shape.getId().getNamespace()), ".")
         .build();
+  }
+
+  /**
+   * The handler interface of an operation: {@code I{Operation}Handler} in the operation's
+   * namespace, or the one its manifest records when another project generated the operation.
+   */
+  public Symbol handlerSymbol(OperationShape operation) {
+    return settings
+        .providedShapes()
+        .handler(operation.getId())
+        .orElseGet(() ->
+            Symbol.builder()
+                .name("I" + FSharpNaming.typeName(operation.getId().getName()) + "Handler")
+                .namespace(settings.fsharpNamespace(operation.getId().getNamespace()), ".")
+                .build());
   }
 
   /** The F# namespace of a Smithy namespace's schemas. */
@@ -233,6 +254,12 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
   }
 
   private Symbol declared(Shape shape) {
+    // A shape another project generated is that project's type, under the name its manifest
+    // records.
+    Optional<Symbol> provided = settings.providedShapes().type(shape.getId());
+    if (provided.isPresent()) {
+      return provided.get();
+    }
     String name = FSharpNaming.typeName(shape.getId().getName());
     if (name.equals(SCHEMAS_NAMESPACE)) {
       throw new CodegenException(

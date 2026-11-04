@@ -33,6 +33,8 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.Naming;
+import io.github.thomaslaich.nsmithy.codegen.core.ProvidedShapes;
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
 import java.util.List;
 import java.util.Optional;
 import software.amazon.smithy.model.node.ExpectationNotMetException;
@@ -174,7 +176,7 @@ public final class CSharpSettings {
   /** The shapes referenced projects generated, read from their manifests on first use. */
   public ProvidedShapes providedShapes() {
     if (providedShapes == null) {
-      providedShapes = ProvidedShapes.load(providedShapeManifests);
+      providedShapes = ProvidedShapes.load(providedShapeManifests, ShapeManifest.CSHARP_GENERATOR);
     }
     return providedShapes;
   }

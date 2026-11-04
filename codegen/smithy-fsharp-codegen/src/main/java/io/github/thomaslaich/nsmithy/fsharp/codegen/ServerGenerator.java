@@ -73,54 +73,22 @@ final class ServerGenerator {
             .filter(ProtocolInfo::server)
             .toList();
 
-    List<String> names = new ArrayList<>();
-    operations.forEach(operation -> names.add(handlerName(operation)));
-    names.addAll(
-        List.of(
-            "I" + contract + "Handler",
-            contract + "Protocols",
-            contract + "Definition",
-            contract + "ServerExtensions"));
+    List<String> names =
+        new ArrayList<>(
+            List.of(
+                "I" + contract + "Handler",
+                contract + "Protocols",
+                contract + "Definition",
+                contract + "ServerExtensions"));
     GeneratedNames.check(model, service, names.toArray(String[]::new));
 
     FSharpWriter writer = context.files().server(service);
-    for (OperationShape operation : operations) {
-      writeHandler(writer, operation);
-    }
     writeServiceHandler(writer, contract, operations);
     if (!protocols.isEmpty()) {
       writeProtocols(writer, contract, protocols);
     }
     writeDefinition(writer, contract, operations);
     writeExtensions(writer, contract, operations, protocols);
-  }
-
-  private void writeHandler(FSharpWriter writer, OperationShape operation) {
-    List<String> parameters = new ArrayList<>();
-    if (!ShapeSupport.isUnit(operation.getInputShape())) {
-      parameters.add("input: " + schemas.operationType(operation.getInputShape()));
-    }
-    parameters.add("cancellationToken: " + CANCELLATION_TOKEN);
-    writer.writeTemplate(
-        """
-        ${?docs}
-        ${docs:L|}
-        ${/docs}
-        type ${handler:L} =
-            ${?docs}
-            ${docs:L|}
-            ${/docs}
-            abstract ${method:L}: ${parameters:L} -> ${returns:L}
-        """,
-        Map.of(
-            "docs", FSharpWriter.docs(operation),
-            "handler", handlerName(operation),
-            "method", methodName(operation),
-            "parameters", String.join(" * ", parameters),
-            "returns",
-                ShapeSupport.isUnit(operation.getOutputShape())
-                    ? TASK
-                    : TASK + "<" + schemas.operationType(operation.getOutputShape()) + ">"));
   }
 
   private void writeServiceHandler(
@@ -141,7 +109,7 @@ final class ServerGenerator {
         Map.of(
             "docs", FSharpWriter.docs(service),
             "contract", contract,
-            "handlers", operations.stream().map(ServerGenerator::handlerName).toList()));
+            "handlers", operations.stream().map(this::handlerName).toList()));
   }
 
   private void writeProtocols(FSharpWriter writer, String contract, List<ProtocolInfo> protocols) {
@@ -384,11 +352,12 @@ final class ServerGenerator {
         || ShapeSupport.isStreamingShape(model, operation.getOutputShape());
   }
 
-  private static String handlerName(OperationShape operation) {
-    return "I" + FSharpNaming.typeName(operation.getId().getName()) + "Handler";
+  /** An operation's handler interface, qualified: it lives in the operation's namespace. */
+  private String handlerName(OperationShape operation) {
+    return FSharpSymbolProvider.render(symbols.handlerSymbol(operation));
   }
 
   private static String methodName(OperationShape operation) {
-    return FSharpNaming.typeName(operation.getId().getName()) + "Async";
+    return OperationHandlerGenerator.methodName(operation);
   }
 }

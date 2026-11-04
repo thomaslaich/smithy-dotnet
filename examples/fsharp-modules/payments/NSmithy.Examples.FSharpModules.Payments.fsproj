@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Payments module: owns CapturePayment and implements its handler. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+    <SmithyPublish>true</SmithyPublish>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="CapturePaymentHandler.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="10.1.201" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
+    <ProjectReference Include="../common/NSmithy.Examples.FSharpModules.Common.fsproj" />
+  </ItemGroup>
+</Project>

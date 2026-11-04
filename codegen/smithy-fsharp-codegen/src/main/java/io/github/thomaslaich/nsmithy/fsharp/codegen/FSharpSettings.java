@@ -3,20 +3,28 @@
  *
  * smithy-build.json:
  *   "fsharp-codegen": {
- *     "service": "example.hello#HelloService", // the service whose shapes to generate
+ *     "service": "example.hello#HelloService", // optional; the service to generate
  *     "closure": "example.hello#events",       // optional; a shapeClosures metadata entry
+ *     "ownedSources": ["/abs/model"],          // optional; the project's own model files
+ *     "providedShapes": ["/abs/nsmithy-shapes.json"], // optional; manifests of references
  *     "baseNamespace": "MyOrg",                // optional; prepended to PascalCase(smithyNamespace)
  *     "generateClient": true,                  // optional; emit the service's client (default true)
  *     "generateServer": true,                  // optional; emit the service's server (default true)
  *     "defaultProtocol": "aws.protocols#restJson1" // optional; the client's default protocol
  *   }
  *
- * At least one of service and closure is required. With both, the closure is the generated set
- * and must contain the service.
+ * At least one of service, closure, and ownedSources is required. With a closure, the closure is
+ * the generated set and must contain the service, if there is one. Without a closure, ownedSources
+ * makes the project generate the shapes defined in those files, operations included, and with a
+ * service also the service and everything it reaches. providedShapes lists the shape manifests of
+ * the projects this one references; the shapes they list are not generated again. See
+ * designs/shape-ownership.md.
  */
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.Naming;
+import io.github.thomaslaich.nsmithy.codegen.core.ProvidedShapes;
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
 import java.util.List;
 import java.util.Optional;
 import software.amazon.smithy.model.node.ExpectationNotMetException;
@@ -30,6 +38,8 @@ public final class FSharpSettings {
 
   private static final String SERVICE = "service";
   private static final String CLOSURE = "closure";
+  private static final String OWNED_SOURCES = "ownedSources";
+  private static final String PROVIDED_SHAPES = "providedShapes";
   private static final String BASE_NAMESPACE = "baseNamespace";
   private static final String GENERATE_CLIENT = "generateClient";
   private static final String GENERATE_SERVER = "generateServer";
@@ -37,6 +47,9 @@ public final class FSharpSettings {
 
   private final ShapeId service;
   private final String closure;
+  private final List<String> ownedSources;
+  private final List<String> providedShapeManifests;
+  private ProvidedShapes providedShapes;
   private final String baseNamespace;
   private final boolean generateClient;
   private final boolean generateServer;
@@ -45,12 +58,16 @@ public final class FSharpSettings {
   private FSharpSettings(
       ShapeId service,
       String closure,
+      List<String> ownedSources,
+      List<String> providedShapeManifests,
       String baseNamespace,
       boolean generateClient,
       boolean generateServer,
       ShapeId defaultProtocol) {
     this.service = service;
     this.closure = closure;
+    this.ownedSources = ownedSources;
+    this.providedShapeManifests = providedShapeManifests;
     this.baseNamespace = baseNamespace;
     this.generateClient = generateClient;
     this.generateServer = generateServer;
@@ -60,23 +77,39 @@ public final class FSharpSettings {
   public static FSharpSettings fromNode(ObjectNode config) {
     config.warnIfAdditionalProperties(
         List.of(
-            SERVICE, CLOSURE, BASE_NAMESPACE, GENERATE_CLIENT, GENERATE_SERVER, DEFAULT_PROTOCOL));
+            SERVICE,
+            CLOSURE,
+            OWNED_SOURCES,
+            PROVIDED_SHAPES,
+            BASE_NAMESPACE,
+            GENERATE_CLIENT,
+            GENERATE_SERVER,
+            DEFAULT_PROTOCOL));
     ShapeId service = config.getStringMember(SERVICE).map(StringNode::expectShapeId).orElse(null);
     String closure = config.getStringMember(CLOSURE).map(StringNode::getValue).orElse(null);
-    if (service == null && closure == null) {
+    if (service == null && closure == null && config.getArrayMember(OWNED_SOURCES).isEmpty()) {
       throw new ExpectationNotMetException(
-          "fsharp-codegen requires `service`, `closure`, or both.", config);
+          "fsharp-codegen requires `service`, `closure`, or `ownedSources`.", config);
     }
     return new FSharpSettings(
         service,
         closure,
+        strings(config, OWNED_SOURCES),
+        strings(config, PROVIDED_SHAPES),
         config.getStringMemberOrDefault(BASE_NAMESPACE, ""),
         config.getBooleanMemberOrDefault(GENERATE_CLIENT, true),
         config.getBooleanMemberOrDefault(GENERATE_SERVER, true),
         config.getStringMember(DEFAULT_PROTOCOL).map(StringNode::expectShapeId).orElse(null));
   }
 
-  /** The service whose shapes to generate. Empty when only a closure is generated. */
+  private static List<String> strings(ObjectNode config, String member) {
+    return config
+        .getArrayMember(member)
+        .map(array -> array.getElementsAs(StringNode::getValue))
+        .orElse(List.of());
+  }
+
+  /** The service to generate. Empty when only a closure or the owned shapes are generated. */
   public Optional<ShapeId> service() {
     return Optional.ofNullable(service);
   }
@@ -84,6 +117,28 @@ public final class FSharpSettings {
   /** The id of the {@code shapeClosures} metadata entry to generate, when set. */
   public Optional<String> closure() {
     return Optional.ofNullable(closure);
+  }
+
+  /** The project's own model files and directories; empty when the setting is absent. */
+  public List<String> ownedSources() {
+    return ownedSources;
+  }
+
+  /** The shapes referenced projects generated, read from their manifests on first use. */
+  public ProvidedShapes providedShapes() {
+    if (providedShapes == null) {
+      providedShapes = ProvidedShapes.load(providedShapeManifests, ShapeManifest.FSHARP_GENERATOR);
+    }
+    return providedShapes;
+  }
+
+  /**
+   * Whether {@code ownedSources} selects the generated set: no closure is set, and either owned
+   * sources are listed or there is no service (an empty {@code ownedSources} then generates
+   * nothing).
+   */
+  public boolean generatesOwnedShapes() {
+    return closure == null && (!ownedSources.isEmpty() || service == null);
   }
 
   /** May be empty (no prefix). */

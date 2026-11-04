@@ -86,6 +86,12 @@ The model can also come from a contracts project, as in
 Generated files are compiled before the project's own files, so every `.fs`
 file in the project can use them.
 
+Like a C# project, an F# project generates the shapes in its own model files and
+uses the types that the F# projects it references generated, so the modules of a
+server can each own their operations
+([Splitting a service across projects](/smithy-dotnet/guides/distributing-contracts/#splitting-a-service-across-projects)).
+C# and F# projects do not share generated types.
+
 ## What the model becomes
 
 | Model | Generated F# |
