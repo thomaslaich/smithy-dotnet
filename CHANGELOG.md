@@ -34,6 +34,15 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **BREAKING: a contracts project publishes the model files its `smithy-build.json` names.**
+  `SmithyPublish` publishes the `sources` and `imports` of the project's `smithy-build.json`, the
+  files it generates its own shapes from, to project references and in the package, instead of
+  `$(SmithySources)/**/*.smithy`. The `SmithySources` property is gone, and the model files move
+  from `build/smithy/` to their paths under it, for example `build/smithy/model/`. A model file
+  outside the project directory fails `dotnet pack`.
+- **BREAKING: one MSBuild target returns what a project reference contributes.**
+  `GetSmithyShapeReferences` returns its model files, build file, and shape manifest, and those of
+  the contracts it references. `GetSmithyContractItems` and `GetSmithyBuildFile` are gone.
 - `NSmithy.MSBuild` no longer has `build/` props; every default is in its `buildTransitive` targets.
 - **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
   `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
@@ -61,6 +70,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `generateServer` set to `false`. For operations in the service's namespace nothing else changes, so handler
   implementations compile unchanged; an operation from another Smithy namespace now has its handler
   interface in that namespace.
+
+### Fixed
+
+- A project that references a project using only `NSmithy.Client` no longer fails with `MSB5029`,
+  a wildcard that enumerated every file on the drive.
 
 ## [0.17.0]
 

@@ -40,7 +40,7 @@ code path, and every MSBuild property means the same thing in every project.
 | Contract build files | `SmithyContractsBuildFile` items, collected from contracts project references or set for packaged contracts. |
 | Contract sources | `SmithySource` items, collected the same way. |
 | Shape manifests | `SmithyShapeManifest` items: the `nsmithy-shapes.json` of every C# project the project references, directly or transitively. See [shape-ownership.md](shape-ownership.md). |
-| Package contracts | `SmithyPackageSource`, `SmithyPackageBuildFile`, and `SmithyPackageShapeManifest` items, declared by the `buildTransitive` props of contracts packages and added to the items above when the project generates code. |
+| Package contracts | `SmithyPackageReference` items with `SmithyKind` `Source`, `BuildFile`, or `Manifest`, declared by the `buildTransitive` props of contracts packages and added to the items above when the project generates code. |
 | Generation properties | `SmithyService`, `SmithyGenerateCode`, `SmithyGenerateClient`, `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, `SmithyGrpc`, and `SmithyProjection`. |
 | Contract coordinates | `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and `PackageVersion` of a contracts project. |
 

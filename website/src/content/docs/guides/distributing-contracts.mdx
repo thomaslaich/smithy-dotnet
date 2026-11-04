@@ -249,9 +249,10 @@ shapes tagged `internal`.
    With `SmithyPublish=true`, the package contains:
 
    - the assembly with the types the contracts project generated;
-   - the model sources under `build/smithy/` and `build/smithy-build.json`;
-   - the shape manifest, `build/smithy/nsmithy-shapes.json`, which lists
-     those types;
+   - the model files that `smithy-build.json` names, under `build/smithy/`,
+     and `build/smithy-build.json`;
+   - the shape manifest, `build/nsmithy-shapes.json`, which lists those
+     types;
    - `buildTransitive/<PackageId>.props`, which declares the model and the
      manifest to the projects that reference the package.
 
