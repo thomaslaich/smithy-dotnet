@@ -55,12 +55,9 @@ public final class GrpcEventStreamValidator extends AbstractValidator {
     String members =
         structure.members().stream()
             .sorted(Comparator.comparing(MemberShape::getMemberName))
-            .map(
-                member ->
-                    member.getMemberName()
-                        + (ShapeSupport.isEventStreamMember(model, member)
-                            ? " (event stream)"
-                            : ""))
+            .map(member ->
+                member.getMemberName()
+                    + (ShapeSupport.isEventStreamMember(model, member) ? " (event stream)" : ""))
             .collect(Collectors.joining(", "));
     events.add(
         error(

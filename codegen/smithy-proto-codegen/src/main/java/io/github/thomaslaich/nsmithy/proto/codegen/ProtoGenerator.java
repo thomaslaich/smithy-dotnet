@@ -573,10 +573,9 @@ public final class ProtoGenerator {
     Shape s = model.expectShape(shapeId);
     if (s.hasTrait(StreamingTrait.class)) return Optional.of(shapeId);
     return s.members().stream()
-        .filter(
-            m ->
-                m.hasTrait(StreamingTrait.class)
-                    || model.expectShape(m.getTarget()).hasTrait(StreamingTrait.class))
+        .filter(m ->
+            m.hasTrait(StreamingTrait.class)
+                || model.expectShape(m.getTarget()).hasTrait(StreamingTrait.class))
         .map(MemberShape::getTarget)
         .findFirst();
   }
@@ -596,10 +595,9 @@ public final class ProtoGenerator {
 
     long streamingMemberCount =
         structure.members().stream()
-            .filter(
-                member ->
-                    member.hasTrait(StreamingTrait.class)
-                        || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class))
+            .filter(member ->
+                member.hasTrait(StreamingTrait.class)
+                    || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class))
             .count();
     if (streamingMemberCount == 1 && structure.members().size() == 1) {
       return;
@@ -747,10 +745,9 @@ public final class ProtoGenerator {
   private int protoIndex(MemberShape m) {
     return m.findTrait(PROTO_INDEX)
         .map(t -> ((Node) t.toNode()).expectNumberNode().getValue().intValue())
-        .orElseThrow(
-            () ->
-                new CodegenException(
-                    "Member " + m.getId() + " is missing required @protoIndex trait."));
+        .orElseThrow(() ->
+            new CodegenException(
+                "Member " + m.getId() + " is missing required @protoIndex trait."));
   }
 
   // ---- utilities ---------------------------------------------------------

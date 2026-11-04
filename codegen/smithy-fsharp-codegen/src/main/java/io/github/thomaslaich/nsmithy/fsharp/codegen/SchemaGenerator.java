@@ -565,9 +565,8 @@ final class SchemaGenerator {
     }
     if (shape.getType() == ShapeType.TIMESTAMP) {
       return SchemaSupport.timestampFormat(shape)
-          .map(
-              format ->
-                  SCHEMAS + ".TimestampWithTraits([| " + FSharpLiterals.trait(format) + " |])")
+          .map(format ->
+              SCHEMAS + ".TimestampWithTraits([| " + FSharpLiterals.trait(format) + " |])")
           .orElse(SCHEMAS + ".Timestamp");
     }
     if (shape.getType() != ShapeType.ENUM) {

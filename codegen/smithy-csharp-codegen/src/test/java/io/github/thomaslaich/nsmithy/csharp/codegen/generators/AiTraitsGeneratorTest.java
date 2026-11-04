@@ -54,13 +54,12 @@ final class AiTraitsGeneratorTest {
     assertTrue(result.isBroken(), result.getValidationEvents().toString());
     assertTrue(
         result.getValidationEvents().stream()
-            .anyMatch(
-                event ->
-                    event
-                        .getMessage()
-                        .contains(
-                            "Duplicate prompt name detected: 'Weather_Report' conflicts with an"
-                                + " existing prompt")),
+            .anyMatch(event ->
+                event
+                    .getMessage()
+                    .contains(
+                        "Duplicate prompt name detected: 'Weather_Report' conflicts with an"
+                            + " existing prompt")),
         result.getValidationEvents().toString());
   }
 

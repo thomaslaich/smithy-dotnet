@@ -118,13 +118,12 @@ final class DirectedCSharpCodegen
               dir + "/" + typeName + ".Client.g.cs",
               csNamespace,
               writer -> new ClientGenerator(ctx, writer, directive.shape(), endpointRules).run());
-      endpointRules.ifPresent(
-          rules ->
-              ctx.writerDelegator()
-                  .useFileWriter(
-                      dir + "/" + typeName + ".Endpoints.Client.g.cs",
-                      csNamespace,
-                      writer -> new EndpointResolverGenerator(ctx, writer, rules).run()));
+      endpointRules.ifPresent(rules ->
+          ctx.writerDelegator()
+              .useFileWriter(
+                  dir + "/" + typeName + ".Endpoints.Client.g.cs",
+                  csNamespace,
+                  writer -> new EndpointResolverGenerator(ctx, writer, rules).run()));
       if (WaiterMethods.hasWaiters(ctx, directive.shape())) {
         ctx.writerDelegator()
             .useFileWriter(

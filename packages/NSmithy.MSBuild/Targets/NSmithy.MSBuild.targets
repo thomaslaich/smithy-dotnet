@@ -38,8 +38,7 @@
   <PropertyGroup>
     <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.74.1</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''"
-      >0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion
-    >
+      >0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion>
     <SmithyGenerateDocs Condition="'$(SmithyGenerateDocs)' == ''">false</SmithyGenerateDocs>
     <SmithyOpenApiProtocol Condition="'$(SmithyOpenApiProtocol)' == ''"></SmithyOpenApiProtocol>
   </PropertyGroup>
@@ -56,14 +55,11 @@
          so the tasks come from its build output. They run out of process so a reused MSBuild
          node does not keep that freshly built DLL loaded. -->
     <_NSmithyTasksFromProject Condition="!Exists('$(_NSmithyTasksAssembly)')"
-      >true</_NSmithyTasksFromProject
-    >
+      >true</_NSmithyTasksFromProject>
     <_NSmithyTasksAssembly Condition="'$(_NSmithyTasksFromProject)' == 'true'"
-      >$(MSBuildThisFileDirectory)..\bin\$(Configuration)\net10.0\NSmithy.MSBuild.dll</_NSmithyTasksAssembly
-    >
+      >$(MSBuildThisFileDirectory)..\bin\$(Configuration)\net10.0\NSmithy.MSBuild.dll</_NSmithyTasksAssembly>
     <_NSmithyTaskFactory Condition="'$(_NSmithyTasksFromProject)' == 'true'"
-      >TaskHostFactory</_NSmithyTaskFactory
-    >
+      >TaskHostFactory</_NSmithyTaskFactory>
   </PropertyGroup>
 
   <UsingTask
@@ -170,36 +166,28 @@
 
   <PropertyGroup>
     <SmithyBuildFile Condition="'$(SmithyBuildFile)' == ''"
-      >$(MSBuildProjectDirectory)/smithy-build.json</SmithyBuildFile
-    >
+      >$(MSBuildProjectDirectory)/smithy-build.json</SmithyBuildFile>
     <SmithyProjection Condition="'$(SmithyProjection)' == ''">source</SmithyProjection>
     <!-- An F# project generates F#: fsharp-codegen writes Types.g.fs and Schemas.g.fs, which
          _AddSmithyGeneratedFSharpCompileItems compiles in that order ahead of the project's own
          files. -->
     <_SmithyIsFSharp Condition="'$(MSBuildProjectExtension)' == '.fsproj'">true</_SmithyIsFSharp>
     <SmithyPlugin Condition="'$(SmithyPlugin)' == '' and '$(_SmithyIsFSharp)' == 'true'"
-      >fsharp-codegen</SmithyPlugin
-    >
+      >fsharp-codegen</SmithyPlugin>
     <SmithyPlugin Condition="'$(SmithyPlugin)' == ''">csharp-codegen</SmithyPlugin>
     <_SmithyGeneratedExtension Condition="'$(_SmithyIsFSharp)' == 'true'"
-      >fs</_SmithyGeneratedExtension
-    >
+      >fs</_SmithyGeneratedExtension>
     <_SmithyGeneratedExtension Condition="'$(_SmithyIsFSharp)' != 'true'"
-      >cs</_SmithyGeneratedExtension
-    >
+      >cs</_SmithyGeneratedExtension>
     <SmithyBuildOutputPath Condition="'$(SmithyBuildOutputPath)' == ''"
-      >$(IntermediateOutputPath)Smithy/</SmithyBuildOutputPath
-    >
+      >$(IntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
     <SmithyGeneratedOutputPath Condition="'$(SmithyGeneratedOutputPath)' == ''"
-      >$(SmithyBuildOutputPath)$(SmithyProjection)/$(SmithyPlugin)/</SmithyGeneratedOutputPath
-    >
+      >$(SmithyBuildOutputPath)$(SmithyProjection)/$(SmithyPlugin)/</SmithyGeneratedOutputPath>
     <SmithyAllProjectionsGlob Condition="'$(SmithyAllProjectionsGlob)' == ''"
-      >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.$(_SmithyGeneratedExtension)</SmithyAllProjectionsGlob
-    >
+      >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.$(_SmithyGeneratedExtension)</SmithyAllProjectionsGlob>
     <SmithyProtoPlugin Condition="'$(SmithyProtoPlugin)' == ''">proto-codegen</SmithyProtoPlugin>
     <SmithyAllProtosGlob Condition="'$(SmithyAllProtosGlob)' == ''"
-      >$(SmithyBuildOutputPath)*/$(SmithyProtoPlugin)/**/*.proto</SmithyAllProtosGlob
-    >
+      >$(SmithyBuildOutputPath)*/$(SmithyProtoPlugin)/**/*.proto</SmithyAllProtosGlob>
     <SmithyGrpcServices Condition="'$(SmithyGrpcServices)' == ''">Both</SmithyGrpcServices>
     <SmithyExtraArgs Condition="'$(SmithyExtraArgs)' == ''"></SmithyExtraArgs>
     <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
@@ -279,11 +267,9 @@
   <!-- The launcher in the NSmithy.SmithyCli package, if referenced -->
   <PropertyGroup Condition="'$(NSmithySmithyCliDirectory)' != '' and '$(_SmithyCliPlatform)' != ''">
     <_SmithyPackagedCliPath Condition="'$(_SmithyIsWindows)' == 'True'"
-      >$(NSmithySmithyCliDirectory)/windows-x64/bin/smithy.bat</_SmithyPackagedCliPath
-    >
+      >$(NSmithySmithyCliDirectory)/windows-x64/bin/smithy.bat</_SmithyPackagedCliPath>
     <_SmithyPackagedCliPath Condition="'$(_SmithyIsWindows)' != 'True'"
-      >$(NSmithySmithyCliDirectory)/$(_SmithyCliPlatform)/bin/smithy</_SmithyPackagedCliPath
-    >
+      >$(NSmithySmithyCliDirectory)/$(_SmithyCliPlatform)/bin/smithy</_SmithyPackagedCliPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(SmithyCliPath)' == '' and '$(_SmithyPackagedCliPath)' != '' and Exists('$(_SmithyPackagedCliPath)')">
@@ -296,11 +282,9 @@
 
   <PropertyGroup Condition="'$(SmithyCliVersionCheck)' == ''">
     <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' == 'true'"
-      >exact</SmithyCliVersionCheck
-    >
+      >exact</SmithyCliVersionCheck>
     <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' != 'true'"
-      >minimum</SmithyCliVersionCheck
-    >
+      >minimum</SmithyCliVersionCheck>
   </PropertyGroup>
 
   <!-- ================================================================
@@ -315,21 +299,17 @@
        ================================================================ -->
   <PropertyGroup>
     <SmithyUseBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == ''"
-      >true</SmithyUseBundledMavenRepo
-    >
+      >true</SmithyUseBundledMavenRepo>
     <_SmithyBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == 'true'"
-      >$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo
-    >
+      >$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo>
   </PropertyGroup>
 
   <PropertyGroup>
     <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">true</SmithyGenerateServer>
     <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''"
-      >false</SmithyEmitGeneratedFiles
-    >
+      >false</SmithyEmitGeneratedFiles>
     <SmithyStampFile Condition="'$(SmithyStampFile)' == ''"
-      >$(SmithyBuildOutputPath)NSmithy.Generated.stamp</SmithyStampFile
-    >
+      >$(SmithyBuildOutputPath)NSmithy.Generated.stamp</SmithyStampFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -393,12 +373,10 @@
   >
     <PropertyGroup>
       <_SmithyProjectBuildFile Condition="Exists('$(SmithyBuildFile)')"
-        >$(SmithyBuildFile)</_SmithyProjectBuildFile
-      >
+        >$(SmithyBuildFile)</_SmithyProjectBuildFile>
       <_SmithyEffectiveBuildFile
         Condition="'$(_SmithyProjectBuildFile)' != '' or '@(SmithySource)' != ''"
-        >$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'smithy-build.json'))</_SmithyEffectiveBuildFile
-      >
+        >$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'smithy-build.json'))</_SmithyEffectiveBuildFile>
     </PropertyGroup>
     <PropertyGroup Condition="'$(SmithyPublish)' == 'true'">
       <_SmithyContractsGroupId>$(SmithyMavenGroupId)</_SmithyContractsGroupId>
@@ -530,8 +508,7 @@
     />
     <PropertyGroup>
       <_SmithyCheckCliVersion Condition="'$(SmithyCliVersionCheck)' != 'none'"
-        >true</_SmithyCheckCliVersion
-      >
+        >true</_SmithyCheckCliVersion>
     </PropertyGroup>
     <Exec
       Command="&quot;$(SmithyCliPath)&quot; --version"
@@ -555,11 +532,9 @@
          warnings. Versions compare by their major.minor.patch core. -->
     <PropertyGroup Condition="'$(_SmithyCheckCliVersion)' == 'true'">
       <_SmithyCliVersion Condition="'$(_SmithyCliFromPackage)' == 'true'"
-        >$(NSmithySmithyCliVersion)</_SmithyCliVersion
-      >
+        >$(NSmithySmithyCliVersion)</_SmithyCliVersion>
       <_SmithyCliVersion Condition="'$(_SmithyCliFromPackage)' != 'true'"
-        >$([System.Text.RegularExpressions.Regex]::Match('$(_SmithyCliVersionOutput)', '(?:^|;)(\d+\.\d+\.\d+[^;\s]*)').Groups[1].Value)</_SmithyCliVersion
-      >
+        >$([System.Text.RegularExpressions.Regex]::Match('$(_SmithyCliVersionOutput)', '(?:^|;)(\d+\.\d+\.\d+[^;\s]*)').Groups[1].Value)</_SmithyCliVersion>
       <_SmithyCliVersionCore>$([System.Text.RegularExpressions.Regex]::Match('$(_SmithyCliVersion)', '^\d+\.\d+\.\d+').Value)</_SmithyCliVersionCore>
       <_SmithyVersionCore>$([System.Text.RegularExpressions.Regex]::Match('$(SmithyVersion)', '^\d+\.\d+\.\d+').Value)</_SmithyVersionCore>
     </PropertyGroup>

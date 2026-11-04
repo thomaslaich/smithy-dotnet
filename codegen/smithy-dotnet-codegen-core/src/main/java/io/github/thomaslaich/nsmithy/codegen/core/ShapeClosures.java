@@ -39,11 +39,10 @@ public final class ShapeClosures {
     service.ifPresent(shape -> runner.service(shape.getId()));
     Optional<ShapeClosure> configured = closure.map(id -> configuredClosure(model, id));
     // A shape the configured closure already contains needs no selector of its own.
-    configured.ifPresent(
-        c ->
-            ShapeClosureIndex.of(model)
-                .getShapesInClosure(c.getId())
-                .forEach(shape -> additionalShapes.remove(shape.getId())));
+    configured.ifPresent(c ->
+        ShapeClosureIndex.of(model)
+            .getShapesInClosure(c.getId())
+            .forEach(shape -> additionalShapes.remove(shape.getId())));
     if (additionalShapes.isEmpty()) {
       configured.ifPresent(c -> runner.shapeClosure(c.getId()));
     } else {

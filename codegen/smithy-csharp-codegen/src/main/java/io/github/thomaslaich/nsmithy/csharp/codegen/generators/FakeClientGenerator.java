@@ -73,24 +73,22 @@ public final class FakeClientGenerator implements Runnable {
       writer.putContext("interfaceName", interfaceName);
       writer.putContext(
           "operations",
-          writer.consumer(
-              w -> {
-                for (OperationShape op : ops) {
-                  writeOperationMethod(op);
-                  ClientGenerator.paginationInfo(context, service, op)
-                      .ifPresent(info -> writePaginatorMethods(op, info));
-                  WaiterMethods.writeImplementations(w, context, service, op, "public virtual ");
-                  w.write("");
-                }
-              }));
+          writer.consumer(w -> {
+            for (OperationShape op : ops) {
+              writeOperationMethod(op);
+              ClientGenerator.paginationInfo(context, service, op)
+                  .ifPresent(info -> writePaginatorMethods(op, info));
+              WaiterMethods.writeImplementations(w, context, service, op, "public virtual ");
+              w.write("");
+            }
+          }));
       writer.putContext(
           "helpers",
-          writer.consumer(
-              w -> {
-                w.write("public virtual void Dispose() { }");
-                matcher.writePendingMatchers(w);
-                values.writePendingIterators(w);
-              }));
+          writer.consumer(w -> {
+            w.write("public virtual void Dispose() { }");
+            matcher.writePendingMatchers(w);
+            values.writePendingIterators(w);
+          }));
       writer.write(
           """
           public class ${fakeClass:L} : ${interfaceName:L}
@@ -145,34 +143,32 @@ public final class FakeClientGenerator implements Runnable {
           }
           """);
       ClientGenerator.paginatorItemsSignature(writer, context, info)
-          .ifPresent(
-              signature -> {
-                writer.putContext(
-                    "itemsSignature",
-                    ClientGenerator.withEnumeratorCancellation(writer, signature));
-                writer.putContext(
-                    "items", ClientGenerator.memberPathExpr("page", info.getItemsMemberPath()));
-                writer.write("");
-                writer.write(
-                    """
-                    public virtual async ${itemsSignature:L}
+          .ifPresent(signature -> {
+            writer.putContext(
+                "itemsSignature", ClientGenerator.withEnumeratorCancellation(writer, signature));
+            writer.putContext(
+                "items", ClientGenerator.memberPathExpr("page", info.getItemsMemberPath()));
+            writer.write("");
+            writer.write(
+                """
+                public virtual async ${itemsSignature:L}
+                {
+                    await foreach (var page in ${operation:L}PagesAsync(input, cancellationToken)
+                        .ConfigureAwait(false))
                     {
-                        await foreach (var page in ${operation:L}PagesAsync(input, cancellationToken)
-                            .ConfigureAwait(false))
+                        var items = ${items:L};
+                        if (items is null)
                         {
-                            var items = ${items:L};
-                            if (items is null)
-                            {
-                                continue;
-                            }
-                            foreach (var item in items)
-                            {
-                                yield return item;
-                            }
+                            continue;
+                        }
+                        foreach (var item in items)
+                        {
+                            yield return item;
                         }
                     }
-                    """);
-              });
+                }
+                """);
+          });
     } finally {
       writer.popState();
     }

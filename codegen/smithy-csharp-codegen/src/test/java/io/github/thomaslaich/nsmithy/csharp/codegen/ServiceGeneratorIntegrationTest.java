@@ -85,13 +85,12 @@ class ServiceGeneratorIntegrationTest {
     @Override
     public Optional<CSharpServiceGenerator> serviceGenerator(
         GenerationContext context, ServiceShape service) {
-      return Optional.of(
-          (ctx, shape) ->
-              ctx.writerDelegator()
-                  .useFileWriter(
-                      "Example/Messaging/Messaging.Messaging.g.cs",
-                      "Example.Messaging",
-                      writer -> writer.write("public sealed class MessagingProducer { }")));
+      return Optional.of((ctx, shape) ->
+          ctx.writerDelegator()
+              .useFileWriter(
+                  "Example/Messaging/Messaging.Messaging.g.cs",
+                  "Example.Messaging",
+                  writer -> writer.write("public sealed class MessagingProducer { }")));
     }
   }
 

@@ -146,11 +146,10 @@ public final class EndpointRules {
     Optional<EndpointBddTrait> bdd =
         service
             .getTrait(EndpointBddTrait.class)
-            .or(
-                () ->
-                    service
-                        .getTrait(EndpointRuleSetTrait.class)
-                        .map(trait -> CompileBdd.compileBdd(trait.getEndpointRuleSet())));
+            .or(() ->
+                service
+                    .getTrait(EndpointRuleSetTrait.class)
+                    .map(trait -> CompileBdd.compileBdd(trait.getEndpointRuleSet())));
     if (bdd.isEmpty()) {
       return Optional.empty();
     }
@@ -276,12 +275,11 @@ public final class EndpointRules {
         .forEach(id -> modeled.add(id.toString()));
     TopDownIndex.of(context.model()).getContainedOperations(service).stream()
         .sorted(Comparator.comparing(operation -> operation.getId().toString()))
-        .forEach(
-            operation ->
-                serviceIndex
-                    .getEffectiveAuthSchemes(service, operation)
-                    .keySet()
-                    .forEach(id -> modeled.add(id.toString())));
+        .forEach(operation ->
+            serviceIndex
+                .getEffectiveAuthSchemes(service, operation)
+                .keySet()
+                .forEach(id -> modeled.add(id.toString())));
     if (modeled.stream().noneMatch(defaults::containsKey)) {
       return List.of();
     }
@@ -299,13 +297,12 @@ public final class EndpointRules {
       }
       Map<String, Parameter> parameterProperties = new LinkedHashMap<>();
       new TreeMap<>(scheme.builtInProperties())
-          .forEach(
-              (property, builtIn) -> {
-                Parameter parameter = byBuiltIn.get(builtIn);
-                if (parameter != null) {
-                  parameterProperties.put(property, parameter);
-                }
-              });
+          .forEach((property, builtIn) -> {
+            Parameter parameter = byBuiltIn.get(builtIn);
+            if (parameter != null) {
+              parameterProperties.put(property, parameter);
+            }
+          });
       schemes.add(
           new DefaultAuthScheme(schemeId, new TreeMap<>(scheme.properties()), parameterProperties));
     }

@@ -63,11 +63,10 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
   public void reserveMemberNames(Shape shape) {
     shape
         .members()
-        .forEach(
-            member -> {
-              getImportContainer().reserveName(CSharpNaming.memberName(member));
-              getImportContainer().reserveName(CSharpNaming.variantName(member));
-            });
+        .forEach(member -> {
+          getImportContainer().reserveName(CSharpNaming.memberName(member));
+          getImportContainer().reserveName(CSharpNaming.variantName(member));
+        });
   }
 
   /** Render a type reference without importing potentially ambiguous model namespaces. */
@@ -131,15 +130,14 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
       writeXmlText(summary);
       write("/// </summary>");
     }
-    parameterDocs.forEach(
-        (name, documentation) -> {
-          if (documentation == null || documentation.isBlank()) {
-            return;
-          }
-          write("/// <param name=\"$L\">", escapeXml(name));
-          writeXmlText(documentation);
-          write("/// </param>");
-        });
+    parameterDocs.forEach((name, documentation) -> {
+      if (documentation == null || documentation.isBlank()) {
+        return;
+      }
+      write("/// <param name=\"$L\">", escapeXml(name));
+      writeXmlText(documentation);
+      write("/// </param>");
+    });
   }
 
   /** Factory used by WriterDelegator. */
@@ -180,23 +178,22 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
     model
         .shapes()
         .filter(shape -> !shape.isMemberShape())
-        .forEach(
-            shape -> {
-              String ns = settings.csharpNamespace(shape.getId().getNamespace());
-              // Namespace segments can also hide imported types during C# name lookup.
-              for (String segment : ns.split("\\.")) {
-                getImportContainer().reserveNamespaceSegment(segment);
-              }
-              if (ns.equals(namespace) || namespace.startsWith(ns + ".")) {
-                String name = CSharpNaming.typeName(shape.getId().getName());
-                getImportContainer().reserveModelTypeName(name);
-                getImportContainer().reserveModelTypeName(name + "Schema");
-                if (shape.isServiceShape()) {
-                  getImportContainer().reserveModelTypeName(name + "Client");
-                  getImportContainer().reserveModelTypeName(name + "ClientConfig");
-                }
-              }
-            });
+        .forEach(shape -> {
+          String ns = settings.csharpNamespace(shape.getId().getNamespace());
+          // Namespace segments can also hide imported types during C# name lookup.
+          for (String segment : ns.split("\\.")) {
+            getImportContainer().reserveNamespaceSegment(segment);
+          }
+          if (ns.equals(namespace) || namespace.startsWith(ns + ".")) {
+            String name = CSharpNaming.typeName(shape.getId().getName());
+            getImportContainer().reserveModelTypeName(name);
+            getImportContainer().reserveModelTypeName(name + "Schema");
+            if (shape.isServiceShape()) {
+              getImportContainer().reserveModelTypeName(name + "Client");
+              getImportContainer().reserveModelTypeName(name + "ClientConfig");
+            }
+          }
+        });
   }
 
   /** Writes an example, preserving code indentation and escaping all model-provided text. */

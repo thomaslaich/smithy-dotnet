@@ -48,44 +48,39 @@ public final class ServicePrompts {
   private static void add(Model model, Shape owner, List<Prompt> prompts) {
     owner
         .findTrait(TraitIds.PROMPTS)
-        .ifPresent(
-            trait -> {
-              var entries =
-                  trait.toNode().expectObjectNode().getStringMap().entrySet().stream()
-                      .sorted(Map.Entry.comparingByKey())
-                      .toList();
-              for (var entry : entries) {
-                ObjectNode definition = entry.getValue().expectObjectNode();
-                prompts.add(
-                    new Prompt(
-                        entry.getKey(),
-                        definition.expectStringMember("description").getValue(),
-                        definition.expectStringMember("template").getValue(),
-                        definition
-                            .getStringMember("preferWhen")
-                            .map(StringNode::getValue)
-                            .orElse(null),
-                        definition
-                            .getStringMember("arguments")
-                            .map(node -> arguments(model, node.getValue()))
-                            .orElse(List.of())));
-              }
-            });
+        .ifPresent(trait -> {
+          var entries =
+              trait.toNode().expectObjectNode().getStringMap().entrySet().stream()
+                  .sorted(Map.Entry.comparingByKey())
+                  .toList();
+          for (var entry : entries) {
+            ObjectNode definition = entry.getValue().expectObjectNode();
+            prompts.add(
+                new Prompt(
+                    entry.getKey(),
+                    definition.expectStringMember("description").getValue(),
+                    definition.expectStringMember("template").getValue(),
+                    definition.getStringMember("preferWhen").map(StringNode::getValue).orElse(null),
+                    definition
+                        .getStringMember("arguments")
+                        .map(node -> arguments(model, node.getValue()))
+                        .orElse(List.of())));
+          }
+        });
   }
 
   private static List<Argument> arguments(Model model, String shapeId) {
     StructureShape structure = model.expectShape(ShapeId.from(shapeId), StructureShape.class);
     return structure.getAllMembers().values().stream()
         .sorted(Comparator.comparing(MemberShape::getMemberName))
-        .map(
-            member ->
-                new Argument(
-                    member.getMemberName(),
-                    member
-                        .getTrait(DocumentationTrait.class)
-                        .map(DocumentationTrait::getValue)
-                        .orElse(null),
-                    member.hasTrait(RequiredTrait.class)))
+        .map(member ->
+            new Argument(
+                member.getMemberName(),
+                member
+                    .getTrait(DocumentationTrait.class)
+                    .map(DocumentationTrait::getValue)
+                    .orElse(null),
+                member.hasTrait(RequiredTrait.class)))
         .toList();
   }
 }
