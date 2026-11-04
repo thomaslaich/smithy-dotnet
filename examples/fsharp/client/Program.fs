@@ -33,8 +33,9 @@ let run (endpoint: string) =
                   Genre = Genre.SCIENCE
                   Pages = None }
 
-        let! lent = client.LendBookAsync { Id = dune.Book.Id; Reader = "Ada" }
-        printfn "Lent: %s" (describe lent.Book)
+        match! client.LendBookAsync { Id = dune.Book.Id; Reader = "Ada" } with
+        | Ok lent -> printfn "Lent: %s" (describe lent.Book)
+        | Error error -> printfn "Could not lend Dune: %A" error
 
         let! fiction = client.ListBooksAsync { Genre = Some Genre.FICTION }
         printfn "Fiction:"
@@ -42,20 +43,18 @@ let run (endpoint: string) =
         for book in fiction.Books do
             printfn "  %s" (describe book)
 
-        // Modeled errors arrive as the exceptions the model declares.
-        try
-            let! _ = client.LendBookAsync { Id = dune.Book.Id; Reader = "Grace" }
-            ()
-        with :? AlreadyLent as error ->
-            printfn "Cannot lend Dune again: %s has it" error.Reader
+        // An operation returns the errors the model declares for it as a Result.
+        match! client.LendBookAsync { Id = dune.Book.Id; Reader = "Grace" } with
+        | Ok lent -> printfn "Lent: %s" (describe lent.Book)
+        | Error(LendBookError.AlreadyLent error) -> printfn "Cannot lend Dune again: %s has it" error.Reader
+        | Error(LendBookError.NoSuchBook error) -> printfn "No book with id %s" error.Id
 
-        try
-            let! _ = client.GetBookAsync { Id = "missing" }
-            ()
-        with :? NoSuchBook as error ->
-            printfn "No book with id %s" error.Id
+        match! client.GetBookAsync { Id = "missing" } with
+        | Ok found -> printfn "Found: %s" (describe found.Book)
+        | Error(GetBookError.NoSuchBook error) -> printfn "No book with id %s" error.Id
 
-        // The server validates input against the model before the handler runs.
+        // Failures the model does not declare stay exceptions. The server validates input against
+        // the model before the handler runs, and AddBook does not declare ValidationException.
         try
             let! _ =
                 client.AddBookAsync

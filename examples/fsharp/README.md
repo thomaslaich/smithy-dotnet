@@ -4,7 +4,7 @@ A Bookshelf service served and called from F#, over `aws.protocols#restJson1`.
 The model shows how Smithy shapes look in F#: structures become records, an
 optional member becomes an `option`, the `Status` union and the `Genre` enum
 become discriminated unions, and the `NoSuchBook` and `AlreadyLent` errors
-become exceptions that the client catches with `:?`.
+reach the client as the `Error` case of a `Result`.
 
 ## Projects
 

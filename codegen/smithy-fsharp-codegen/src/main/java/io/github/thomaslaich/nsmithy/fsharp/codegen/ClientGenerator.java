@@ -1,13 +1,15 @@
 /*
  * Declares a service's client in Client.g.fs:
  *
+ *   {Operation}Error       one case per error the model declares for the operation
  *   I{Service}Client       one Task-returning method per operation, and IDisposable
  *   {Service}ClientConfig  the runtime's SmithyClientConfig
  *   {Service}Client        binds each operation to the service's default protocol once, when it
  *                          is constructed, and calls the runtime's SmithyClientRuntime
  *
  * The runtime does the work (serialization, transport, retries, auth); the client only passes it
- * the operation's binding, schema, and input.
+ * the operation's binding, schema, and input. An operation that declares errors returns a Result,
+ * with those errors in the Error case; every other failure stays an exception.
  */
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
@@ -39,6 +41,7 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 final class ClientGenerator {
 
   private static final String CLIENT = "global.NSmithy.Client.";
+  private static final String RESULT = "global.Microsoft.FSharp.Core.Result";
   private static final String TASKS = "global.System.Threading.Tasks.";
   private static final String CANCELLATION_TOKEN = "global.System.Threading.CancellationToken";
 
@@ -68,13 +71,18 @@ final class ClientGenerator {
     String client = name + "Client";
     String config = client + "Config";
     String clientInterface = "I" + client;
-    GeneratedNames.check(model, service, client, config, clientInterface);
     List<OperationShape> operations =
         TopDownIndex.of(model).getContainedOperations(service).stream()
             .sorted(Comparator.comparing(operation -> operation.getId().toString()))
             .toList();
+    List<String> generatedNames = new ArrayList<>(List.of(client, config, clientInterface));
+    operations.stream()
+        .filter(operation -> !errors(operation).isEmpty())
+        .forEach(operation -> generatedNames.add(errorTypeName(operation)));
+    GeneratedNames.check(model, service, generatedNames.toArray(String[]::new));
 
     FSharpWriter writer = context.files().client(service);
+    operations.forEach(operation -> writeErrorType(writer, operation));
     writeInterface(writer, clientInterface, operations);
 
     // A service with no protocol the client knows gets the interface only.
@@ -86,6 +94,32 @@ final class ClientGenerator {
     }
     writeConfig(writer, config);
     writeClient(writer, client, config, clientInterface, operations, protocol.get());
+  }
+
+  /**
+   * The union of an operation's errors. Its cases are qualified, so they do not hide the error
+   * types they are named after, and operations can share an error.
+   */
+  private void writeErrorType(FSharpWriter writer, OperationShape operation) {
+    List<StructureShape> errors = errors(operation);
+    if (errors.isEmpty()) {
+      return;
+    }
+    List<String> cases =
+        errors.stream()
+            .map(error -> "| " + errorCaseName(error) + " of " + symbols.typeOf(error))
+            .toList();
+    writer.writeTemplate(
+        """
+        /// <summary>The errors the model declares for <c>${method:L}</c>.</summary>
+        [<RequireQualifiedAccess>]
+        type ${type:L} =
+            ${#cases}
+            ${value:L}
+            ${/cases}
+
+        """,
+        Map.of("method", methodName(operation), "type", errorTypeName(operation), "cases", cases));
   }
 
   private void writeInterface(
@@ -336,9 +370,32 @@ final class ClientGenerator {
     context.put("hasInput", hasInput);
     context.put(
         "tokens", idempotencyTokens(operation).stream().map(FSharpNaming::fieldName).toList());
-    context.put("binding", FSharpNaming.typeName(operation.getId().getName()));
-    context.put("input", hasInput ? "input" : "global.NSmithy.Core.SmithyUnit.Value");
+    context.put(
+        "invoke",
+        "runtime.InvokeAsync(bindings."
+            + FSharpNaming.typeName(operation.getId().getName())
+            + ", "
+            + (hasInput ? "input" : "global.NSmithy.Core.SmithyUnit.Value")
+            + ", global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken"
+            + " global.System.Threading.CancellationToken.None)");
     context.put("unitOutput", ShapeSupport.isUnit(operation.getOutputShape()));
+    context.put("returnsResult", !errors(operation).isEmpty());
+    context.put(
+        "errorClauses",
+        errors(operation).stream()
+            .map(
+                error ->
+                    "| :? "
+                        + symbols.typeOf(error)
+                        + " as error -> return "
+                        + RESULT
+                        + ".Error("
+                        + errorTypeName(operation)
+                        + "."
+                        + errorCaseName(error)
+                        + " error)")
+            .toList());
+    context.put("result", RESULT);
     writer.writeTemplate(
         """
         ${?docs}
@@ -360,7 +417,26 @@ final class ClientGenerator {
                     ${/tokens}
                 }
             ${/tokens}
-            runtime.InvokeAsync(bindings.${binding:L}, ${input:L}, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)${?unitOutput} :> global.System.Threading.Tasks.Task${/unitOutput}
+            ${?returnsResult}
+            task {
+                try
+                    ${?unitOutput}
+                    let! _ = ${invoke:L}
+                    return ${result:L}.Ok()
+                    ${/unitOutput}
+                    ${^unitOutput}
+                    let! output = ${invoke:L}
+                    return ${result:L}.Ok output
+                    ${/unitOutput}
+                with
+                ${#errorClauses}
+                ${value:L}
+                ${/errorClauses}
+            }
+            ${/returnsResult}
+            ${^returnsResult}
+            ${invoke:L}${?unitOutput} :> global.System.Threading.Tasks.Task${/unitOutput}
+            ${/returnsResult}
             ${/canBind}\
         """,
         context);
@@ -396,9 +472,30 @@ final class ClientGenerator {
   }
 
   private String returnType(OperationShape operation) {
+    String output = schemas.operationType(operation.getOutputShape());
+    if (!errors(operation).isEmpty()) {
+      String value = ShapeSupport.isUnit(operation.getOutputShape()) ? "unit" : output;
+      return TASKS + "Task<" + RESULT + "<" + value + ", " + errorTypeName(operation) + ">>";
+    }
     return ShapeSupport.isUnit(operation.getOutputShape())
         ? TASKS + "Task"
-        : TASKS + "Task<" + schemas.operationType(operation.getOutputShape()) + ">";
+        : TASKS + "Task<" + output + ">";
+  }
+
+  /** The errors an operation can return: its own and the service's, in a stable order. */
+  private List<StructureShape> errors(OperationShape operation) {
+    return operation.getErrors(service).stream()
+        .sorted()
+        .map(error -> model.expectShape(error, StructureShape.class))
+        .toList();
+  }
+
+  private String errorTypeName(OperationShape operation) {
+    return FSharpNaming.typeName(operation.getId().getName()) + "Error";
+  }
+
+  private String errorCaseName(StructureShape error) {
+    return FSharpNaming.typeName(service.getContextualName(error));
   }
 
   /** An event-stream operation needs a protocol that binds event streams. */

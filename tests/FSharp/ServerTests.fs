@@ -83,9 +83,11 @@ let ``An F# client calls an F# server`` (served: KitchenServiceProtocols, protoc
         use app = startServer served
         use client = client app protocol
 
-        let! output = client.OrderAsync(order "pizza")
+        let! result = client.OrderAsync(order "pizza")
 
-        Assert.Equal(Receipt.Paid { Amount = 19M; Currency = "CHF" }, output.Receipt)
+        match result with
+        | Ok output -> Assert.Equal(Receipt.Paid { Amount = 19M; Currency = "CHF" }, output.Receipt)
+        | Error error -> failwith $"Unexpected error: {error}"
     }
 
 [<Theory>]
@@ -97,10 +99,13 @@ let ``A modeled error a handler raises reaches the client``
         use app = startServer served
         use client = client app protocol
 
-        let! error = Assert.ThrowsAsync<OutOfStock>(fun () -> client.OrderAsync(order "sold out") :> Task)
+        let! result = client.OrderAsync(order "sold out")
 
-        Assert.Equal(Ingredient.CHEESE, error.Item)
-        Assert.Equal(Some "gone", error.ErrorMessage)
+        match result with
+        | Error(OrderError.OutOfStock error) ->
+            Assert.Equal(Ingredient.CHEESE, error.Item)
+            Assert.Equal(Some "gone", error.ErrorMessage)
+        | other -> failwith $"Unexpected result: {other}"
     }
 
 [<Fact>]

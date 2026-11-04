@@ -70,9 +70,12 @@ let ``An operation sends its input over the HTTP bindings and reads its output``
 
         use client = client handler
 
-        let! output = client.OrderAsync order
+        let! result = client.OrderAsync order
 
-        Assert.Equal(Receipt.Comped, output.Receipt)
+        match result with
+        | Ok output -> Assert.Equal(Receipt.Comped, output.Receipt)
+        | Error error -> failwith $"Unexpected error: {error}"
+
         let request, body = Seq.exactlyOne handler.Requests
         Assert.Equal(HttpMethod.Post, request.Method)
         Assert.Equal("/tables/7/orders", (nonNull request.RequestUri).AbsolutePath)
@@ -100,7 +103,7 @@ let ``A missing idempotency token is filled in, and a given one is kept`` () : T
     }
 
 [<Fact>]
-let ``A modeled error is raised as its exception`` () : Task =
+let ``A modeled error is returned as its case`` () : Task =
     task {
         let handler =
             new StubHandler(fun _ _ ->
@@ -110,10 +113,45 @@ let ``A modeled error is raised as its exception`` () : Task =
 
         use client = client handler
 
-        let! error = Assert.ThrowsAsync<OutOfStock>(fun () -> client.OrderAsync order :> Task)
+        let! result = client.OrderAsync order
 
-        Assert.Equal(Ingredient.CHEESE, error.Item)
-        Assert.Equal(Some "gone", error.ErrorMessage)
+        match result with
+        | Error(OrderError.OutOfStock error) ->
+            Assert.Equal(Ingredient.CHEESE, error.Item)
+            Assert.Equal(Some "gone", error.ErrorMessage)
+        | other -> failwith $"Unexpected result: {other}"
+    }
+
+[<Fact>]
+let ``A failure the model does not declare stays an exception`` () : Task =
+    task {
+        let handler =
+            new StubHandler(fun _ _ ->
+                let response = json HttpStatusCode.InternalServerError "{}"
+                response.Headers.Add("x-amzn-errortype", "KitchenOnFire")
+                response)
+
+        use client = client handler
+
+        let! error = Assert.ThrowsAsync<NSmithy.Client.SmithyClientException>(fun () -> client.OrderAsync order :> Task)
+
+        // Passing through the Result wrapper keeps where the failure came from.
+        Assert.Contains("SmithyClientRuntime", error.StackTrace)
+    }
+
+[<Fact>]
+let ``Cancelling an operation that returns a Result cancels its task`` () : Task =
+    task {
+        let handler = new StubHandler(fun _ _ -> json HttpStatusCode.OK "{}")
+        use client = client handler
+        use cancelled = new CancellationTokenSource()
+        cancelled.Cancel()
+
+        let! _ =
+            Assert.ThrowsAnyAsync<OperationCanceledException>(fun () ->
+                client.OrderAsync(order, cancelled.Token) :> Task)
+
+        ()
     }
 
 [<Fact>]
