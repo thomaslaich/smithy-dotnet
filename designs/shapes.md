@@ -160,12 +160,15 @@ documentation falls back to the map shape's documentation.
 
 ## Services
 
-A Smithy service shape produces two generated files:
+A Smithy service shape produces these generated files:
 
-- `<Service>Client.g.cs` — a typed async client class with one method per
+- `<Service>.Client.g.cs` — a typed async client class with one method per
   operation.
-- `<Service>Server.g.cs` — a handler interface (`I<Service>Handler`) and an
-  ASP.NET Core adapter (`<Service>Server`).
+- `<Operation>.Handler.g.cs` — one per operation, with its handler
+  interface (`I<Operation>Handler`).
+- `<Service>.Server.g.cs` — the combined handler interface
+  (`I<Service>ServiceHandler`), the service definition, and the ASP.NET Core
+  registration and mapping extensions.
 
 See [codegen-architecture.md](codegen-architecture.md) for the generator
 pipeline details.

@@ -53,7 +53,8 @@ smithy build (Smithy CLI)
       │     ├── OperationSchemaGenerator → <Operation>.g.cs
       │     ├── ServiceSchemaGenerator   → <Service>.Schema.g.cs
       │     ├── ClientGenerator          → <Service>.Client.g.cs
-      │     └── ServerGenerator          → <Service>.Server.g.cs
+      │     ├── ServerGenerator          → <Service>.Server.g.cs
+      │     └── OperationHandlerGenerator → <Operation>.Handler.g.cs
       │
       ▼
   obj/Smithy/<projection>/csharp-codegen/**/*.g.cs
@@ -91,7 +92,7 @@ in the generated set:
 | `generateIntEnumShape` | `IntEnumGenerator` | `<Shape>.g.cs` |
 | `generateOperation` | `OperationSchemaGenerator` | `<Operation>.g.cs` |
 | `generateService` | `ServiceSchemaGenerator` | `<Service>.Schema.g.cs` |
-| `generateService` | `ClientGenerator` + `ServerGenerator` | `<Service>.Client.g.cs`, `<Service>.Server.g.cs` |
+| `generateService` | `ClientGenerator` + `ServerGenerator` + `OperationHandlerGenerator` | `<Service>.Client.g.cs`, `<Service>.Server.g.cs`, `<Operation>.Handler.g.cs` |
 
 All files are written under the Smithy projection's output directory:
 `<SmithyBuildOutputPath>/<projection>/csharp-codegen/`.
@@ -107,6 +108,15 @@ The settings name a `service`, a `closure`, or both. A closure is a
 | `service` | Shapes the service reaches | Yes |
 | `closure` | Shapes in the closure | No; data shapes only |
 | Both | Shapes in the closure, which must contain the service | Yes |
+| `ownedSources`, no `closure` | Shapes defined in those files, operations included, plus the service's when one is set; everything they target | Only for `service` |
+
+With `ownedSources`, operations are generated with their handler interfaces
+even without a service or the server, and every service other than `service` generates
+nothing. See [shape-ownership.md](shape-ownership.md). Every run records what
+it generated in the shape manifest, `nsmithy-shapes.json`, next to its output.
+With `providedShapes`, shapes listed in referenced projects' manifests are left
+out of the generated set, and the symbol provider and schema references resolve
+them to the names their manifest records.
 
 When integrations add shapes to the service (`additionalShapes`), the plugin
 gives the director a closure of its own, `nsmithy.generated`: the configured
@@ -430,7 +440,11 @@ Service files contain:
   service-level traits.
 - `<Service>.Client.g.cs` — typed async methods for each operation; binds
   protocol and transport at construction time.
-- `<Service>.Server.g.cs` — handler interfaces, a DI-registered
+- `<Operation>.Handler.g.cs` — the operation's handler interface,
+  `I{Operation}Handler`, one file per operation. It depends only on the
+  operation.
+- `<Service>.Server.g.cs` — `I{Service}ServiceHandler`, which combines the
+  operation handler interfaces, a DI-registered
   `IServiceDefinition` holding the service's operation table, prompt
   definitions generated from `smithy.ai#prompts`, JSON Schema 2020-12
   companions for unary operations, and `Map{Service}`.

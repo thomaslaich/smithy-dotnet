@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.directed.CodegenDirector;
 import software.amazon.smithy.model.Model;
@@ -51,6 +52,36 @@ public final class ShapeClosures {
     if (service.isEmpty()) {
       runner.generateDataShapesOnly();
     }
+  }
+
+  /**
+   * Points {@code runner} at the shapes a project owns, plus the service and the shapes
+   * integrations add to it when there is a service. Everything those shapes target is generated
+   * with them. Unlike a closure without a service, operations are generated too, so a project
+   * without a service still gets its operations' schemas and handlers; services other than {@code
+   * service} generate nothing.
+   *
+   * @return false when there is nothing to generate: no owned shapes and no service.
+   */
+  public static boolean configureOwned(
+      CodegenDirector<?, ?, ?, ?> runner,
+      Optional<ServiceShape> service,
+      Set<ShapeId> ownedShapes,
+      Set<ShapeId> additionalShapes) {
+    Set<ShapeId> roots = new TreeSet<>(ownedShapes);
+    roots.addAll(additionalShapes);
+    service.ifPresent(shape -> roots.add(shape.getId()));
+    if (roots.isEmpty()) {
+      return false;
+    }
+    service.ifPresent(shape -> runner.service(shape.getId()));
+    List<String> selectors = roots.stream().map(ShapeClosures::idSelector).toList();
+    runner.shapeClosure(
+        ShapeClosure.builder()
+            .id(GENERATED_CLOSURE)
+            .includeBySelector(":is(" + String.join(", ", selectors) + ")")
+            .build());
+    return true;
   }
 
   /**

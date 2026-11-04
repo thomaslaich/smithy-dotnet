@@ -9,6 +9,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import java.util.List;
+import java.util.Optional;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
@@ -234,6 +235,15 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
    * {@code Schemas}, which is the child namespace that holds the generated schema classes.
    */
   private Symbol declaredType(Shape shape) {
+    // A shape another project generated is that project's type, under the name its manifest
+    // records; the shape keeps everything else, such as whether it is a value type.
+    Optional<Symbol> provided = settings.providedShapes().type(shape.getId());
+    if (provided.isPresent()) {
+      return declaredSymbol(settings, shape).toBuilder()
+          .name(provided.get().getName())
+          .namespace(provided.get().getNamespace(), ".")
+          .build();
+    }
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     if (typeName.equals(SchemaGenerator.SCHEMAS_NAMESPACE)) {
       throw new CodegenException(

@@ -5,6 +5,8 @@
  *   "csharp-codegen": {
  *     "service": "example.hello#HelloService",
  *     "closure": "example.hello#events",  // optional; a shapeClosures metadata entry to generate
+ *     "ownedSources": ["/abs/model"],      // optional; the project's own model files and directories
+ *     "providedShapes": ["/abs/nsmithy-shapes.json"], // optional; manifests of referenced projects
  *     "baseNamespace": "MyOrg",         // optional; prepended to PascalCase(smithyNamespace)
  *     "packageVersion": "0.1.0",          // optional
  *     "generateClient": true,             // optional; emit the client surface (default true)
@@ -14,9 +16,16 @@
  *     "defaultProtocol": "aws.protocols#restJson1" // optional; the client's default protocol
  *   }
  *
- * At least one of service and closure is required. A closure alone generates only the types in
- * it. With both, the closure is the generated set and the service, which must be in it, gets its
- * client and server.
+ * At least one of service, closure, and ownedSources is required. A closure alone generates only
+ * the types in it. With both, the closure is the generated set and the service, which must be in it,
+ * gets its client and server.
+ *
+ * Without a closure, ownedSources makes the project generate the shapes defined in those files,
+ * operations included with their schemas and handler interfaces, and everything they target. With a
+ * service, the service and everything it reaches are generated too. See designs/shape-ownership.md.
+ *
+ * providedShapes lists the shape manifests of the projects this one references. The shapes they list
+ * are not generated again; generated code refers to the types those projects generated.
  *
  * If baseNamespace is omitted, the C# namespace is just PascalCase of the
  * Smithy namespace (e.g. example.hello -> Example.Hello).
@@ -24,9 +33,11 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.Naming;
+import java.util.List;
 import java.util.Optional;
 import software.amazon.smithy.model.node.ExpectationNotMetException;
 import software.amazon.smithy.model.node.ObjectNode;
+import software.amazon.smithy.model.node.StringNode;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
@@ -35,6 +46,8 @@ public final class CSharpSettings {
 
   private static final String SERVICE = "service";
   private static final String CLOSURE = "closure";
+  private static final String OWNED_SOURCES = "ownedSources";
+  private static final String PROVIDED_SHAPES = "providedShapes";
   private static final String BASE_NAMESPACE = "baseNamespace";
   private static final String PACKAGE_VERSION = "packageVersion";
   private static final String GENERATE_CLIENT = "generateClient";
@@ -45,6 +58,9 @@ public final class CSharpSettings {
 
   private final ShapeId service;
   private final String closure;
+  private final List<String> ownedSources;
+  private final List<String> providedShapeManifests;
+  private ProvidedShapes providedShapes;
   private final String baseNamespace;
   private final String packageVersion;
   private final boolean generateClient;
@@ -56,6 +72,8 @@ public final class CSharpSettings {
   private CSharpSettings(
       ShapeId service,
       String closure,
+      List<String> ownedSources,
+      List<String> providedShapeManifests,
       String baseNamespace,
       String packageVersion,
       boolean generateClient,
@@ -65,6 +83,8 @@ public final class CSharpSettings {
       ShapeId defaultProtocol) {
     this.service = service;
     this.closure = closure;
+    this.ownedSources = ownedSources;
+    this.providedShapeManifests = providedShapeManifests;
     this.baseNamespace = baseNamespace;
     this.packageVersion = packageVersion;
     this.generateClient = generateClient;
@@ -76,9 +96,11 @@ public final class CSharpSettings {
 
   public static CSharpSettings fromNode(ObjectNode config) {
     config.warnIfAdditionalProperties(
-        java.util.List.of(
+        List.of(
             SERVICE,
             CLOSURE,
+            OWNED_SOURCES,
+            PROVIDED_SHAPES,
             BASE_NAMESPACE,
             PACKAGE_VERSION,
             GENERATE_CLIENT,
@@ -89,9 +111,19 @@ public final class CSharpSettings {
     ShapeId service =
         config.getStringMember(SERVICE).map(node -> node.expectShapeId()).orElse(null);
     String closure = config.getStringMember(CLOSURE).map(node -> node.getValue()).orElse(null);
-    if (service == null && closure == null) {
+    List<String> ownedSources =
+        config
+            .getArrayMember(OWNED_SOURCES)
+            .map(array -> array.getElementsAs(StringNode::getValue))
+            .orElse(List.of());
+    List<String> providedShapeManifests =
+        config
+            .getArrayMember(PROVIDED_SHAPES)
+            .map(array -> array.getElementsAs(StringNode::getValue))
+            .orElse(List.of());
+    if (service == null && closure == null && config.getArrayMember(OWNED_SOURCES).isEmpty()) {
       throw new ExpectationNotMetException(
-          "csharp-codegen requires `service`, `closure`, or both.", config);
+          "csharp-codegen requires `service`, `closure`, or `ownedSources`.", config);
     }
     String baseNamespace = config.getStringMemberOrDefault(BASE_NAMESPACE, "");
     String packageVersion = config.getStringMemberOrDefault(PACKAGE_VERSION, "0.0.1");
@@ -105,6 +137,8 @@ public final class CSharpSettings {
     return new CSharpSettings(
         service,
         closure,
+        ownedSources,
+        providedShapeManifests,
         baseNamespace,
         packageVersion,
         generateClient,
@@ -122,6 +156,36 @@ public final class CSharpSettings {
   /** The id of the {@code shapeClosures} metadata entry to generate, when set. */
   public Optional<String> closure() {
     return Optional.ofNullable(closure);
+  }
+
+  /**
+   * The project's own model files and directories. The project generates the shapes defined in
+   * them; empty when the setting is absent.
+   */
+  public List<String> ownedSources() {
+    return ownedSources;
+  }
+
+  /** The shape manifests of referenced projects, as configured. */
+  public List<String> providedShapeManifests() {
+    return providedShapeManifests;
+  }
+
+  /** The shapes referenced projects generated, read from their manifests on first use. */
+  public ProvidedShapes providedShapes() {
+    if (providedShapes == null) {
+      providedShapes = ProvidedShapes.load(providedShapeManifests);
+    }
+    return providedShapes;
+  }
+
+  /**
+   * Whether {@code ownedSources} selects the generated set: no closure is set, and either owned
+   * sources are listed or there is no service (an empty {@code ownedSources} then generates
+   * nothing).
+   */
+  public boolean generatesOwnedShapes() {
+    return closure == null && (!ownedSources.isEmpty() || service == null);
   }
 
   /** May be empty (no prefix). */
