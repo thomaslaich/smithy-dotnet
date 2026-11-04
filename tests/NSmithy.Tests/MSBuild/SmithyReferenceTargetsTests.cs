@@ -118,6 +118,38 @@ public sealed class SmithyReferenceTargetsTests : IDisposable
     }
 
     [Fact]
+    public async Task ProjectThatNoLongerGeneratesRemovesItsShapeManifest()
+    {
+        // Left over from a build that generated code: the project has since lost its model.
+        WriteFile("plain/Smithy/source/csharp-codegen/nsmithy-shapes.json", "{}");
+
+        var result = await DotnetProcess.RunAsync(
+            _directory,
+            [
+                "msbuild",
+                Path.Combine(_directory, "plain", "plain.proj"),
+                "-t:_PrepareSmithyBuildFile",
+                "-nologo",
+                "-v:m",
+            ]
+        );
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.False(
+            File.Exists(
+                Path.Combine(
+                    _directory,
+                    "plain",
+                    "Smithy",
+                    "source",
+                    "csharp-codegen",
+                    "nsmithy-shapes.json"
+                )
+            )
+        );
+    }
+
+    [Fact]
     public async Task PublishingWithoutBuildFileFails()
     {
         WriteProject("nobuildfile", "<SmithyPublish>true</SmithyPublish>");
