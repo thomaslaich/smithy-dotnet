@@ -202,13 +202,11 @@ final class ClientGenerator {
         writer.consumer(w -> writeConstructors(w, client, config, serviceSchema, protocol)));
     context.put(
         "operations",
-        writer.consumer(
-            w ->
-                operations.forEach(
-                    operation -> {
-                      w.write("");
-                      writeOperation(w, operation);
-                    })));
+        writer.consumer(w ->
+            operations.forEach(operation -> {
+              w.write("");
+              writeOperation(w, operation);
+            })));
     context.put("forwards", forwards);
     writer.writeTemplate(
         """
@@ -383,17 +381,16 @@ final class ClientGenerator {
     context.put(
         "errorClauses",
         errors(operation).stream()
-            .map(
-                error ->
-                    "| :? "
-                        + symbols.typeOf(error)
-                        + " as error -> return "
-                        + RESULT
-                        + ".Error("
-                        + errorTypeName(operation)
-                        + "."
-                        + errorCaseName(error)
-                        + " error)")
+            .map(error ->
+                "| :? "
+                    + symbols.typeOf(error)
+                    + " as error -> return "
+                    + RESULT
+                    + ".Error("
+                    + errorTypeName(operation)
+                    + "."
+                    + errorCaseName(error)
+                    + " error)")
             .toList());
     context.put("result", RESULT);
     writer.writeTemplate(
@@ -531,12 +528,11 @@ final class ClientGenerator {
     index.getEffectiveAuthSchemes(service).keySet().forEach(id -> ids.add(id.toString()));
     TopDownIndex.of(model).getContainedOperations(service).stream()
         .sorted(Comparator.comparing(operation -> operation.getId().toString()))
-        .forEach(
-            operation ->
-                index
-                    .getEffectiveAuthSchemes(service, operation)
-                    .keySet()
-                    .forEach(id -> ids.add(id.toString())));
+        .forEach(operation ->
+            index
+                .getEffectiveAuthSchemes(service, operation)
+                .keySet()
+                .forEach(id -> ids.add(id.toString())));
     return List.copyOf(ids);
   }
 
@@ -556,16 +552,15 @@ final class ClientGenerator {
     StructureShape input = model.expectShape(operation.getInputShape(), StructureShape.class);
     String labels =
         endpoint.get().getHostPrefix().getLabels().stream()
-            .map(
-                label -> {
-                  MemberShape member = input.getMember(label.getContent()).orElseThrow();
-                  return CLIENT
-                      + "SmithyHostLabel("
-                      + FSharpNaming.stringLiteral(label.getContent())
-                      + ", input."
-                      + FSharpNaming.fieldName(member)
-                      + ")";
-                })
+            .map(label -> {
+              MemberShape member = input.getMember(label.getContent()).orElseThrow();
+              return CLIENT
+                  + "SmithyHostLabel("
+                  + FSharpNaming.stringLiteral(label.getContent())
+                  + ", input."
+                  + FSharpNaming.fieldName(member)
+                  + ")";
+            })
             .collect(Collectors.joining("; ", "[| ", " |]"));
     String type = schemas.operationType(operation.getInputShape());
     return Optional.of(
@@ -587,17 +582,16 @@ final class ClientGenerator {
   private Optional<String> httpVersionPreference(ProtocolInfo protocol) {
     return Protocols.httpVersionPreference(
             service, protocol.trait(), Protocols.hasEventStreamOperations(model, service))
-        .map(
-            preference ->
-                "global.NSmithy.Http.SmithyHttpVersionPreference(global.System.Net.HttpVersion."
-                    + switch (preference.alpnId()) {
-                      case "h3" -> "Version30";
-                      case "h2" -> "Version20";
-                      default -> "Version11";
-                    }
-                    + ", "
-                    + preference.allowDowngrade()
-                    + ")");
+        .map(preference ->
+            "global.NSmithy.Http.SmithyHttpVersionPreference(global.System.Net.HttpVersion."
+                + switch (preference.alpnId()) {
+                  case "h3" -> "Version30";
+                  case "h2" -> "Version20";
+                  default -> "Version11";
+                }
+                + ", "
+                + preference.allowDowngrade()
+                + ")");
   }
 
   private static String strings(List<String> values) {
