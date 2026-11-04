@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -80,7 +81,8 @@ class ClientGeneratorTest {
         client.contains(
             "abstract OrderAsync: input: global.Example.Cafe.OrderInput * ?cancellationToken:"
                 + " global.System.Threading.CancellationToken ->"
-                + " global.System.Threading.Tasks.Task<global.Example.Cafe.OrderOutput>"),
+                + " global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<"
+                + "global.Example.Cafe.OrderOutput, OrderError>>"),
         client);
     assertTrue(client.contains("type CafeClientConfig ="), client);
     assertTrue(client.contains("global.NSmithy.Protocols.RestJson.RestJson1Protocol()"), client);
@@ -117,6 +119,54 @@ class ClientGeneratorTest {
     assertTrue(
         schemas.contains(", 409) :> global.NSmithy.Core.Serde.IOperationErrorSchema"), schemas);
     assertTrue(schemas.contains("type CafeSchema ="), schemas);
+  }
+
+  @Test
+  void anOperationThatDeclaresErrorsReturnsAResult() {
+    String client = generate(MODEL, true).expectFileString(CLIENT);
+
+    assertTrue(
+        client.contains(
+            "[<RequireQualifiedAccess>]\ntype OrderError =\n"
+                + "    | SoldOut of global.Example.Cafe.SoldOut"),
+        client);
+    assertTrue(
+        client.contains(
+            "| :? global.Example.Cafe.SoldOut as error -> return"
+                + " global.Microsoft.FSharp.Core.Result.Error(OrderError.SoldOut error)"),
+        client);
+    assertFalse(client.contains("type PingError"), client);
+  }
+
+  @Test
+  void aServiceErrorIsACaseOfEveryOperation() {
+    String model =
+        MODEL.replace(
+                "operations: [Order, Ping, Forget]",
+                "operations: [Order, Ping, Forget]\n    errors: [Busy]")
+            + "\n@error(\"server\")\n@httpError(503)\nstructure Busy {}\n";
+
+    MockManifest manifest = generate(model, true);
+    String client = manifest.expectFileString(CLIENT);
+
+    assertTrue(client.contains("type PingError =\n    | Busy of global.Example.Cafe.Busy"), client);
+    assertTrue(
+        client.contains(
+            "type OrderError =\n    | Busy of global.Example.Cafe.Busy\n"
+                + "    | SoldOut of global.Example.Cafe.SoldOut"),
+        client);
+    // The runtime only decodes an error its operation's schema lists.
+    String schemas = manifest.expectFileString(SCHEMAS);
+    assertEquals(
+        3, schemas.split("OperationError<global.Example.Cafe.Busy", -1).length - 1, schemas);
+  }
+
+  @Test
+  void aShapeNamedLikeAnErrorTypeFails() {
+    String model = MODEL + "\nstructure OrderError {}\n";
+
+    CodegenException error = assertThrows(CodegenException.class, () -> generate(model, true));
+    assertTrue(error.getMessage().contains("example.cafe#OrderError"), error.getMessage());
   }
 
   @Test

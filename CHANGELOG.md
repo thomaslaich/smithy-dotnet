@@ -11,6 +11,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: F# client operations that declare errors return a `Result`.** `OrderAsync` returns
+  `Task<Result<OrderOutput, OrderError>>`, where `OrderError` has a case for each error the operation
+  or its service declares. Other failures stay exceptions.
+
 ## [0.17.0]
 
 This release packages contracts as Maven JARs with the new `contracts-jar` Smithy build plugin.
