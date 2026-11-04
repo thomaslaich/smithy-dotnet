@@ -86,7 +86,7 @@ The same rule covers the other layouts:
 | Project | `SmithyService` | Generates |
 | --- | --- | --- |
 | Contracts project with a service in its model | Not set | Its shapes and operations, no service code |
-| Implementation of those contracts, with no model files and no `NSmithy.MSBuild` | Not set | Nothing; it implements the handler interfaces |
+| Implementation of those contracts, with no model files | Not set | Nothing; it implements the handler interfaces |
 | Server against that contracts project | Set | The server only |
 | Client against that contracts project | Set | The client only |
 | Client against a Maven contract JAR | Set | Everything: no project owns those shapes |
@@ -200,11 +200,13 @@ A project publishes the model files its `smithy-build.json` names in `sources`
 and `imports`, the same files it passes as `ownedSources`, so the model its
 consumers get is the one its generated types come from.
 
-The model files and build files of a direct reference make a project generate
-code. Those a reference only passes on from its own references are added only
-to a project that generates code anyway. A project that generates nothing, such
-as a test project that references a server, is left as it is: a model it does
-not use must not make it fail.
+A project generates code when it has model files of its own or `SmithyService`
+is set. Only then do its references' model files, build files, and manifests
+join its build, whether a reference contributes them itself or passes them on
+from its own references. A project with neither, such as one that implements
+a contracts project's handler interfaces or a test project that references a
+server, is left as it is: a model it does not use must not make it generate or
+fail.
 
 MSBuild passes the manifests as the code generator's setting `providedShapes`,
 a list of manifest paths. The plugin then:
@@ -432,7 +434,7 @@ it fails at runtime instead of compile time and interacts badly with trimming.
   provided error or any operation, so these names are unique across the modules
   of a service.
 - **Transitive model collection.** A project that generates code gets the models
-  of the contracts its references reference. Together with manifests, nothing is
+  of every contract its references reach. Together with manifests, nothing is
   generated twice.
 - **Design-time builds.** A reference that has not been built yet has no
   manifest, so an IDE build that skips building references generates the

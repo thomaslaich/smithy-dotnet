@@ -53,8 +53,9 @@ stale or missing staged JAR produces confusing codegen errors.
   `NSmithy.Client`, `NSmithy.Server.AspNetCore`, `NSmithy.Codecs.*`,
   `NSmithy.Protocols.*`, `NSmithy.MSBuild`).
 - `tests/` — `NSmithy.Tests` (unit), `tests/FSharp` (F# codegen through MSBuild),
-  and `tests/Conformance/*` (one project per protocol, run against the official
-  Smithy/AWS protocol-test fixtures).
+  `tests/Ownership` (a service split across projects that own their shapes, served
+  and called in-process), and `tests/Conformance/*` (one project per protocol, run
+  against the official Smithy/AWS protocol-test fixtures).
 - `examples/` — runnable end-to-end samples (`simplerestjson`, nested
   `restjson1` / `rpcv2cbor` / `grpc` unary and streaming variants,
   `aws-localstack`, `polyglot`). These

@@ -37,6 +37,13 @@
     <Project Path="tests/FSharp/FSharp.Tests.fsproj" />
     <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Ownership/">
+    <Project Path="tests/Ownership/Api/Ownership.Api.csproj" />
+    <Project Path="tests/Ownership/Common/Ownership.Common.csproj" />
+    <Project Path="tests/Ownership/Orders/Ownership.Orders.csproj" />
+    <Project Path="tests/Ownership/Payments/Ownership.Payments.csproj" />
+    <Project Path="tests/Ownership/Tests/Ownership.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Conformance/">
     <Project Path="tests/Conformance/AwsQuery/AwsQuery.Conformance.csproj" />
     <Project Path="tests/Conformance/AwsJson/AwsJson.Conformance.csproj" />
