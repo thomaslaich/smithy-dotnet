@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointResolverGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointRules;
@@ -25,6 +26,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -48,6 +50,7 @@ import software.amazon.smithy.model.shapes.EnumShape;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -56,6 +59,9 @@ final class DirectedCSharpCodegen
 
   /** What this run generated, written as the shape manifest once generation is done. */
   private final ShapeManifest shapeManifest = new ShapeManifest();
+
+  /** The shapes defined in this project's own model files, read on first use. */
+  private Set<ShapeId> ownedShapes;
 
   @Override
   public SymbolProvider createSymbolProvider(
@@ -116,7 +122,7 @@ final class DirectedCSharpCodegen
         .useFileWriter(
             dir + "/" + typeName + ".Schema.g.cs",
             SchemaGenerator.schemaNamespace(csNamespace),
-            writer -> new ServiceSchemaGenerator(writer, directive.shape()).run());
+            writer -> new ServiceSchemaGenerator(ctx, writer, directive.shape()).run());
     shapeManifest.add(
         service.getId(), ShapeManifest.SCHEMA, SchemaGenerator.schemaClassSymbol(ctx, service));
 
@@ -348,7 +354,7 @@ final class DirectedCSharpCodegen
     if (isProvided(d.context(), d.shape())) {
       return;
     }
-    // An operation has no C# type of its own, only a schema and its server handler interface.
+    // An operation has no C# type of its own, only a schema and its handler interface.
     writeSchema(
         d.context(),
         d.shape(),
@@ -366,11 +372,16 @@ final class DirectedCSharpCodegen
   }
 
   /**
-   * Whether an operation gets a server handler interface: whenever the server is generated, except
-   * for an operation of a service whose surface an integration's service generator replaces.
+   * Whether an operation gets a handler interface. A project that owns the operation always
+   * generates it, since a server built on that project cannot; any other operation gets one when
+   * the server is generated. The exception is an operation of a service whose surface an
+   * integration's service generator replaces.
    */
-  private static boolean generatesHandler(GenerationContext ctx, OperationShape op) {
-    if (!ctx.settings().generateServer()) {
+  private boolean generatesHandler(GenerationContext ctx, OperationShape op) {
+    if (ownedShapes == null) {
+      ownedShapes = OwnedShapes.of(ctx.model(), ctx.settings().ownedSources());
+    }
+    if (!ownedShapes.contains(op.getId()) && !ctx.settings().generateServer()) {
       return false;
     }
     Optional<ServiceShape> service =

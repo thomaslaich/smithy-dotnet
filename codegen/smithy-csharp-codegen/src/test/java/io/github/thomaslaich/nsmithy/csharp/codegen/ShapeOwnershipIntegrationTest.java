@@ -57,7 +57,7 @@ class ShapeOwnershipIntegrationTest {
     assertTrue(manifest.hasFile(Path.of("Acme/Shop/PlaceOrderInput.g.cs")));
     assertTrue(manifest.hasFile(Path.of("Acme/Shop/PlaceOrderOutput.g.cs")));
     assertTrue(manifest.hasFile(Path.of("Acme/Shop/PlaceOrder.Schema.g.cs")));
-    String handler = manifest.expectFileString(Path.of("Acme/Shop/PlaceOrder.Handler.Server.g.cs"));
+    String handler = manifest.expectFileString(Path.of("Acme/Shop/PlaceOrder.Handler.g.cs"));
     assertTrue(handler.contains("public interface IPlaceOrderHandler"), handler);
     assertTrue(handler.contains("/// Places an order."), handler);
     // Money is targeted but owned by no project in this build, so it is generated where needed.
@@ -111,7 +111,7 @@ class ShapeOwnershipIntegrationTest {
                 .withMember("ownedSources", ArrayNode.fromStrings(List.of("common.smithy"))));
 
     assertTrue(manifest.hasFile(Path.of("Acme/Shop/Shop.Server.g.cs")));
-    assertTrue(manifest.hasFile(Path.of("Acme/Shop/PlaceOrder.Handler.Server.g.cs")));
+    assertTrue(manifest.hasFile(Path.of("Acme/Shop/PlaceOrder.Handler.g.cs")));
     // Unused is reached by nothing, but the project owns it.
     assertTrue(manifest.hasFile(Path.of("Acme/Shop/Unused.g.cs")));
     ObjectNode shapes = shapes(manifest);
@@ -129,16 +129,15 @@ class ShapeOwnershipIntegrationTest {
   }
 
   @Test
-  void withoutTheServerOperationsGetNoHandler() {
+  void aProjectThatOwnsAnOperationGeneratesItsHandlerWithoutTheServer() {
     MockManifest manifest =
         generate(
             settings()
                 .withMember("ownedSources", ArrayNode.fromStrings(List.of("orders.smithy")))
                 .withMember("generateServer", false));
 
-    assertTrue(manifest.hasFile(Path.of("Acme/Shop/PlaceOrder.Schema.g.cs")));
-    assertFalse(manifest.hasFile(Path.of("Acme/Shop/PlaceOrder.Handler.Server.g.cs")));
-    assertFalse(
+    assertTrue(manifest.hasFile(Path.of("Acme/Shop/PlaceOrder.Handler.g.cs")));
+    assertTrue(
         shapes(manifest)
             .expectObjectMember("acme.shop#PlaceOrder")
             .getMember("handler")
@@ -186,8 +185,7 @@ class ShapeOwnershipIntegrationTest {
         manifest,
         List.of());
 
-    String handler =
-        manifest.expectFileString(Path.of("Acme/Orders/PlaceOrder.Handler.Server.g.cs"));
+    String handler = manifest.expectFileString(Path.of("Acme/Orders/PlaceOrder.Handler.g.cs"));
     assertTrue(handler.contains("namespace Acme.Orders;"), handler);
     String server = manifest.expectFileString(Path.of("Acme/Api/Api.Server.g.cs"));
     assertTrue(

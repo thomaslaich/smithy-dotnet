@@ -54,7 +54,7 @@ smithy build (Smithy CLI)
       │     ├── ServiceSchemaGenerator   → <Service>.Schema.g.cs
       │     ├── ClientGenerator          → <Service>.Client.g.cs
       │     ├── ServerGenerator          → <Service>.Server.g.cs
-      │     └── OperationHandlerGenerator → <Operation>.Handler.Server.g.cs
+      │     └── OperationHandlerGenerator → <Operation>.Handler.g.cs
       │
       ▼
   obj/Smithy/<projection>/csharp-codegen/**/*.g.cs
@@ -92,7 +92,7 @@ in the generated set:
 | `generateIntEnumShape` | `IntEnumGenerator` | `<Shape>.g.cs` |
 | `generateOperation` | `OperationSchemaGenerator` | `<Operation>.g.cs` |
 | `generateService` | `ServiceSchemaGenerator` | `<Service>.Schema.g.cs` |
-| `generateService` | `ClientGenerator` + `ServerGenerator` + `OperationHandlerGenerator` | `<Service>.Client.g.cs`, `<Service>.Server.g.cs`, `<Operation>.Handler.Server.g.cs` |
+| `generateService` | `ClientGenerator` + `ServerGenerator` + `OperationHandlerGenerator` | `<Service>.Client.g.cs`, `<Service>.Server.g.cs`, `<Operation>.Handler.g.cs` |
 
 All files are written under the Smithy projection's output directory:
 `<SmithyBuildOutputPath>/<projection>/csharp-codegen/`.
@@ -111,7 +111,7 @@ The settings name a `service`, a `closure`, or both. A closure is a
 | `ownedSources`, no `closure` | Shapes defined in those files, operations included, plus the service's when one is set; everything they target | Only for `service` |
 
 With `ownedSources`, operations are generated with their handler interfaces
-even without a service, and every service other than `service` generates
+even without a service or the server, and every service other than `service` generates
 nothing. See [shape-ownership.md](shape-ownership.md). Every run records what
 it generated in the shape manifest, `nsmithy-shapes.json`, next to its output.
 With `providedShapes`, shapes listed in referenced projects' manifests are left
@@ -440,7 +440,7 @@ Service files contain:
   service-level traits.
 - `<Service>.Client.g.cs` — typed async methods for each operation; binds
   protocol and transport at construction time.
-- `<Operation>.Handler.Server.g.cs` — the operation's handler interface,
+- `<Operation>.Handler.g.cs` — the operation's handler interface,
   `I{Operation}Handler`, one file per operation. It depends only on the
   operation.
 - `<Service>.Server.g.cs` — `I{Service}ServiceHandler`, which combines the

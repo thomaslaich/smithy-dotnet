@@ -164,7 +164,7 @@ A Smithy service shape produces these generated files:
 
 - `<Service>.Client.g.cs` — a typed async client class with one method per
   operation.
-- `<Operation>.Handler.Server.g.cs` — one per operation, with its handler
+- `<Operation>.Handler.g.cs` — one per operation, with its handler
   interface (`I<Operation>Handler`).
 - `<Service>.Server.g.cs` — the combined handler interface
   (`I<Service>ServiceHandler`), the service definition, and the ASP.NET Core

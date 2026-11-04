@@ -54,7 +54,7 @@ public final class OperationSchemaGenerator implements Runnable {
       writer.putContext(
           "outputSchema",
           SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()));
-      writer.putContext("errors", errorsLiteral(errors));
+      writer.putContext("errors", errorsLiteral(writer, context, errors));
       writer.putContext(
           "traits", SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
       writer.putContext("streamingArgument", isStreaming ? ", isStreaming: true" : "");
@@ -71,7 +71,9 @@ public final class OperationSchemaGenerator implements Runnable {
     }
   }
 
-  private String errorsLiteral(List<ShapeId> errors) {
+  /** A C# collection expression of the operation error schemas of {@code errors}. */
+  static String errorsLiteral(
+      CSharpWriter writer, GenerationContext context, List<ShapeId> errors) {
     if (errors.isEmpty()) {
       return "[]";
     }

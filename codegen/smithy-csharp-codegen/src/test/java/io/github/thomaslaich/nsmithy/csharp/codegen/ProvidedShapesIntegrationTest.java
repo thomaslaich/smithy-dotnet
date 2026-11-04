@@ -57,7 +57,7 @@ class ProvidedShapesIntegrationTest {
 
     assertFalse(api.hasFile(Path.of("Acme/Shop/PlaceOrderInput.g.cs")));
     assertFalse(api.hasFile(Path.of("Acme/Shop/PlaceOrder.Schema.g.cs")));
-    assertFalse(api.hasFile(Path.of("Acme/Shop/PlaceOrder.Handler.Server.g.cs")));
+    assertFalse(api.hasFile(Path.of("Acme/Shop/PlaceOrder.Handler.g.cs")));
     assertFalse(api.hasFile(Path.of("Acme/Shop/Money.g.cs")));
     assertTrue(api.hasFile(Path.of("Acme/Shop/Shop.Schema.g.cs")));
   }
@@ -147,22 +147,121 @@ class ProvidedShapesIntegrationTest {
   }
 
   @Test
-  void aServiceRenameOfAProvidedShapeFails() throws Exception {
-    Path manifest = ordersManifest(true);
+  void slicesInTheirOwnNamespacesCanDefineShapesWithTheSameName() throws Exception {
+    String orders =
+        """
+        $version: "2"
+        namespace acme.orders
+
+        operation PlaceOrder {
+            input := { shipTo: Address }
+        }
+
+        structure Address {
+            street: String
+        }
+        """;
+    String payments =
+        """
+        $version: "2"
+        namespace acme.payments
+
+        operation CapturePayment {
+            input := { billTo: Address }
+        }
+
+        structure Address {
+            iban: String
+        }
+        """;
+    String shop =
+        """
+        $version: "2"
+        namespace acme.shop
+
+        use acme.orders#PlaceOrder
+        use acme.payments#CapturePayment
+
+        service Shop {
+            operations: [PlaceOrder, CapturePayment]
+            rename: { "acme.payments#Address": "PaymentAddress" }
+        }
+        """;
+    Path ordersManifest = sliceManifest("orders.smithy", orders);
+    Path paymentsManifest = sliceManifest("payments.smithy", payments);
     Model model =
         Model.assembler()
-            .addUnparsedModel("orders.smithy", ORDERS)
-            .addUnparsedModel(
-                "service.smithy",
-                """
-                $version: "2"
-                namespace acme.shop
+            .addUnparsedModel("orders.smithy", orders)
+            .addUnparsedModel("payments.smithy", payments)
+            .addUnparsedModel("shop.smithy", shop)
+            .assemble()
+            .unwrap();
 
-                service Shop {
-                    operations: [PlaceOrder]
-                    rename: { "acme.shop#Money": "Cash" }
-                }
-                """)
+    MockManifest api =
+        generate(
+            model,
+            settings("")
+                .withMember("service", "acme.shop#Shop")
+                .withMember(
+                    "providedShapes",
+                    ArrayNode.fromStrings(
+                        List.of(ordersManifest.toString(), paymentsManifest.toString()))));
+
+    assertFalse(api.hasFile(Path.of("Acme/Orders/Address.g.cs")));
+    assertFalse(api.hasFile(Path.of("Acme/Payments/Address.g.cs")));
+    String server = api.expectFileString(Path.of("Acme/Shop/Shop.Server.g.cs"));
+    assertTrue(server.contains("IPlaceOrderHandler"), server);
+    assertTrue(server.contains("ICapturePaymentHandler"), server);
+  }
+
+  @Test
+  void aServiceRenameOfAProvidedErrorFails() throws Exception {
+    String orders =
+        """
+        $version: "2"
+        namespace acme.orders
+
+        operation PlaceOrder {
+            input := {}
+            errors: [NotFound]
+        }
+
+        @error("client")
+        structure NotFound {}
+        """;
+    String payments =
+        """
+        $version: "2"
+        namespace acme.payments
+
+        operation CapturePayment {
+            input := {}
+            errors: [NotFound]
+        }
+
+        @error("client")
+        structure NotFound {}
+        """;
+    String shop =
+        """
+        $version: "2"
+        namespace acme.shop
+
+        use acme.orders#PlaceOrder
+        use acme.payments#CapturePayment
+
+        service Shop {
+            operations: [PlaceOrder, CapturePayment]
+            rename: { "acme.payments#NotFound": "PaymentNotFound" }
+        }
+        """;
+    Path ordersManifest = sliceManifest("orders.smithy", orders);
+    Path paymentsManifest = sliceManifest("payments.smithy", payments);
+    Model model =
+        Model.assembler()
+            .addUnparsedModel("orders.smithy", orders)
+            .addUnparsedModel("payments.smithy", payments)
+            .addUnparsedModel("shop.smithy", shop)
             .assemble()
             .unwrap();
 
@@ -176,15 +275,66 @@ class ProvidedShapesIntegrationTest {
                         .withMember("service", "acme.shop#Shop")
                         .withMember(
                             "providedShapes",
-                            ArrayNode.fromStrings(List.of(manifest.toString())))));
+                            ArrayNode.fromStrings(
+                                List.of(ordersManifest.toString(), paymentsManifest.toString())))));
 
-    assertTrue(exception.getMessage().contains("renames acme.shop#Money"), exception.getMessage());
+    assertTrue(
+        exception.getMessage().contains("renames the error acme.payments#NotFound"),
+        exception.getMessage());
+  }
+
+  @Test
+  void aServiceAddsItsErrorsToTheOperationsOtherProjectsGenerated() throws Exception {
+    Path manifest = ordersManifest(true);
+    Model model =
+        Model.assembler()
+            .addUnparsedModel("orders.smithy", ORDERS)
+            .addUnparsedModel(
+                "service.smithy",
+                """
+                $version: "2"
+                namespace acme.shop
+
+                service Shop {
+                    operations: [PlaceOrder]
+                    errors: [Fault]
+                }
+
+                @error("server")
+                @httpError(503)
+                structure Fault {}
+                """)
+            .assemble()
+            .unwrap();
+
+    MockManifest api =
+        generate(
+            model,
+            settings("")
+                .withMember("service", "acme.shop#Shop")
+                .withMember("providedShapes", ArrayNode.fromStrings(List.of(manifest.toString()))));
+
+    String schema = api.expectFileString(Path.of("Acme/Shop/Shop.Schema.g.cs"));
+    assertTrue(schema.contains("PlaceOrderOperation"), schema);
+    assertTrue(schema.contains("PlaceOrderSchema.Schema.WithErrors("), schema);
+    assertTrue(schema.contains("ShapeId.Parse(\"acme.shop#Fault\")"), schema);
+    assertTrue(schema.contains("503"), schema);
+    String server = api.expectFileString(Path.of("Acme/Shop/Shop.Server.g.cs"));
+    assertTrue(server.contains("ShopSchema.PlaceOrderOperation"), server);
+  }
+
+  @Test
+  void aServiceWithoutErrorsUsesTheOperationSchemasAsTheyAre() throws Exception {
+    MockManifest api = generateApi(ordersManifest(true));
+
+    String schema = api.expectFileString(Path.of("Acme/Shop/Shop.Schema.g.cs"));
+    assertFalse(schema.contains("WithErrors"), schema);
   }
 
   @Test
   void aProvidedOperationWithoutAHandlerFailsForAServer() throws Exception {
     CodegenException exception =
-        assertThrows(CodegenException.class, () -> generateApi(ordersManifest(false)));
+        assertThrows(CodegenException.class, () -> generateApi(manifestWithoutHandlers()));
 
     assertTrue(
         exception.getMessage().contains("without a handler interface"), exception.getMessage());
@@ -192,16 +342,57 @@ class ProvidedShapesIntegrationTest {
 
   @Test
   void aClientNeedsNoHandlers() throws Exception {
-    Path manifest = ordersManifest(false);
     MockManifest client =
         generate(
             model(),
             settings("")
                 .withMember("service", "acme.shop#Shop")
                 .withMember("generateServer", false)
-                .withMember("providedShapes", ArrayNode.fromStrings(List.of(manifest.toString()))));
+                .withMember(
+                    "providedShapes",
+                    ArrayNode.fromStrings(List.of(manifestWithoutHandlers().toString()))));
 
     assertTrue(client.hasFile(Path.of("Acme/Shop/Shop.Client.g.cs")));
+  }
+
+  /**
+   * The manifest of a project that generated the operation from its service without owning it and
+   * with the server turned off, so it has no handler interface.
+   */
+  private Path manifestWithoutHandlers() throws Exception {
+    MockManifest generated =
+        generate(
+            Model.assembler()
+                .addUnparsedModel("orders.smithy", ORDERS)
+                .addUnparsedModel(
+                    "other.smithy",
+                    """
+                    $version: "2"
+                    namespace acme.shop
+
+                    service Other {
+                        operations: [PlaceOrder]
+                    }
+                    """)
+                .assemble()
+                .unwrap(),
+            settings("Orders")
+                .withMember("service", "acme.shop#Other")
+                .withMember("generateServer", false));
+    Path file = Files.createTempFile(tempDir, "no-handlers-", ".json");
+    Files.writeString(file, generated.expectFileString(Path.of(ShapeManifest.FILE_NAME)));
+    return file;
+  }
+
+  /** Generates a slice that owns the one model file it is given, and saves its manifest. */
+  private Path sliceManifest(String fileName, String model) throws Exception {
+    MockManifest slice =
+        generate(
+            Model.assembler().addUnparsedModel(fileName, model).assemble().unwrap(),
+            settings("").withMember("ownedSources", ArrayNode.fromStrings(List.of(fileName))));
+    Path file = Files.createTempFile(tempDir, "slice-", ".json");
+    Files.writeString(file, slice.expectFileString(Path.of(ShapeManifest.FILE_NAME)));
+    return file;
   }
 
   /** Generates the Orders module, with the base namespace "Orders", and saves its manifest. */

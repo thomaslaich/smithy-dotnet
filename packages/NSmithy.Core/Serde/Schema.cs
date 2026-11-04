@@ -1156,6 +1156,24 @@ public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
 
     public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
 
+    /// <summary>
+    /// A copy of this schema that also declares <paramref name="errors"/>. An error it already
+    /// declares keeps its registration. A service uses this to add its service-level errors to an
+    /// operation that another project compiled without knowing the service.
+    /// </summary>
+    public OperationSchema<TInput, TOutput> WithErrors(IEnumerable<IOperationErrorSchema> errors)
+    {
+        ArgumentNullException.ThrowIfNull(errors);
+        return new(
+            Id,
+            Input,
+            Output,
+            [.. Errors, .. errors.Where(error => Errors.All(existing => existing.Id != error.Id))],
+            Traits.Values,
+            IsStreaming
+        );
+    }
+
     // Every operation implicitly carries smithy.framework#ValidationException: the server runtime
     // returns it when input validation fails, and clients must be able to deserialize it. A model
     // that declares the error itself keeps its own registration.

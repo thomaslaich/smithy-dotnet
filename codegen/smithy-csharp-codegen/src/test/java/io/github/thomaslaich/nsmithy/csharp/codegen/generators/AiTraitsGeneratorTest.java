@@ -36,8 +36,9 @@ final class AiTraitsGeneratorTest {
     var operation =
         model.expectShape(ShapeId.from("example.weather#GetForecast"), OperationShape.class);
 
-    String serviceSchema = renderServiceSchema(service);
-    String operationSchema = renderOperationSchema(model, operation);
+    GenerationContext context = context(model);
+    String serviceSchema = renderServiceSchema(context, service);
+    String operationSchema = renderOperationSchema(context, operation);
 
     // Prompts are generated as server prompt definitions, so runtime schemas omit the trait.
     assertFalse(serviceSchema.contains("smithy.ai#prompts"), serviceSchema);
@@ -76,13 +77,23 @@ final class AiTraitsGeneratorTest {
         "Missing test resource " + resourceName);
   }
 
-  private static String renderServiceSchema(ServiceShape service) {
+  private static String renderServiceSchema(GenerationContext context, ServiceShape service) {
     var writer = new CSharpWriter("Example.Weather");
-    new ServiceSchemaGenerator(writer, service).run();
+    new ServiceSchemaGenerator(context, writer, service).run();
     return writer.toString();
   }
 
-  private String renderOperationSchema(Model model, OperationShape operation) throws Exception {
+  private static String renderOperationSchema(GenerationContext context, OperationShape operation) {
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
+
+    new OperationSchemaGenerator(context, writer, operation).run();
+
+    return writer.toString();
+  }
+
+  private GenerationContext context(Model model) throws Exception {
     CSharpSettings settings =
         CSharpSettings.fromNode(
             ObjectNode.builder()
@@ -91,20 +102,12 @@ final class AiTraitsGeneratorTest {
                 .build());
     var symbolProvider = new CSharpSymbolProvider(model, settings);
     var manifest = FileManifest.create(Files.createDirectory(tempDir.resolve("manifest")));
-    var context =
-        GenerationContext.builder()
-            .model(model)
-            .settings(settings)
-            .symbolProvider(symbolProvider)
-            .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
-            .build();
-    var writer =
-        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
-            .apply("test.g.cs", "Example.Weather");
-
-    new OperationSchemaGenerator(context, writer, operation).run();
-
-    return writer.toString();
+    return GenerationContext.builder()
+        .model(model)
+        .settings(settings)
+        .symbolProvider(symbolProvider)
+        .fileManifest(manifest)
+        .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
+        .build();
   }
 }

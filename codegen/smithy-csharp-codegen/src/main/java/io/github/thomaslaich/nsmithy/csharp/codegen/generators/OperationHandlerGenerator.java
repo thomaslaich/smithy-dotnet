@@ -17,9 +17,9 @@ import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 /**
- * Emits an operation's server handler interface, {@code I{Operation}Handler}, with one method that
- * takes the operation's input and returns its output. The interface depends only on the operation,
- * so each one has a file of its own; the service's server file combines them into {@code
+ * Emits an operation's handler interface, {@code I{Operation}Handler}, with one method that takes
+ * the operation's input and returns its output. The interface depends only on the operation, so
+ * each one has a file of its own; the service's server file combines them into {@code
  * I{Service}ServiceHandler}.
  */
 @SmithyInternalApi
@@ -42,8 +42,8 @@ public final class OperationHandlerGenerator implements Runnable {
 
   /**
    * The symbol of an operation's handler interface. It lives in the operation's namespace, in a
-   * file of its own: {@code {Operation}.Handler.Server.g.cs}, whose ".Server" suffix keeps it
-   * inside the MSBuild globs that {@code SmithyGenerateServer} controls.
+   * file of its own: {@code {Operation}.Handler.g.cs}. It has no ".Server" suffix, because it
+   * depends only on the operation and the project that owns the operation always compiles it.
    */
   public static Symbol handlerSymbol(CSharpSettings settings, OperationShape op) {
     Optional<Symbol> provided = settings.providedShapes().handler(op.getId());
@@ -55,7 +55,7 @@ public final class OperationHandlerGenerator implements Runnable {
         namespace.replace('.', '/')
             + "/"
             + CSharpNaming.typeName(op.getId().getName())
-            + ".Handler.Server.g.cs";
+            + ".Handler.g.cs";
     return Symbol.builder()
         .name(handlerName(op))
         .namespace(namespace, ".")

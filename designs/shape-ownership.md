@@ -106,7 +106,7 @@ The same rule covers the other layouts:
 | Server against that contracts project | set | The server only |
 | Client against that contracts project | set | The client only |
 | Client against a Maven contract JAR | set | Everything, as today: no project owns those shapes |
-| Model-only project | — plus `SmithyGenerateShapes=false` | Nothing, as today |
+| Model-only project | — plus `SmithyGenerateCode=false` | Nothing, as today |
 
 ## Design
 
@@ -149,9 +149,12 @@ or a protocol. A `service` shape in the owned sources generates nothing unless
 `I{Operation}Handler` depends only on its operation: its input, output, errors,
 and streaming members. It is generated with the operation, so a project
 without a service gets it too, into a file of its own,
-`{Operation}.Handler.Server.g.cs`, in the operation's namespace. The `.Server`
-suffix keeps it inside the MSBuild globs that `SmithyGenerateServer` controls,
-and `generateServer: false` leaves it out. An operation of a service whose
+`{Operation}.Handler.g.cs`, in the operation's namespace. The project that owns
+an operation always generates its handler interface, because a server built on
+that project cannot generate it, so `SmithyGenerateServer` only decides whether
+the project generates the server for `SmithyService`. An operation no project
+owns follows `SmithyGenerateServer`, so a client generated from a Maven contract
+JAR gets no handler interfaces. An operation of a service whose
 surface an integration's service generator replaces gets none, as before.
 `I{Service}ServiceHandler`, which combines the operation interfaces, stays with
 the service and refers to an operation from another namespace by its qualified
@@ -213,6 +216,21 @@ public types and the public static `Schema` property of their schema classes.
 Code that refers to a provided shape is therefore the same as code that refers
 to a shape of its own, and the runtime needs no change.
 
+Smithy requires the shape names in a service's closure to be unique across
+namespaces. Modules in their own Smithy namespaces can define shapes with the
+same name, and the service resolves the conflict with its `rename` property as
+usual. Their C# types stay in their own namespaces under their own names: the
+owning project compiled them without knowing the service. An error's name goes
+on the wire, so a service cannot rename a provided error.
+
+A service's `errors` apply to all its operations, but a provided operation's
+schema was compiled without knowing the service. For each provided operation,
+the service's schema class therefore holds a copy with the service's errors
+added, `{Service}Schema.{Operation}Operation`, built with
+`OperationSchema.WithErrors`, and the client and server use that copy. An error
+listed on a service has to be defined in a project its modules reference for
+them to throw it.
+
 For a service, `ServerGenerator` writes the operation table, the combined
 handler interface, and the registration and mapping extensions with the
 manifest's names for provided operations. The operations' JSON Schemas for
@@ -242,7 +260,7 @@ Consumers use the package's types as the package generated them: its
 `baseNamespace` and other type-shaping settings, and its NSmithy version (see
 [Tradeoffs](#tradeoffs)). Settings that only affect the consumer's own output,
 such as generating a client or fakes for its service, still apply. A package
-that should leave generation to its consumers sets `SmithyGenerateShapes=false`
+that should leave generation to its consumers sets `SmithyGenerateCode=false`
 and ships the model only, as packages do today.
 
 The Maven contracts JAR is unaffected. It contains the model only, and other
@@ -250,7 +268,7 @@ languages generate their own types from it.
 
 ### Opting out
 
-`SmithyGenerateShapes=false` turns C# generation off for a project without
+`SmithyGenerateCode=false` turns C# generation off for a project without
 `SmithyService`. Such a project only validates and packages its model, as a
 contracts project does today: for example one whose contract is published only
 as a Maven JAR. Its consumers generate its shapes, as today. Setting it
@@ -261,10 +279,10 @@ together with `SmithyService` fails the build.
 | Condition | Result |
 | --- | --- |
 | A project generates shapes and does not reference `NSmithy.Core` | The build fails and names the package to add. |
-| `SmithyGenerateShapes=false` is set together with `SmithyService` | The build fails. |
+| `SmithyGenerateCode=false` is set together with `SmithyService` | The build fails. |
 | Two manifests list the same shape | Code generation fails and names both manifests. |
 | A model file comes from a package that has a manifest, but the manifest is not provided | Code generation fails instead of generating the package's shapes again. |
-| The service's `rename` renames a provided shape | Code generation fails. The owning project generated the shape under its own name, so the rename cannot apply. |
+| The service's `rename` renames a provided error | Code generation fails. An error's name goes on the wire, where NSmithy does not apply a rename. |
 | A manifest's `generatorVersion` differs from the running plugin's | Code generation fails. Generated code from different versions may not fit together. |
 
 ## Migration
@@ -272,7 +290,7 @@ together with `SmithyService` fails the build.
 This is a breaking change:
 
 - **Contracts projects without `SmithyService` generate code.** They need a
-  `NSmithy.Core` reference, or `SmithyGenerateShapes=false` to keep today's
+  `NSmithy.Core` reference, or `SmithyGenerateCode=false` to keep today's
   behavior.
 - **Their consumers reference the contracts project's types** instead of
   generating their own. Code that used the consumer's copies keeps compiling
