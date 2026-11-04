@@ -33,7 +33,7 @@
     <!--#endif-->
     <!--#if (WithContractsProject)-->
     <!-- NSmithy generates the client from the contracts project's model. -->
-    <ProjectReference Include="../ContractsProjectName/ContractsProjectName.csproj" />
+    <ProjectReference Include="../ContractsProjectName/ContractsProjectName.fsproj" />
     <!--#elif (IsNuget)-->
     <!-- Replace with your actual contracts package name and version -->
     <PackageReference Include="MyService.Contracts" Version="1.0.0" />

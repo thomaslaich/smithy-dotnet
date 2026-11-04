@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SmithyPublish>true</SmithyPublish>
+    <!-- Remove the two lines below if you only need NuGet distribution -->
+    <SmithyMavenGroupId>io.github.YOUR_ORG</SmithyMavenGroupId>
+    <SmithyMavenArtifactId>my-service-contracts</SmithyMavenArtifactId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
+    <!--#if (UseSmithyCliPackage)-->
+    <!-- The Smithy CLI that code generation runs. Leave it out to use your own (SmithyCliPath or PATH). -->
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
+    <!--#endif-->
+  </ItemGroup>
+
+
+</Project>

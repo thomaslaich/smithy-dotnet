@@ -34,6 +34,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **F# projects generate the shapes in their own model files**, like C# projects: `fsharp-codegen`
+  takes `ownedSources` and `providedShapes` and writes a shape manifest, and each operation's schema
+  and `I{Operation}Handler` are generated into a new `Operations.g.fs`, compiled whatever
+  `SmithyGenerateServer` says. A service's errors are on its service schema, as in C#. C# and F#
+  projects do not share generated types; a project that would generate a shape the other
+  language's manifest lists fails. See `examples/fsharp-modules`.
 - **BREAKING: a contracts project publishes the model files its `smithy-build.json` names.**
   `SmithyPublish` publishes the `sources` and `imports` of the project's `smithy-build.json`, the
   files it generates its own shapes from, to project references and in the package, instead of

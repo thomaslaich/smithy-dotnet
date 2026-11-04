@@ -36,7 +36,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 
     /// <summary>
     /// SmithyGenerateCode: whether a project generates the shapes in its own model files, also
-    /// without SmithyService. Only for the C# generator.
+    /// without SmithyService. For the C# and F# generators.
     /// </summary>
     public bool GenerateCode { get; set; } = true;
 
@@ -172,10 +172,13 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             : "none";
     }
 
-    // Owned shapes apply when NSmithy's C# generator runs in one projection only: a file that runs
-    // it in several projections generates them itself, and each would generate the owned shapes.
+    // Owned shapes apply when NSmithy's code generator, C# or F#, runs in one projection only: a
+    // file that runs it in several projections generates them itself, and each would generate the
+    // owned shapes.
     private bool GeneratesOwnedShapes =>
-        Plugin == CSharpPlugin && GenerateCode && _configuresPlugin != "elsewhere";
+        (Plugin is CSharpPlugin or FSharpPlugin)
+        && GenerateCode
+        && _configuresPlugin != "elsewhere";
 
     private bool HasProjectBuildFile =>
         !string.IsNullOrEmpty(ProjectBuildFile) && File.Exists(ProjectBuildFile);

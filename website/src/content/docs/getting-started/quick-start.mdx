@@ -269,8 +269,9 @@ in the same solution. Without it, the server owns its model, and the client
 references the published contracts as chosen by `--contracts-package` (`maven`,
 the default, or `nuget`).
 
-`-lang F#` scaffolds the server or client as an F# project. The contracts
-project has no code, so it is the same for both languages.
+`-lang F#` scaffolds the contracts, server, or client as an F# project. The
+contracts project generates the model's types, so use the same language for all
+three: C# and F# projects do not share generated types.
 
 Additional options:
 

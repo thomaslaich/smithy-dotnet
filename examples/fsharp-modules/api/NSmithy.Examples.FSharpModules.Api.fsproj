@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- The service: ties the modules' operations into one restJson1 API. It generates only the
+       service; the modules' shapes and handler interfaces come from their assemblies. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+    <SmithyService>example.shop#Shop</SmithyService>
+    <SmithyGenerateClient>false</SmithyGenerateClient>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="10.1.403" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.0.0-SNAPSHOT" />
+    <ProjectReference Include="../orders/NSmithy.Examples.FSharpModules.Orders.fsproj" />
+    <ProjectReference Include="../payments/NSmithy.Examples.FSharpModules.Payments.fsproj" />
+  </ItemGroup>
+</Project>

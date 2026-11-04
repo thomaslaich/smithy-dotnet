@@ -791,7 +791,33 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     }
 
     [Fact]
-    public void FSharpProjectGetsNoOwnedShapes()
+    public void FSharpProjectGetsOwnedSourcesAndProvidedShapes()
+    {
+        var project = WriteFile(
+            "smithy-build.json",
+            """{ "version": "1.0", "sources": ["model"] }"""
+        );
+        var manifest = Path.Combine(_directory, "orders", "nsmithy-shapes.json");
+
+        var (file, errors) = Write(task =>
+        {
+            task.ProjectBuildFile = project;
+            task.Plugin = "fsharp-codegen";
+            task.Service = "example#Service";
+            task.ShapeManifests = [new TaskItem(manifest)];
+        });
+
+        Assert.Empty(errors);
+        var fsharp = Plugin(file, "source", "fsharp-codegen");
+        Assert.Equal(
+            [Path.Combine(_directory, "model")],
+            fsharp["ownedSources"]!.AsArray().Select(node => node!.GetValue<string>())
+        );
+        Assert.Equal(manifest, fsharp["providedShapes"]![0]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void FSharpProjectWithoutServiceGeneratesItsOwnShapes()
     {
         var project = WriteFile(
             "smithy-build.json",
@@ -802,11 +828,13 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         {
             task.ProjectBuildFile = project;
             task.Plugin = "fsharp-codegen";
-            task.Service = "example#Service";
         });
 
         Assert.Empty(errors);
-        Assert.Null(Plugin(file, "source", "fsharp-codegen")["ownedSources"]);
+        var fsharp = Plugin(file, "source", "fsharp-codegen");
+        Assert.Null(fsharp["service"]);
+        Assert.NotNull(fsharp["ownedSources"]);
+        Assert.Null(file["projections"]!["source"]!["plugins"]!["csharp-codegen"]);
     }
 
     private string WriteFile(string relativePath, string content)

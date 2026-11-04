@@ -139,11 +139,11 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   build "$protocol-server-standalone" "$solo/Hello.Server"
   check_server_dependencies "$protocol-server-standalone" "$solo/Hello.Server" "$protocol"
 
-  # The same two layouts with the F# server and client (`-lang F#`); contracts has no code.
+  # The same two layouts in F# (`-lang F#`): the server and client share the F# contracts' types.
   fqs="$SRC/qs-fsharp-$protocol"
   mkdir -p "$fqs"
   cp "$SRC/NuGet.config" "$fqs/"
-  dotnet new nsmithy-contracts -o "$fqs/Hello.Contracts" -n Hello.Contracts --protocol "$protocol" > /dev/null
+  dotnet new nsmithy-contracts -lang F# -o "$fqs/Hello.Contracts" -n Hello.Contracts --protocol "$protocol" > /dev/null
   dotnet new nsmithy-server -lang F# -o "$fqs/Hello.Server" -n Hello.Server --protocol "$protocol" \
     --contracts-project Hello.Contracts --with-docs > /dev/null
   dotnet new nsmithy-client -lang F# -o "$fqs/Hello.Client" -n Hello.Client --protocol "$protocol" \

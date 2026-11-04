@@ -8,8 +8,8 @@ the shapes that other projects generated.
 > **A project generates the shapes in its own model files and references the
 > shapes in its references' model files. `SmithyService` adds the service.**
 
-It is the rule C# itself follows: a project compiles its own files and
-references the others. Concretely:
+It is the rule .NET itself follows: a project compiles its own files and
+references the others. C# and F# projects follow it alike. Concretely:
 
 - **Every project with model files generates their shapes**, operations
   included: types, schemas, each operation's schema, and its handler interface.
@@ -45,10 +45,8 @@ That serves three layouts:
 
 ## Non-goals
 
-- F#. The F# generator writes one file per kind (`Types.g.fs`,
-  `Schemas.g.fs`), its symbols follow other rules, and an F# project generates
-  every shape it uses.
-- Sharing generated types between C# and F# projects.
+- Sharing generated types between C# and F# projects. A C# class and an F#
+  record for one shape are different types.
 - Composing several services into one.
 
 ## Example
@@ -100,8 +98,9 @@ The same rule covers the other layouts:
 
 A project's own model files are the `sources` and `imports` of its project
 build file, but not the sources collected from references. MSBuild passes them
-as the `csharp-codegen` setting `ownedSources`, following the per-key ownership
-in [build-configuration.md](build-configuration.md#plugin-settings):
+as the setting `ownedSources` of the project's code generator, `csharp-codegen`
+or, in an F# project, `fsharp-codegen`, following the per-key ownership in
+[build-configuration.md](build-configuration.md#plugin-settings):
 
 ```json
 "csharp-codegen": {
@@ -111,11 +110,11 @@ in [build-configuration.md](build-configuration.md#plugin-settings):
 
 A build outside MSBuild sets the same key in its `smithy-build.json`.
 
-A build file that runs `csharp-codegen` in projections other than
+A build file that runs the code generator in projections other than
 `SmithyProjection`, for example one per projection to generate several
 services, gets no `ownedSources`: each of those projections would generate
 the owned shapes again. It generates what its settings select. The same holds
-for a build file without a service that configures `csharp-codegen` itself.
+for a build file without a service that configures the code generator itself.
 
 ### The generated set
 
@@ -138,8 +137,9 @@ or a protocol. A `service` shape in the owned sources generates nothing unless
 ### Handler interfaces
 
 `I{Operation}Handler` depends only on its operation: its input, output, errors,
-and streaming members. It lives in a file of its own,
-`{Operation}.Handler.g.cs`, in the operation's namespace.
+and streaming members. It lives in the operation's namespace, in C# in a file of
+its own, `{Operation}.Handler.g.cs`, and in F# in `Operations.g.fs` (see
+[F#](#f)).
 
 The project that owns an operation always generates its handler interface,
 because a server built on that project cannot, so `SmithyGenerateServer` only
@@ -154,9 +154,10 @@ name.
 
 ### The shape manifest
 
-Every `csharp-codegen` run writes `nsmithy-shapes.json` next to its generated
-files. It lists each shape the run generated, with the names of the C# symbols
-that represent it:
+Every `csharp-codegen` and `fsharp-codegen` run writes `nsmithy-shapes.json`
+next to its generated files. It lists each shape the run generated, with the
+names of the .NET symbols that represent it, and the generator that wrote them,
+`smithy-csharp-codegen` or `smithy-fsharp-codegen`:
 
 ```json
 {
@@ -189,7 +190,7 @@ references from its own references are in those references' manifests.
 The `GetSmithyShapeReferences` target returns what a project needs from a
 reference and everything that reference references:
 
-- **Their manifests**, from every C# project that generated code.
+- **Their manifests**, from every project that generated code.
 - **Their model files and build files**, from contracts projects
   (`SmithyPublish=true`): Api needs Common's model, because the operations it
   gets from Orders target `Money`. A module therefore sets `SmithyPublish`, so
@@ -205,11 +206,12 @@ to a project that generates code anyway. A project that generates nothing, such
 as a test project that references a server, is left as it is: a model it does
 not use must not make it fail.
 
-MSBuild passes the manifests as the `csharp-codegen` setting `providedShapes`,
+MSBuild passes the manifests as the code generator's setting `providedShapes`,
 a list of manifest paths. The plugin then:
 
-1. Loads the manifests and removes every shape they list from the generated
-   set.
+1. Loads the manifests its own generator wrote and removes every shape they list
+   from the generated set. Manifests of the other generator are set aside (see
+   [Mixed languages](#mixed-languages)).
 2. Resolves a provided shape to the symbols in its manifest.
 3. Generates the rest as usual.
 
@@ -223,6 +225,43 @@ handler interface, and the registration and mapping extensions with the
 manifest's names for provided operations. The operations' JSON Schemas for
 adapters such as MCP stay private to the service definition and are generated
 from the full model. The client generator works the same way.
+
+### F#
+
+`fsharp-codegen` takes the same `ownedSources` and `providedShapes` settings as
+`csharp-codegen`, and its generated set, manifest, and service errors follow the
+same rules. What differs is where the code goes.
+
+F# compiles a project's files in order, and a file can only use what the files
+before it declare. The generated code is therefore a fixed sequence of files
+ahead of the project's own:
+
+| File | Contents | Compiled |
+| --- | --- | --- |
+| `Types.g.fs` | Types | Always |
+| `Schemas.g.fs` | Schemas of the types | Always |
+| `Operations.g.fs` | Each operation's schema and `I{Operation}Handler` | Always |
+| `Client.g.fs` | The service's client | With `SmithyGenerateClient` |
+| `Server.g.fs` | `I{Service}ServiceHandler`, the operation table, and the ASP.NET Core extensions | With `SmithyGenerateServer` |
+
+Each file holds one `namespace rec` section per Smithy namespace, so the
+declarations of one namespace can refer to each other. A project that owns an
+operation compiles its handler interface whatever `SmithyGenerateServer` says,
+as in C#. Provided types and schemas come from referenced assemblies, which F#
+sees before any file of the project, so the file order does not constrain them.
+
+### Mixed languages
+
+C# and F# projects do not share generated types. A plugin therefore uses only
+the manifests its own generator wrote. A project whose consumers are written in
+the other language publishes its model only (`SmithyGenerateCode=false`), and
+each consumer generates the shapes in its own language, as in the
+[F# example](../examples/fsharp).
+
+The other generator's manifests are not ignored entirely: a project that would
+generate a shape one of them lists fails, because it would declare a type that a
+referenced assembly already declares. The error names the manifest, so the
+project that wrote it can set `SmithyGenerateCode=false`.
 
 ### Shape names across modules
 
@@ -255,7 +294,7 @@ reference.
 
 ### Packages
 
-A package of a project that generates shapes ships compiled code, not C#
+A package of a project that generates shapes ships compiled code, not generated
 source: its assembly contains the generated types, as any library's does.
 `dotnet pack`, with `SmithyPublish=true`, puts three things in the package:
 
@@ -290,10 +329,10 @@ their own types from it.
 
 ### Opting out
 
-`SmithyGenerateCode=false` turns C# generation off for a project without
+`SmithyGenerateCode=false` turns code generation off for a project without
 `SmithyService`. Such a project only validates and packages its model: for
 example one whose contract is published only as a Maven JAR, or whose consumers
-are F# projects. Its consumers generate its shapes. Setting it together with
+are written in the other language. Its consumers generate its shapes. Setting it together with
 `SmithyService` fails the build.
 
 ## Rules
@@ -303,6 +342,7 @@ are F# projects. Its consumers generate its shapes. Setting it together with
 | A project generates shapes and does not reference `NSmithy.Core` | The build fails (`NSMITHYRUNTIME`) and names the package to add. |
 | `SmithyGenerateCode=false` is set together with `SmithyService` | The build fails (`NSMITHYCODE`). |
 | Two manifests list the same shape | Code generation fails and names both manifests. |
+| A project would generate a shape that a manifest of the other generator lists | Code generation fails and names the manifest. C# and F# projects do not share generated types. |
 | The service's `rename` renames a provided error | Code generation fails. NSmithy does not apply a rename to the error names it sends and matches. |
 | A manifest's `generatorVersion` differs from the running plugin's | Code generation fails. Generated code from different versions may not fit together. |
 
@@ -413,8 +453,6 @@ it fails at runtime instead of compile time and interacts badly with trimming.
 - **Manifests as assembly metadata.** Embedding the manifest in the assembly
   would remove the file from packages, but needs the assembly before code
   generation runs.
-- **F#.** Whether F# projects should follow the same rule, and whether C# and
-  F# projects should ever share generated types.
 
 ## Related Docs
 

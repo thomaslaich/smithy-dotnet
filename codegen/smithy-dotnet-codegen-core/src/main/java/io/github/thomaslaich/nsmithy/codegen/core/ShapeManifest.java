@@ -1,4 +1,4 @@
-package io.github.thomaslaich.nsmithy.csharp.codegen;
+package io.github.thomaslaich.nsmithy.codegen.core;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,7 +14,7 @@ import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 /**
- * The shapes a code generation run generated, with the C# symbols that represent them. Written as
+ * The shapes a code generation run generated, with the .NET symbols that represent them. Written as
  * {@value #FILE_NAME} next to the generated files, so that projects referencing this one can use
  * these types instead of generating the shapes again. See designs/shape-ownership.md.
  */
@@ -27,9 +27,13 @@ public final class ShapeManifest {
   /** The manifest format's version. */
   public static final int FORMAT_VERSION = 1;
 
-  static final String GENERATOR = "smithy-csharp-codegen";
+  /** The generator name of smithy-csharp-codegen. */
+  public static final String CSHARP_GENERATOR = "smithy-csharp-codegen";
 
-  /** The C# type a shape is generated as. Lists and maps have none: they use runtime types. */
+  /** The generator name of smithy-fsharp-codegen. */
+  public static final String FSHARP_GENERATOR = "smithy-fsharp-codegen";
+
+  /** The type a shape is generated as. Lists and maps have none: they use runtime types. */
   public static final String TYPE = "type";
 
   /** The class holding a shape's schema. */
@@ -38,7 +42,13 @@ public final class ShapeManifest {
   /** An operation's server handler interface. */
   public static final String HANDLER = "handler";
 
+  private final String generator;
   private final Map<ShapeId, Map<String, String>> shapes = new TreeMap<>();
+
+  /** An empty manifest for the shapes {@code generator} generates. */
+  public ShapeManifest(String generator) {
+    this.generator = generator;
+  }
 
   /** Records that {@code shape} is represented by {@code symbol} in the given role. */
   public void add(ShapeId shape, String role, Symbol symbol) {
@@ -50,8 +60,13 @@ public final class ShapeManifest {
     return shapes;
   }
 
-  /** Writes the manifest to {@code manifest}'s base directory. */
-  public void write(FileManifest manifest) {
+  /**
+   * Writes the manifest to {@code manifest}'s base directory, after checking that no recorded shape
+   * is one the other generator's types already represent (see {@link
+   * ProvidedShapes#checkNotForeign}).
+   */
+  public void write(FileManifest manifest, ProvidedShapes provided) {
+    shapes.keySet().forEach(provided::checkNotForeign);
     ObjectNode.Builder shapeNodes = Node.objectNodeBuilder();
     shapes.forEach((id, symbols) -> {
       ObjectNode.Builder entry = Node.objectNodeBuilder();
@@ -61,14 +76,14 @@ public final class ShapeManifest {
     ObjectNode node =
         Node.objectNodeBuilder()
             .withMember("version", FORMAT_VERSION)
-            .withMember("generator", GENERATOR)
+            .withMember("generator", generator)
             .withMember("generatorVersion", generatorVersion())
             .withMember("shapes", shapeNodes.build())
             .build();
     manifest.writeFile(FILE_NAME, Node.prettyPrintJson(node) + "\n");
   }
 
-  /** The version of this code generator, as built. */
+  /** The version of NSmithy's code generators, as built. */
   public static String generatorVersion() {
     try (InputStream in = ShapeManifest.class.getResourceAsStream("codegen-version.properties")) {
       if (in == null) {

@@ -40,8 +40,9 @@ generates the model's types, and it needs the runtime:
 Its consumers reference those types instead of generating their own: a client
 and a server of the contract generate only their client or server and share one
 set of types. A contracts project that should only validate and package its
-model, for example one whose consumers are F# projects, sets
-`SmithyGenerateCode` to `false`; its consumers then generate its shapes.
+model sets `SmithyGenerateCode` to `false`; its consumers then generate its
+shapes. C# and F# projects do not share generated types, so a contracts project
+whose consumers are written in the other language does this.
 
 A service in a contracts project's model generates no service code there. The
 project that sets `SmithyService` to that service generates its client and
@@ -90,11 +91,13 @@ service Shop {
 
 A module sets `SmithyPublish` so that its model reaches the projects that
 reference it. Every project in the solution must use the same NSmithy version.
+F# projects split a service the same way, as in the
+[F# modules example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/fsharp-modules).
 See the [shape ownership design](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shape-ownership.md).
 
 Modules in their own Smithy namespaces can define shapes with the same name for
-different concepts, and the service separates them with `rename`. Their C# types
-keep the name from the model. A concept the modules share belongs in a common
+different concepts, and the service separates them with `rename`. Their .NET
+types keep the name from the model. A concept the modules share belongs in a common
 project. A service cannot rename a provided error, because its name goes on the
 wire: give the errors distinct names or share one. Operation names must be
 unique within a service, because Smithy does not allow renaming them.

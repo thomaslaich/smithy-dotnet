@@ -369,23 +369,7 @@ final class SchemaGenerator {
   void operation(OperationShape shape) {
     String input = operationType(shape.getInputShape());
     String output = operationType(shape.getOutputShape());
-    List<String> errors = new ArrayList<>();
-    for (ShapeId errorId : shape.getErrors().stream().sorted().toList()) {
-      StructureShape error = model.expectShape(errorId, StructureShape.class);
-      errors.add(
-          SCHEMAS
-              + ".OperationError<"
-              + symbols.typeOf(error)
-              + ">("
-              + FSharpLiterals.shapeId(errorId)
-              + ", "
-              + lazy(error)
-              + ", "
-              + SchemaSupport.errorStatusCode(error)
-              + ") :> "
-              + SERDE
-              + "IOperationErrorSchema");
-    }
+    List<String> errors = errorSchemas(shape.getErrors());
     List<String> arguments = new ArrayList<>();
     arguments.add(FSharpLiterals.shapeId(shape.getId()));
     arguments.add(operationSchema(shape.getInputShape()));
@@ -398,7 +382,7 @@ final class SchemaGenerator {
     }
     context
         .files()
-        .schemas(shape)
+        .operationSchemas(shape)
         .writeTemplate(
             """
             [<AbstractClass; Sealed>]
@@ -423,11 +407,57 @@ final class SchemaGenerator {
     arguments.add(FSharpLiterals.shapeId(shape.getId()));
     arguments.add(FSharpNaming.stringLiteral(shape.getVersion()));
     namedTraits(arguments, "traits", FSharpLiterals.traits(shape.getAllTraits().values()));
-    writeHolder(
-        context.files().schemas(shape),
-        shape,
-        SERDE + "ServiceSchema",
-        SCHEMAS + ".Service(" + String.join(", ", arguments) + ")");
+    // The errors every operation of the service can raise. Operation schemas list only their own,
+    // and protocols combine the two (ServiceSchema.ErrorsOf).
+    if (!shape.getErrors().isEmpty()) {
+      arguments.add(
+          "errors = " + array(errorSchemas(shape.getErrors()), SERDE + "IOperationErrorSchema"));
+    }
+    // One argument per line, indented as a block: the errors are a multiline array.
+    context
+        .files()
+        .schemas(shape)
+        .writeTemplate(
+            """
+            [<AbstractClass; Sealed>]
+            type ${name:L} =
+                static member val Schema: ${schemaType:L} =
+                    ${schemas:L}.Service(
+                        ${arguments:L|})
+            """,
+            Map.of(
+                "name",
+                symbols.schemaSymbol(shape).getName(),
+                "schemaType",
+                SERDE + "ServiceSchema",
+                "schemas",
+                SCHEMAS,
+                "arguments",
+                String.join(",\n", arguments)));
+  }
+
+  /**
+   * The error schemas of {@code errorIds}, sorted by shape id, as an operation schema lists them.
+   */
+  private List<String> errorSchemas(List<ShapeId> errorIds) {
+    List<String> errors = new ArrayList<>();
+    for (ShapeId errorId : errorIds.stream().sorted().toList()) {
+      StructureShape error = model.expectShape(errorId, StructureShape.class);
+      errors.add(
+          SCHEMAS
+              + ".OperationError<"
+              + symbols.typeOf(error)
+              + ">("
+              + FSharpLiterals.shapeId(errorId)
+              + ", "
+              + lazy(error)
+              + ", "
+              + SchemaSupport.errorStatusCode(error)
+              + ") :> "
+              + SERDE
+              + "IOperationErrorSchema");
+    }
+    return errors;
   }
 
   /** The type an operation's input or output is: its structure, or {@code SmithyUnit}. */

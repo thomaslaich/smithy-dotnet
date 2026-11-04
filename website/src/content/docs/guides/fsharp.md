@@ -18,8 +18,8 @@ has a server and a client that share a contracts project.
 
 ## Set up a project
 
-To start from a template, pass `-lang F#` to `dotnet new nsmithy-server` or
-`dotnet new nsmithy-client`; see [Quick start](/smithy-dotnet/getting-started/quick-start/).
+To start from a template, pass `-lang F#` to `dotnet new nsmithy-contracts`,
+`nsmithy-server`, or `nsmithy-client`; see [Quick start](/smithy-dotnet/getting-started/quick-start/).
 
 Name the service with `SmithyService`. NSmithy sees that the project is an F#
 project and generates F#. A client project references `NSmithy.Client` and the
@@ -85,6 +85,12 @@ The model can also come from a contracts project, as in
 
 Generated files are compiled before the project's own files, so every `.fs`
 file in the project can use them.
+
+Like a C# project, an F# project generates the shapes in its own model files and
+uses the types that the F# projects it references generated, so the modules of a
+server can each own their operations
+([Splitting a service across projects](/smithy-dotnet/guides/distributing-contracts/#splitting-a-service-across-projects)).
+C# and F# projects do not share generated types.
 
 ## What the model becomes
 

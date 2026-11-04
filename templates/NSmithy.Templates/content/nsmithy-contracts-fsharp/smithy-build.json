@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "sources": ["model"],
+  "maven": {
+    "dependencies": [
+      //#if (IsRestJson1)
+      "software.amazon.smithy:smithy-aws-traits:1.74.1"
+      //#elseif (IsRpcv2Cbor)
+      "software.amazon.smithy:smithy-protocol-traits:1.74.1"
+      //#elseif (IsSimpleRestJson || IsGrpc)
+      "com.disneystreaming.alloy:alloy-core:0.3.40"
+      //#endif
+    ]
+  },
+  "plugins": {
+    "contracts-jar": {
+      "dependencies": [
+        //#if (IsRestJson1)
+        "software.amazon.smithy:smithy-aws-traits:1.74.1"
+        //#elseif (IsRpcv2Cbor)
+        "software.amazon.smithy:smithy-protocol-traits:1.74.1"
+        //#elseif (IsSimpleRestJson || IsGrpc)
+        "com.disneystreaming.alloy:alloy-core:0.3.40"
+        //#endif
+      ]
+    }
+  }
+}
