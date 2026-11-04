@@ -92,7 +92,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
             outputIsUnit = outputIsSmithyUnit || Schemas.IsSyntheticUnit(operation.Output);
             this.kind = kind;
             requestTransform = SmithyRequestModifiers.Compile(operation);
-            errors = CompileErrors(operation.Errors);
+            errors = CompileErrors(service.ErrorsOf(operation));
         }
 
         public SmithyHttpRequest SerializeRequest(

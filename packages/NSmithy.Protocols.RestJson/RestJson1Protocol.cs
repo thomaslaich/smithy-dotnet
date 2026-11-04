@@ -15,6 +15,7 @@ public sealed class RestJson1Protocol : IProtocol
     /// </summary>
     public IServiceProtocol ForService(ServiceSchema service) =>
         new RestServiceProtocol(
+            service,
             JsonRestBodyCodecFactory.For,
             DeserializeErrorType,
             rawStringPayloads: true,

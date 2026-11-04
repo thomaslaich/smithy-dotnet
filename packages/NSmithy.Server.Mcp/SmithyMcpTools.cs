@@ -29,7 +29,7 @@ public static class SmithyMcpTools
             SmithyMcpTool tool;
             try
             {
-                tool = new SmithyMcpTool(operation);
+                tool = new SmithyMcpTool(catalog.Schema, operation);
             }
             catch (McpStreamingNotSupportedException)
             {
@@ -56,12 +56,14 @@ internal sealed class SmithyMcpTool : McpServerTool
     private static readonly ShapeId IdempotentTrait = ShapeId.Parse("smithy.api#idempotent");
     private static readonly ShapeId ReadonlyTrait = ShapeId.Parse("smithy.api#readonly");
 
+    private readonly ServiceSchema service;
     private readonly IServerOperation operation;
     private readonly IBoxedJsonCodec inputCodec;
     private readonly IBoxedJsonCodec outputCodec;
 
-    public SmithyMcpTool(IServerOperation operation)
+    public SmithyMcpTool(ServiceSchema service, IServerOperation operation)
     {
+        this.service = service ?? throw new ArgumentNullException(nameof(service));
         this.operation = operation ?? throw new ArgumentNullException(nameof(operation));
         var schema = operation.Schema;
         if (schema.IsStreaming)
@@ -171,7 +173,7 @@ internal sealed class SmithyMcpTool : McpServerTool
     private bool IsModeledError(Exception exception)
     {
         var matcher = new OperationErrorMatcher(exception);
-        return operation.Schema.Errors.Any(error => error.Accept(matcher));
+        return service.ErrorsOf(operation.Schema).Any(error => error.Accept(matcher));
     }
 
     private static byte[] WriteArguments(IDictionary<string, JsonElement>? arguments)

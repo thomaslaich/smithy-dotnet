@@ -23,6 +23,7 @@ import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.traits.ErrorTrait;
+import software.amazon.smithy.model.transform.ModelTransformer;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -50,10 +51,13 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
 
   /** Runs directed codegen for {@code settings} with the given integrations. */
   static void generate(
-      Model model,
+      Model sourceModel,
       CSharpSettings settings,
       FileManifest manifest,
       List<CSharpIntegration> integrations) {
+    // Not performDefaultCodegenTransforms: it also copies a service's errors onto its operations,
+    // but operation schemas are service-agnostic. The service schema carries those errors.
+    Model model = ModelTransformer.create().flattenAndRemoveMixins(sourceModel);
     CodegenDirector<CSharpWriter, CSharpIntegration, GenerationContext, CSharpSettings> runner =
         new CodegenDirector<>();
 
@@ -63,7 +67,6 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
     runner.model(model);
     runner.integrationClass(CSharpIntegration.class);
     runner.integrationFinder(() -> integrations);
-    runner.performDefaultCodegenTransforms();
     runner.createDedicatedInputsAndOutputs();
 
     Optional<ServiceShape> service =

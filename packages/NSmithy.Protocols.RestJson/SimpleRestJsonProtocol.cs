@@ -17,6 +17,7 @@ public sealed class SimpleRestJsonProtocol : IProtocol
 
     public IServiceProtocol ForService(ServiceSchema service) =>
         new RestServiceProtocol(
+            service,
             JsonRestBodyCodecFactory.For,
             DeserializeErrorType,
             rawStringPayloads: false,

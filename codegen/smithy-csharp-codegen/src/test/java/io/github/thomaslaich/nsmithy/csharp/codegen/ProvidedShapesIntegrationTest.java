@@ -284,51 +284,56 @@ class ProvidedShapesIntegrationTest {
   }
 
   @Test
-  void aServiceAddsItsErrorsToTheOperationsOtherProjectsGenerated() throws Exception {
-    Path manifest = ordersManifest(true);
-    Model model =
-        Model.assembler()
-            .addUnparsedModel("orders.smithy", ORDERS)
-            .addUnparsedModel(
-                "service.smithy",
-                """
-                $version: "2"
-                namespace acme.shop
-
-                service Shop {
-                    operations: [PlaceOrder]
-                    errors: [Fault]
-                }
-
-                @error("server")
-                @httpError(503)
-                structure Fault {}
-                """)
-            .assemble()
-            .unwrap();
-
+  void theServiceSchemaCarriesTheServiceErrors() throws Exception {
     MockManifest api =
         generate(
-            model,
+            modelWithServiceError(),
             settings("")
                 .withMember("service", "acme.shop#Shop")
-                .withMember("providedShapes", ArrayNode.fromStrings(List.of(manifest.toString()))));
+                .withMember(
+                    "providedShapes",
+                    ArrayNode.fromStrings(List.of(ordersManifest(true).toString()))));
 
     String schema = api.expectFileString(Path.of("Acme/Shop/Shop.Schema.g.cs"));
-    assertTrue(schema.contains("PlaceOrderOperation"), schema);
-    assertTrue(schema.contains("PlaceOrderSchema.Schema.WithErrors("), schema);
+    assertTrue(schema.contains("errors:"), schema);
     assertTrue(schema.contains("ShapeId.Parse(\"acme.shop#Fault\")"), schema);
     assertTrue(schema.contains("503"), schema);
     String server = api.expectFileString(Path.of("Acme/Shop/Shop.Server.g.cs"));
-    assertTrue(server.contains("ShopSchema.PlaceOrderOperation"), server);
+    assertTrue(server.contains("global::Orders.Acme.Shop.Schemas.PlaceOrderSchema.Schema"), server);
   }
 
   @Test
-  void aServiceWithoutErrorsUsesTheOperationSchemasAsTheyAre() throws Exception {
-    MockManifest api = generateApi(ordersManifest(true));
+  void operationSchemasDoNotListTheServiceErrors() {
+    MockManifest whole =
+        generate(modelWithServiceError(), settings("").withMember("service", "acme.shop#Shop"));
 
-    String schema = api.expectFileString(Path.of("Acme/Shop/Shop.Schema.g.cs"));
-    assertFalse(schema.contains("WithErrors"), schema);
+    String operation = whole.expectFileString(Path.of("Acme/Shop/PlaceOrder.Schema.g.cs"));
+    assertFalse(operation.contains("Fault"), operation);
+    String schema = whole.expectFileString(Path.of("Acme/Shop/Shop.Schema.g.cs"));
+    assertTrue(schema.contains("ShapeId.Parse(\"acme.shop#Fault\")"), schema);
+    assertTrue(whole.hasFile(Path.of("Acme/Shop/Fault.g.cs")));
+  }
+
+  private static Model modelWithServiceError() {
+    return Model.assembler()
+        .addUnparsedModel("orders.smithy", ORDERS)
+        .addUnparsedModel(
+            "service.smithy",
+            """
+            $version: "2"
+            namespace acme.shop
+
+            service Shop {
+                operations: [PlaceOrder]
+                errors: [Fault]
+            }
+
+            @error("server")
+            @httpError(503)
+            structure Fault {}
+            """)
+        .assemble()
+        .unwrap();
   }
 
   @Test

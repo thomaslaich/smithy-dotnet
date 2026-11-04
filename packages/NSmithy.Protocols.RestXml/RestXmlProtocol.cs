@@ -19,6 +19,7 @@ public sealed class RestXmlProtocol : IProtocol
     /// </summary>
     public IServiceProtocol ForService(ServiceSchema service) =>
         new RestServiceProtocol(
+            service,
             _ => new XmlRestBodyCodecFactory(service),
             DeserializeErrorType,
             rawStringPayloads: true,

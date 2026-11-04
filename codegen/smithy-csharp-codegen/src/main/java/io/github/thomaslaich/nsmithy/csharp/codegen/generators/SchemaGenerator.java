@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
@@ -136,30 +135,7 @@ public final class SchemaGenerator {
 
   public static String operationSchemaAccessor(
       CSharpWriter writer, GenerationContext context, OperationShape shape) {
-    Optional<ServiceShape> service =
-        context.settings().service().map(id -> context.model().expectShape(id, ServiceShape.class));
-    if (service.isPresent() && addsServiceErrors(context, service.get(), shape)) {
-      return writer.typeName(schemaClassSymbol(context, service.get()))
-          + "."
-          + serviceOperationProperty(shape);
-    }
     return writer.typeName(schemaClassSymbol(context, shape)) + ".Schema";
-  }
-
-  /**
-   * Whether {@code service}'s schema class holds a copy of {@code operation}'s schema with the
-   * service's errors. An operation generated with the service has them already, but one another
-   * project generated was compiled without knowing the service.
-   */
-  public static boolean addsServiceErrors(
-      GenerationContext context, ServiceShape service, OperationShape operation) {
-    return !service.getErrors().isEmpty()
-        && context.settings().providedShapes().contains(operation.getId());
-  }
-
-  /** The property of a service's schema class that holds a copy of an operation's schema. */
-  static String serviceOperationProperty(OperationShape operation) {
-    return CSharpNaming.typeName(operation.getId().getName()) + "Operation";
   }
 
   public static String serviceSchemaAccessor(

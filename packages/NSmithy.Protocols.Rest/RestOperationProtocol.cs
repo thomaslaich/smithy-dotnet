@@ -12,9 +12,10 @@ namespace NSmithy.Protocols.Rest;
 /// false for simpleRestJson), and the modeled-error discriminator header
 /// (<paramref name="errorTypeHeader"/>; <c>null</c> for protocols that don't serialize errors via a
 /// header, such as restXml). Unlike rpcv2Cbor, REST's per-operation path is authored <c>@http</c>
-/// data on the operation schema, so the service schema is not consulted here.
+/// data on the operation schema, so the service schema only contributes its errors.
 /// </summary>
 public sealed class RestServiceProtocol(
+    ServiceSchema service,
     Func<WireReadMode, IRestBodyCodecFactory> codecFactoryFor,
     Func<SmithyHttpClientResponse, string?> errorDiscriminator,
     bool rawStringPayloads,
@@ -78,7 +79,7 @@ public sealed class RestServiceProtocol(
         // server compiles a validator.
         return CreateOperation(
             operation,
-            operation.Errors,
+            service.ErrorsOf(operation),
             codecFactoryFor(server ? WireReadMode.Strict : WireReadMode.Lenient),
             errorDiscriminator,
             rawStringPayloads,
