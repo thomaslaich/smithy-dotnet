@@ -11,9 +11,25 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.18.0]
+
+This release gives every project ownership of the shapes in its own model files: projects generate
+those shapes and use the types their references generated, so a client and a server of one contract
+share types, and a server's modules can each own their operations. It also adds F# project
+templates. When upgrading, a contracts project without `SmithyService` needs a `NSmithy.Core`
+reference or `SmithyGenerateCode` set to `false`, the latter also when F# projects reference a C#
+contracts project. A project that generates code now takes the model of every referenced project
+that has a `smithy-build.json`; mark a reference whose model it does not build on, such as another
+service's client, with `SmithyModel="false"`. F# client operations that declare errors now return a
+`Result`, with the service's errors behind a `Service` case, and code that reads a service's errors
+from `{Operation}Schema.Schema.Errors` or constructs `RestServiceProtocol` must move to the
+`ServiceSchema`.
+
 ### Added
 
-- **Preview: `ownedSources` setting of `csharp-codegen`.** Lists a project's own model files and
+- **F# project templates.** `dotnet new nsmithy-contracts`, `nsmithy-server`, and `nsmithy-client`
+  scaffold F# projects with `-lang F#`, with the same options and protocols as the C# templates.
+- **`ownedSources` setting of `csharp-codegen`.** Lists a project's own model files and
   directories. Without `closure`, the project generates the shapes defined there, operations
   included with their schemas and handler interfaces, and everything they target, also without a
   service. MSBuild sets it from the `sources` of the project's `smithy-build.json`. See
@@ -26,7 +42,7 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   and generates only its client or server. Projects that reference the package without generating
   code are unaffected, and hand-written `SmithySource` and `SmithyContractsBuildFile` items for the
   package keep working.
-- **Preview: `providedShapes` setting of `csharp-codegen`.** Lists the shape manifests of referenced
+- **`providedShapes` setting of `csharp-codegen`.** Lists the shape manifests of referenced
   projects. The shapes they list are not generated again; generated code refers to the referenced
   projects' types. A shape listed twice, a manifest from another NSmithy version, a service `rename`
   of a provided error, and a provided operation without the handler interface the server needs fail
@@ -40,12 +56,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `SmithyGenerateServer` says. A service's errors are on its service schema, as in C#. C# and F#
   projects do not share generated types; a project that would generate a shape the other
   language's manifest lists fails. See `examples/fsharp-modules`.
-- **BREAKING: a contracts project publishes the model files its `smithy-build.json` names.**
-  `SmithyPublish` publishes the `sources` and `imports` of the project's `smithy-build.json`, the
-  files it generates its own shapes from, to project references and in the package, instead of
-  `$(SmithySources)/**/*.smithy`. The `SmithySources` property is gone, and the model files move
-  from `build/smithy/` to their paths under it, for example `build/smithy/model/`. A model file
-  outside the project directory fails `dotnet pack`.
+- **BREAKING: a contracts project packs the model files its `smithy-build.json` names.**
+  `SmithyPublish` packs the `sources` and `imports` of the project's `smithy-build.json`, the files
+  it generates its own shapes from, instead of `$(SmithySources)/**/*.smithy`. The `SmithySources`
+  property is gone, and the model files move from `build/smithy/` to their paths under it, for
+  example `build/smithy/model/`. A model file outside the project directory fails `dotnet pack`.
 - **BREAKING: one MSBuild target returns what a project reference contributes.**
   `GetSmithyShapeReferences` returns its model files, build file, and shape manifest, and those of
   the contracts it references. `GetSmithyContractItems` and `GetSmithyBuildFile` are gone.
@@ -66,11 +81,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   operations while one project ties them into a service. `SmithyService` adds the service on top.
   A contracts project without `SmithyService` therefore needs a `NSmithy.Core` reference
   (`NSMITHYRUNTIME` names it), or `SmithyGenerateCode` set to `false` to keep only validating and
-  packaging its model, for example for F# consumers. A module's model reaches the projects that
-  reference it when it sets `SmithyPublish`. Projects whose `smithy-build.json` configures
+  packaging its model, for example for F# consumers. Projects whose `smithy-build.json` configures
   `csharp-codegen` in several projections keep their settings. See
   [Distributing contracts](https://thomaslaich.github.io/smithy-dotnet/guides/distributing-contracts/).
-
 - Each operation's handler interface, `I{Operation}Handler`, is generated into a file of its own,
   `{Operation}.Handler.g.cs`, instead of `{Service}.Server.g.cs`, and in the operation's namespace.
   A project always generates the handler interfaces of the operations it owns, also with
@@ -98,8 +111,7 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - A project with no model files and no `SmithyService` generates nothing, whatever its references
   publish. Before, one that got the NSmithy targets, for example through `NSmithy.Client`, and
   referenced a `SmithyPublish` project failed with "SmithyService must be set", although the
-  referenced project had generated the shapes it needs. `GetSmithyShapeReferences` no longer marks
-  items `SmithyDirect`: a project that generates code takes every contract its references reach.
+  referenced project had generated the shapes it needs.
 
 ## [0.17.0]
 
@@ -900,7 +912,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.0...v0.15.1
