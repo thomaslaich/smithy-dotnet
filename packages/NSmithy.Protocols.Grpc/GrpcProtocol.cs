@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using NSmithy.Codecs.Proto;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
@@ -196,9 +197,9 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         var codec = CodecFactory.FromSchema(outputSchema);
+        var sizeHint = 256;
         return new ResponseStrategy<TOutput>(
-            (output, _) =>
-                UnaryGrpcResponse(GrpcMessageFraming.Frame(codec.Serialize(output)), OkTrailers),
+            (output, _) => UnaryGrpcResponse(codec, output, ref sizeHint, OkTrailers),
             // An all-default message proto-encodes to a zero-length frame; the codec turns that into
             // an empty instance rather than null.
             (response, cancellationToken) =>
@@ -388,12 +389,42 @@ public sealed class GrpcProtocol : IProtocol
                 new(GrpcMessageHeader, errorShapeId),
                 new(ErrorShapeHeader, errorShapeId),
             ];
-            return value =>
-                UnaryGrpcResponse(GrpcMessageFraming.Frame(codec.Serialize(value)), _ => trailers);
+            var sizeHint = 256;
+            return value => UnaryGrpcResponse(codec, value, ref sizeHint, _ => trailers);
         }
     }
 
     // ---------------- server response construction ----------------
+
+    // The message is framed in place: the header's bytes are reserved, the codec writes the payload
+    // after them into pooled memory the response owns, and the header is filled in once the
+    // payload's length is known. Nothing is copied into a frame of its own.
+    private static SmithyHttpServerResponse UnaryGrpcResponse<T>(
+        ICodec<T> codec,
+        T value,
+        ref int sizeHint,
+        Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>> trailers
+    )
+    {
+        var buffer = new SmithyPooledBuffer(sizeHint);
+        buffer.GetSpan(GrpcMessageFraming.HeaderLength);
+        buffer.Advance(GrpcMessageFraming.HeaderLength);
+        codec.Serialize(value, buffer);
+        sizeHint = buffer.WrittenCount;
+        GrpcMessageFraming.WriteHeader(
+            MemoryMarshal.AsMemory(buffer.WrittenMemory).Span,
+            buffer.WrittenCount - GrpcMessageFraming.HeaderLength
+        );
+        var response = new SmithyHttpServerResponse
+        {
+            StatusCode = (int)HttpStatusCode.OK,
+            Body = SmithyHttpServerResponse.SingleChunk(buffer),
+            ContentLength = buffer.WrittenCount,
+            Trailers = trailers,
+        };
+        response.Headers["Content-Type"] = [ContentType];
+        return response;
+    }
 
     private static SmithyHttpServerResponse UnaryGrpcResponse(
         byte[] framedBody,

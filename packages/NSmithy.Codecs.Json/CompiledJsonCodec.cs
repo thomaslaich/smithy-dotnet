@@ -1,3 +1,4 @@
+using System.Buffers;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 
@@ -35,6 +36,22 @@ internal sealed class CompiledJsonCodec<T>(
         {
             JsonWriterCache.Return(writer);
             PooledByteBufferWriterCache.Return(buffer);
+        }
+    }
+
+    public void Serialize(T value, IBufferWriter<byte> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        var writer = JsonWriterCache.Rent(destination);
+        try
+        {
+            var serializer = JsonShapeSerializer.ForRoot(writer, root, materializeTopLevelDefaults);
+            schema.Write(MemberIndex.Root, value, ref serializer);
+            writer.Flush();
+        }
+        finally
+        {
+            JsonWriterCache.Return(writer);
         }
     }
 
@@ -80,6 +97,27 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
         {
             JsonWriterCache.Return(writer);
             PooledByteBufferWriterCache.Return(buffer);
+        }
+    }
+
+    public void Serialize(T value, IBufferWriter<byte> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        var writer = JsonWriterCache.Rent(destination);
+        try
+        {
+            JsonShapeSerializer.WriteObject(
+                writer,
+                plan,
+                materializeTopLevelDefaults,
+                source,
+                value
+            );
+            writer.Flush();
+        }
+        finally
+        {
+            JsonWriterCache.Return(writer);
         }
     }
 
