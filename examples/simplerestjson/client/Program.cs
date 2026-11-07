@@ -9,13 +9,13 @@ var client = new PizzaAdminServiceClient(
     new() { AuthSchemes = { new HttpApiKeyAuthScheme("X-Api-Key", ApiKey) } }
 );
 
-var health = await client.HealthAsync(new HealthInput());
+var health = await client.HealthAsync();
 Console.WriteLine($"Health: {health.Status}");
 
-var authenticatedHealth = await client.AuthenticatedHealthAsync(new AuthenticatedHealthInput());
+var authenticatedHealth = await client.AuthenticatedHealthAsync();
 Console.WriteLine($"Authenticated health: {authenticatedHealth.Status}");
 
-var version = await client.VersionAsync(new VersionInput());
+var version = await client.VersionAsync();
 Console.WriteLine($"Version: {version.Version}");
 
 var menu = await client.GetMenuAsync(new GetMenuInput("napoli"));

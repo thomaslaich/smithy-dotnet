@@ -119,6 +119,13 @@ final class FakeClientGeneratorTest {
                 + " CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(generated.contains("public virtual void Dispose() { }"), generated);
+    // An input whose members are all optional may be left out.
+    assertTrue(
+        generated.contains(
+            "public virtual Task<ListCitiesOutput> ListCitiesAsync(ListCitiesInput? input = null,"
+                + " CancellationToken cancellationToken = default)"),
+        generated);
+    assertTrue(generated.contains("input ??= new ListCitiesInput();"), generated);
   }
 
   @Test
@@ -158,7 +165,7 @@ final class FakeClientGeneratorTest {
         generated.contains(
             "public virtual async"
                 + " IAsyncEnumerable<ListCitiesOutput>"
-                + " ListCitiesPagesAsync(ListCitiesInput input,"
+                + " ListCitiesPagesAsync(ListCitiesInput? input = null,"
                 + " [EnumeratorCancellation]"
                 + " CancellationToken cancellationToken = default)"),
         generated);
@@ -178,7 +185,7 @@ final class FakeClientGeneratorTest {
         generated.contains(
             "public virtual async"
                 + " IAsyncEnumerable<CitySummary>"
-                + " ListCitiesItemsAsync(ListCitiesInput input,"
+                + " ListCitiesItemsAsync(ListCitiesInput? input = null,"
                 + " [EnumeratorCancellation]"
                 + " CancellationToken cancellationToken = default)"),
         generated);

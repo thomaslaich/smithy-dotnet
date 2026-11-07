@@ -124,14 +124,13 @@ public final class ClientGenerator implements Runnable {
       CSharpWriter writer, GenerationContext context, OperationShape op) {
     SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
-    String inputType = writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape())));
     String outputType = writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())));
     return writer.format(
-        "$T<$L> $LPagesAsync($L input, $T cancellationToken = default)",
+        "$T<$L> $LPagesAsync($L, $T cancellationToken = default)",
         RuntimeTypes.I_ASYNC_ENUMERABLE,
         outputType,
         CSharpNaming.typeName(op.getId().getName()),
-        inputType,
+        inputParameter(writer, context, op),
         RuntimeTypes.CANCELLATION_TOKEN);
   }
 
@@ -145,13 +144,11 @@ public final class ClientGenerator implements Runnable {
     return paginatorItemElementType(writer, context, info)
         .map(elementType ->
             writer.format(
-                "$T<$L> $LItemsAsync($T input, $T cancellationToken = default)",
+                "$T<$L> $LItemsAsync($L, $T cancellationToken = default)",
                 RuntimeTypes.I_ASYNC_ENUMERABLE,
                 elementType,
                 CSharpNaming.typeName(info.getOperation().getId().getName()),
-                context
-                    .symbolProvider()
-                    .toSymbol(context.model().expectShape(info.getOperation().getInputShape())),
+                inputParameter(writer, context, info.getOperation()),
                 RuntimeTypes.CANCELLATION_TOKEN));
   }
 
@@ -197,21 +194,57 @@ public final class ClientGenerator implements Runnable {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
-    String inputType =
-        hasInput ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) : null;
     String outputType =
         hasOutput ? writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))) : null;
     String returnType =
         hasOutput
             ? writer.typeName(RuntimeTypes.TASK) + "<" + outputType + ">"
             : writer.typeName(RuntimeTypes.TASK);
-    String params = hasInput ? inputType + " input, " : "";
+    String params = hasInput ? inputParameter(writer, context, op) + ", " : "";
     return writer.format(
         "$L $L($L$T cancellationToken = default)",
         returnType,
         name,
         params,
         RuntimeTypes.CANCELLATION_TOKEN);
+  }
+
+  /** The input parameter of a client method; optional when the operation's input is omittable. */
+  static String inputParameter(CSharpWriter writer, GenerationContext context, OperationShape op) {
+    String inputType =
+        writer.typeName(
+            context.symbolProvider().toSymbol(context.model().expectShape(op.getInputShape())));
+    return inputIsOmittable(context.model(), op)
+        ? inputType + "? input = null"
+        : inputType + " input";
+  }
+
+  /**
+   * Whether a caller may leave the input out: every member of the input structure is optional, so
+   * an empty input is a valid one, and none of them is a stream, which the caller must supply. The
+   * client then treats {@code null} as an empty input.
+   */
+  static boolean inputIsOmittable(Model model, OperationShape op) {
+    if (ShapeSupport.isUnit(op.getInputShape())) {
+      return false;
+    }
+    StructureShape input = model.expectShape(op.getInputShape(), StructureShape.class);
+    return input.members().stream()
+        .allMatch(m ->
+            ShapeSupport.isOptionalParameter(m)
+                && !ShapeSupport.isStreamingBlobMember(model, m)
+                && !ShapeSupport.isEventStreamMember(model, m));
+  }
+
+  /** Writes the statement that makes {@code input} non-null: a default, or an argument check. */
+  static void writePrepareInput(CSharpWriter writer, GenerationContext context, OperationShape op) {
+    if (inputIsOmittable(context.model(), op)) {
+      writer.write(
+          "input ??= new $T();",
+          context.symbolProvider().toSymbol(context.model().expectShape(op.getInputShape())));
+    } else {
+      writer.write("$T.ThrowIfNull(input);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+    }
   }
 
   // =====================================================================
@@ -780,7 +813,7 @@ public final class ClientGenerator implements Runnable {
           "prepareInput",
           writer.consumer(w -> {
             if (hasInput) {
-              w.write("$T.ThrowIfNull(input);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+              writePrepareInput(w, context, op);
               writeIdempotencyTokenDefaults(
                   model.expectShape(op.getInputShape(), StructureShape.class));
             }
@@ -869,7 +902,7 @@ public final class ClientGenerator implements Runnable {
       writer.putContext("operation", CSharpNaming.typeName(op.getId().getName()));
       writer.putContext("tokenProperty", CSharpNaming.memberName(info.getInputTokenMember()));
       writer.putContext("outputToken", memberPathExpr("output", info.getOutputTokenMemberPath()));
-      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext("prepareInput", writer.consumer(w -> writePrepareInput(w, context, op)));
       writer.putContext(
           "pagesSignature",
           withEnumeratorCancellation(writer, paginatorPagesSignature(writer, context, op)));
@@ -878,7 +911,7 @@ public final class ClientGenerator implements Runnable {
           """
           public async ${pagesSignature:L}
           {
-              ${argumentNullException:T}.ThrowIfNull(input);
+              ${prepareInput:C|}
               var output = await ${operation:L}Async(input, cancellationToken).ConfigureAwait(false);
               yield return output;
               var token = ${outputToken:L};

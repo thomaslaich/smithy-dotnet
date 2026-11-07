@@ -11,6 +11,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Clients let callers leave out an input that needs nothing.** When every member of an operation's
+  input is optional and none is a stream, the client's method, its paginators, and the fake client
+  take the input as `{Operation}Input? input = null` and treat `null` as an empty input, so
+  `client.ListQueuesAsync()` works. Inputs with a required member or a stream are unchanged.
+
 ## [0.18.2]
 
 A fix for five AWS services whose documentation broke the generated code under 0.18.1.

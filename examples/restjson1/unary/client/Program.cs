@@ -28,7 +28,7 @@ using var client = new WeatherClient(
     new() { RetryStrategy = new SmithyStandardRetryStrategy(maxAttempts: 4) }
 );
 
-var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
+var time = await client.GetCurrentTimeAsync();
 Console.WriteLine($"Current time: {time.Time:u}");
 
 // Paginate through all cities, 3 per page. The generated pages paginator repeats the call

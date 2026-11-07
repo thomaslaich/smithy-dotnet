@@ -106,7 +106,7 @@ public class FakeClientTests
     private sealed class TwoCitiesWeatherClient : FakeWeatherClient
     {
         public override Task<ListCitiesOutput> ListCitiesAsync(
-            ListCitiesInput input,
+            ListCitiesInput? input = null,
             CancellationToken cancellationToken = default
         ) =>
             Task.FromResult(
