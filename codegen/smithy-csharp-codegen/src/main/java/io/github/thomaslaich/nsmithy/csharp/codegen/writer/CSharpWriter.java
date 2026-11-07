@@ -13,6 +13,7 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.writer;
 
+import io.github.thomaslaich.nsmithy.codegen.core.XmlDocMarkup;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
@@ -219,12 +220,13 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
     writeXmlDocs(summary, Map.of());
   }
 
+  /** Writes documentation text; HTML, as the AWS models carry, becomes XML documentation markup. */
   private void writeXmlText(String text) {
-    for (String line : text.strip().split("\\R", -1)) {
-      if (line.isBlank()) {
+    for (String line : XmlDocMarkup.render(text)) {
+      if (line.isEmpty()) {
         write("///");
       } else {
-        write("/// $L", escapeXml(line.strip()));
+        write("/// $L", line);
       }
     }
   }
