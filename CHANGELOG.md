@@ -11,6 +11,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.18.2]
+
+A fix for five AWS services whose documentation broke the generated code under 0.18.1.
+
 ### Fixed
 
 - **Unicode line separators no longer break generated doc comments.** Thirteen AWS models carry
@@ -933,7 +937,9 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.2...HEAD
+[0.18.2]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.1...v0.18.2
+[0.18.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.15.1...v0.16.0
