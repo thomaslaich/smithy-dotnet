@@ -11,6 +11,20 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.18.1]
+
+The generated XML documentation now renders the HTML the AWS models write.
+
+### Changed
+
+- **HTML documentation becomes XML documentation markup.** The AWS models write their
+  `@documentation` as HTML, which the generated `///` comments used to carry as escaped text.
+  `<p>`, lists, `<code>`, links, `<b>`/`<i>`, `<note>`, `<dl>`, `<pre>` and headings now become
+  `<para>`, `<list>`, `<c>`, `<see href>`, `<b>`/`<i>`, a labelled paragraph, a `<list>` with
+  `<term>`s, `<code>` and bold text, so IntelliSense shows the documentation as written.
+  Other tags, such as the `<account-id>` placeholders in ARN examples, stay literal text, and
+  documentation without HTML is unchanged.
+
 ## [0.18.0]
 
 This release gives every project ownership of the shapes in its own model files: projects generate
@@ -50,13 +64,6 @@ from `{Operation}Schema.Schema.Errors` or constructs `RestServiceProtocol` must 
 
 ### Changed
 
-- **HTML documentation becomes XML documentation markup.** The AWS models write their
-  `@documentation` as HTML, which the generated `///` comments used to carry as escaped text.
-  `<p>`, lists, `<code>`, links, `<b>`/`<i>`, `<note>`, `<dl>`, `<pre>` and headings now become
-  `<para>`, `<list>`, `<c>`, `<see href>`, `<b>`/`<i>`, a labelled paragraph, a `<list>` with
-  `<term>`s, `<code>` and bold text, so IntelliSense shows the documentation as written.
-  Other tags, such as the `<account-id>` placeholders in ARN examples, stay literal text, and
-  documentation without HTML is unchanged.
 - **F# projects generate the shapes in their own model files**, like C# projects: `fsharp-codegen`
   takes `ownedSources` and `providedShapes` and writes a shape manifest, and each operation's schema
   and `I{Operation}Handler` are generated into a new `Operations.g.fs`, compiled whatever
