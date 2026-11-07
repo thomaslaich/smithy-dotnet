@@ -77,6 +77,12 @@ final class DocumentationGeneratorTest {
           value: String
       }
 
+      /// <p>Lists <code>things</code> in <account-id>.</p> <ul> <li> <p>Fast</p> </li> </ul>
+      structure HtmlDocs {
+          /// <p>See <a href="https://example.com/docs">the docs</a> &amp; more.</p>
+          value: String
+      }
+
       structure CollectionDocs {
           cities: CityNames
 
@@ -139,6 +145,37 @@ final class DocumentationGeneratorTest {
     assertTrue(generated.contains("/// Member-only docs."), generated);
     assertTrue(
         generated.contains("public sealed record class ParamOnlyDocs(string? Value = null);"));
+  }
+
+  @Test
+  void htmlDocumentationBecomesXmlDocMarkup() throws Exception {
+    String generated = renderStructure("example.weather#HtmlDocs");
+
+    assertTrue(
+        generated.contains(
+            """
+            /// <summary>
+            /// <para>
+            /// Lists <c>things</c> in &lt;account-id&gt;.
+            /// </para>
+            /// <list type="bullet">
+            /// <item>
+            /// <description>
+            /// Fast
+            /// </description>
+            /// </item>
+            /// </list>
+            /// </summary>
+            """),
+        generated);
+    assertTrue(
+        generated.contains(
+            """
+            /// <param name="Value">
+            /// See <see href="https://example.com/docs">the docs</see> &amp; more.
+            /// </param>
+            """),
+        generated);
   }
 
   @Test

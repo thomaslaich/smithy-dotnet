@@ -17,6 +17,12 @@ the generator emits:
 | The service, when `SmithyGenerateClient` is on | A `WeatherClient` with a typed async method per operation |
 | Every shape | A schema class |
 
+`@documentation` becomes the XML documentation of the generated types and
+members. HTML in it, as the AWS models carry, is converted: `<p>` to `<para>`,
+lists to `<list>`, `<code>` to `<c>` and links to `<see href>`. Tags NSmithy
+does not know, such as the `<account-id>` placeholders in ARN examples, stay
+literal text.
+
 Operation `@examples` become `<example>` code samples in the XML documentation
 of the generated client methods. Each sample constructs the input, calls the
 method on a `client` variable, and shows the expected output, or for an error

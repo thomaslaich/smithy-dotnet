@@ -5,6 +5,7 @@
  */
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.XmlDocMarkup;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -88,8 +89,8 @@ public final class FSharpWriter extends SymbolWriter<FSharpWriter, FSharpWriter.
     }
     List<String> lines = new ArrayList<>();
     lines.add("/// <summary>");
-    for (String line : documentation.strip().split("\\R", -1)) {
-      lines.add(line.isBlank() ? "///" : "/// " + escapeXml(line.strip()));
+    for (String line : XmlDocMarkup.render(documentation)) {
+      lines.add(line.isEmpty() ? "///" : "/// " + line);
     }
     lines.add("/// </summary>");
     return String.join("\n", lines);
@@ -98,10 +99,6 @@ public final class FSharpWriter extends SymbolWriter<FSharpWriter, FSharpWriter.
   /** Code with its documentation, if any, on the lines before it. */
   public static String documented(String docs, String code) {
     return docs.isEmpty() ? code : docs + "\n" + code;
-  }
-
-  private static String escapeXml(String value) {
-    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
   }
 
   /** F# needs no imports: every reference is qualified. */
