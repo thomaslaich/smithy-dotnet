@@ -11,6 +11,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Unicode line separators no longer break generated doc comments.** Thirteen AWS models carry
+  U+2028 inside documentation. The C# compiler ends a line there, which ended the `///` comment
+  mid-sentence and turned the rest of the text into code. The documentation renderer now treats
+  NEL, LINE SEPARATOR and PARAGRAPH SEPARATOR as ordinary line breaks.
+
 ## [0.18.1]
 
 The generated XML documentation now renders the HTML the AWS models write.

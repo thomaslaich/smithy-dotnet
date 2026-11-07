@@ -1,6 +1,7 @@
 package io.github.thomaslaich.nsmithy.codegen.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -183,5 +184,16 @@ final class XmlDocMarkupTest {
         XmlDocMarkup.render(
             "<p>" + filler + " <a href=\"https://example.com/x\">link</a> tail</p>");
     assertEquals(List.of(filler, "<see href=\"https://example.com/x\">link</see> tail"), lines);
+  }
+
+  @Test
+  void unicodeLineSeparatorsNeverReachTheOutput() {
+    // The C# lexer ends a line at U+2028, which would end the /// comment mid-sentence.
+    List<String> lines = XmlDocMarkup.render("<p>metric data\u2028 over a <code>period</code></p>");
+    assertEquals(List.of("metric data over a <c>period</c>"), lines);
+    assertEquals(List.of("one", "two"), XmlDocMarkup.render("one\u2029two"));
+    for (String line : XmlDocMarkup.render("<p>a\u0085b</p>")) {
+      assertFalse(line.chars().anyMatch(c -> c == 0x85 || c == 0x2028 || c == 0x2029));
+    }
   }
 }

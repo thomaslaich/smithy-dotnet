@@ -49,6 +49,10 @@ public final class XmlDocMarkup {
   private static final Pattern ENTITY = Pattern.compile("&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);");
   private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
+  // C# ends a line, and so a /// comment, at NEL, LINE SEPARATOR and PARAGRAPH SEPARATOR too.
+  // Java's \\s does not match them, so they are normalized to newlines before anything else.
+  private static final Pattern EXOTIC_LINE_BREAK = Pattern.compile("[\\u0085\\u2028\\u2029]");
+
   private XmlDocMarkup() {}
 
   private static Set<String> union() {
@@ -68,6 +72,7 @@ public final class XmlDocMarkup {
     if (documentation == null || documentation.isBlank()) {
       return List.of();
     }
+    documentation = EXOTIC_LINE_BREAK.matcher(documentation).replaceAll("\n");
     if (!KNOWN_TAG.matcher(documentation).find()) {
       return plain(documentation);
     }
