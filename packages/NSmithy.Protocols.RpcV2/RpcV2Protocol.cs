@@ -254,23 +254,33 @@ public abstract class RpcV2Protocol : IProtocol
         var readsNoValue = typeof(TOutput) == typeof(SmithyUnit);
         var codec = codecFactory.FromSchema(outputSchema);
 
+        // The size of the last response body, so the next one usually fits its first buffer.
+        var sizeHint = 256;
         return new ResponseStrategy<TOutput>(
             (output, _) =>
-                writesNoBody
-                    ? BufferedResponse(
+            {
+                if (writesNoBody)
+                {
+                    return BufferedResponse(
                         200,
                         ReadOnlyMemory<byte>.Empty,
                         headers => headers["Smithy-Protocol"] = [protocolHeader]
-                    )
-                    : BufferedResponse(
-                        200,
-                        codec.Serialize(output),
-                        headers =>
-                        {
-                            headers["Smithy-Protocol"] = [protocolHeader];
-                            headers["Content-Type"] = [contentType];
-                        }
-                    ),
+                    );
+                }
+
+                var buffer = new SmithyPooledBuffer(sizeHint);
+                codec.Serialize(output, buffer);
+                sizeHint = buffer.WrittenCount;
+                var response = new SmithyHttpServerResponse
+                {
+                    StatusCode = 200,
+                    Body = SmithyHttpServerResponse.SingleChunk(buffer),
+                    ContentLength = buffer.WrittenCount,
+                };
+                response.Headers["Smithy-Protocol"] = [protocolHeader];
+                response.Headers["Content-Type"] = [contentType];
+                return response;
+            },
             (response, cancellationToken) =>
             {
                 EnsureProtocolResponse(response);

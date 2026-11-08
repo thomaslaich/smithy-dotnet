@@ -19,10 +19,16 @@ public static class GrpcMessageFraming
     public static byte[] Frame(ReadOnlySpan<byte> payload)
     {
         var frame = new byte[HeaderLength + payload.Length];
-        frame[0] = 0; // compression flag: 0 = uncompressed
-        BinaryPrimitives.WriteUInt32BigEndian(frame.AsSpan(1, 4), (uint)payload.Length);
+        WriteHeader(frame, payload.Length);
         payload.CopyTo(frame.AsSpan(HeaderLength));
         return frame;
+    }
+
+    /// <summary>Writes an uncompressed frame's header for a payload of <paramref name="payloadLength"/> bytes.</summary>
+    internal static void WriteHeader(Span<byte> header, int payloadLength)
+    {
+        header[0] = 0; // compression flag: 0 = uncompressed
+        BinaryPrimitives.WriteUInt32BigEndian(header.Slice(1, 4), (uint)payloadLength);
     }
 
     /// <summary>
