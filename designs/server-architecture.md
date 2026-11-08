@@ -363,6 +363,16 @@ carries it as an implicit modeled error, so each protocol serializes it like
 any other error and generated clients deserialize it. Each violation is a
 `ValidationExceptionField` whose `path` is a JSON Pointer into the input.
 
+The generators also declare the error in the model they generate from
+(`ValidationErrors` in the codegen core), on every operation whose input
+reaches a constraint the runtime enforces or an enum, the way smithy-rs
+attaches it to constrained operations. The generated code then matches what
+the server does: schemas list the error, and an F# client's `Result` has a
+case for it. The framework's shapes are added to the model when it lacks them
+and are never generated; they bind to the runtime's types. The
+`attachValidationException` setting turns this off, and a server then
+requires the model to declare the error on its constrained operations.
+
 A missing `@required` member is caught earlier, in the codec, which cannot
 build the shape without it. The codec throws `MissingRequiredMemberException`,
 which the runtime converts into the same `ValidationException`. The path is

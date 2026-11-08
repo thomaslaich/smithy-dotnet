@@ -1,7 +1,11 @@
 open System
 open Example.Bookshelf
-open NSmithy.Core.Validation
 
+/// The output of a call the example expects to succeed.
+let expectOk (result: Result<'output, 'error>) =
+    match result with
+    | Ok output -> output
+    | Error error -> failwith $"Unexpected error: {error}"
 
 let describe (book: Book) =
     let status =
@@ -19,12 +23,16 @@ let run (endpoint: string) =
     task {
         use client = new BookshelfClient(Uri endpoint)
 
-        let! dune =
+        // AddBook's input is constrained, so the server may reject it with ValidationException,
+        // and the client returns a Result with that case even though the model declares no error.
+        let! added =
             client.AddBookAsync
                 { Title = "Dune"
                   Author = "Frank Herbert"
                   Genre = Genre.FICTION
                   Pages = Some 412 }
+
+        let dune = expectOk added
 
         let! _ =
             client.AddBookAsync
@@ -37,14 +45,15 @@ let run (endpoint: string) =
         | Ok lent -> printfn "Lent: %s" (describe lent.Book)
         | Error error -> printfn "Could not lend Dune: %A" error
 
-        // An input whose members are all optional may be left out.
+        // An input whose members are all optional may be left out. The genre is an enum, which
+        // the server checks, so this operation returns a Result too.
         let! shelf = client.ListBooksAsync()
-        printfn "On the shelf: %d books" shelf.Books.Length
+        printfn "On the shelf: %d books" (expectOk shelf).Books.Length
 
         let! fiction = client.ListBooksAsync { Genre = Some Genre.FICTION }
         printfn "Fiction:"
 
-        for book in fiction.Books do
+        for book in (expectOk fiction).Books do
             printfn "  %s" (describe book)
 
         // An operation returns the errors the model declares for it as a Result.
@@ -52,24 +61,29 @@ let run (endpoint: string) =
         | Ok lent -> printfn "Lent: %s" (describe lent.Book)
         | Error(LendBookError.AlreadyLent error) -> printfn "Cannot lend Dune again: %s has it" error.Reader
         | Error(LendBookError.NoSuchBook error) -> printfn "No book with id %s" error.Id
+        | Error(LendBookError.ValidationException error) -> printfn "Rejected: %s" error.Message
 
         match! client.GetBookAsync { Id = "missing" } with
         | Ok found -> printfn "Found: %s" (describe found.Book)
         | Error(GetBookError.NoSuchBook error) -> printfn "No book with id %s" error.Id
+        | Error(GetBookError.ValidationException error) -> printfn "Rejected: %s" error.Message
 
-        // Failures the model does not declare stay exceptions. The server validates input against
-        // the model before the handler runs, and AddBook does not declare ValidationException.
-        try
-            let! _ =
-                client.AddBookAsync
-                    { Title = ""
-                      Author = "Nobody"
-                      Genre = Genre.HISTORY
-                      Pages = Some 0 }
-
-            ()
-        with :? ValidationException as error ->
+        // The server validates input against the model before the handler runs. The rejection
+        // comes back as the ValidationException case, naming each member and the constraint it
+        // failed.
+        match!
+            client.AddBookAsync
+                { Title = ""
+                  Author = "Nobody"
+                  Genre = Genre.HISTORY
+                  Pages = Some 0 }
+        with
+        | Ok rejected -> printfn "Unexpectedly added: %s" (describe rejected.Book)
+        | Error(AddBookError.ValidationException error) ->
             printfn "Rejected: %s" error.Message
+
+            for field in error.FieldList do
+                printfn "  %s: %s" field.Path field.Message
     }
 
 [<EntryPoint>]

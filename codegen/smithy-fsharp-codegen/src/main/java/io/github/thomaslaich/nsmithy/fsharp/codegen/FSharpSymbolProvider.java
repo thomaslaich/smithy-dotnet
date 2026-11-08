@@ -7,6 +7,7 @@
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
+import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
 import java.util.Optional;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -167,6 +168,12 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
           .namespace("NSmithy.Core.Validation", ".")
           .build();
     }
+    if (ValidationErrors.FIELD.equals(s.getId())) {
+      return Symbol.builder()
+          .name("ValidationExceptionField")
+          .namespace("NSmithy.Core.Validation", ".")
+          .build();
+    }
     return declared(s);
   }
 
@@ -214,6 +221,12 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
     if (ShapeSupport.isValidationException(shape.getId())) {
       return Symbol.builder()
           .name("ValidationExceptionSchema")
+          .namespace("NSmithy.Core.Validation", ".")
+          .build();
+    }
+    if (ValidationErrors.FIELD.equals(shape.getId())) {
+      return Symbol.builder()
+          .name("ValidationExceptionFieldSchema")
           .namespace("NSmithy.Core.Validation", ".")
           .build();
     }

@@ -4,6 +4,7 @@ import io.github.thomaslaich.nsmithy.codegen.core.GeneratedCodeFormatter;
 import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeClosures;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
+import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.nio.file.Path;
@@ -55,7 +56,12 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
       List<CSharpIntegration> integrations) {
     // Not performDefaultCodegenTransforms: it also copies a service's errors onto its operations,
     // but operation schemas are service-agnostic. The service schema carries those errors.
-    Model model = ModelTransformer.create().flattenAndRemoveMixins(sourceModel);
+    Model model =
+        ValidationErrors.apply(
+            ModelTransformer.create().flattenAndRemoveMixins(sourceModel),
+            settings.service(),
+            settings.attachValidationException(),
+            settings.generateServer());
     CodegenDirector<CSharpWriter, CSharpIntegration, GenerationContext, CSharpSettings> runner =
         new CodegenDirector<>();
 

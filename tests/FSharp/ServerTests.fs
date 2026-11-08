@@ -118,9 +118,11 @@ let ``The server validates input before the handler runs`` () : Task =
             { (order "pizza").Dish with
                 Tags = Some(Map [ "pineapple", Some 1 ]) }
 
-        let! error =
-            Assert.ThrowsAsync<NSmithy.Core.Validation.ValidationException>(fun () ->
-                client.OrderAsync { order "pizza" with Dish = unknownKey } :> Task)
+        let! result = client.OrderAsync { order "pizza" with Dish = unknownKey }
 
-        Assert.Contains("/dish/tags", error.Message)
+        match result with
+        | Error(OrderError.ValidationException error) ->
+            Assert.Contains("/dish/tags", error.Message)
+            Assert.Equal("/dish/tags", (Seq.exactlyOne error.FieldList).Path)
+        | other -> failwith $"Unexpected result: {other}"
     }

@@ -17,6 +17,12 @@ let main args =
     use client = new HelloServiceClient(Uri endpoint)
     //#endif
 
-    let response = client.SayHelloAsync({ Name = "world" }).GetAwaiter().GetResult()
-    printfn "%s" response.Message
-    0
+    // The input is constrained (name is @required), so the server can reject it with
+    // ValidationException, which the client returns as a case of the operation's Result.
+    match client.SayHelloAsync({ Name = "world" }).GetAwaiter().GetResult() with
+    | Ok response ->
+        printfn "%s" response.Message
+        0
+    | Error(SayHelloError.ValidationException error) ->
+        eprintfn "Rejected: %s" error.Message
+        1

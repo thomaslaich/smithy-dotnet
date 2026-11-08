@@ -122,7 +122,7 @@ class SmokeTestGeneratorTest {
     assertTrue(
         tests.contains(
             "Failure(null, static exception => exception is SmithyClientException or JobNotFound"
-                + " or Throttled)"),
+                + " or Throttled or ValidationException)"),
         tests);
   }
 
