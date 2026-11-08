@@ -152,7 +152,10 @@ Cancellation through the caller's token is not a result; it propagates.
 - `SmithySmokeTest<TConfig, TClient>`: `Id`, `Operation`, `Expectation`,
   `Tags`, and `RunAsync(TConfig config, CancellationToken)`, which creates a
   client from a configured copy, invokes the operation, disposes the client, and
-  returns a result.
+  returns a result. An overload takes a `Func<TConfig, TClient>` in place of the
+  generated constructor, so a runner can share one `HttpClient` across the tests
+  or run them over a fake handler; the test disposes the client, not what the
+  factory captured.
 - `SmithySmokeTestExpectation`: `Success`, or `Failure(errorId, matches)`.
 - `SmithySmokeTestResult`: `Id`, `Passed`, `Failure` (why it did not pass), and
   `Exception` (what the call threw, if anything).

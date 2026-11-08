@@ -82,13 +82,18 @@ the test.
 ## Configuration
 
 A test applies its settings to a copy of the configuration, which
-`Configure(config)` returns; the configuration passed in is not changed. To
-create the client yourself, for example over your own `HttpClient`, pass a
-factory:
+`Configure(config)` returns; the configuration passed in is not changed.
+`RunAsync(config)` creates the client with its constructor. To create it
+yourself, pass a factory:
 
 ```csharp
 var result = await test.RunAsync(config, c => new TablesClient(httpClient, c));
 ```
+
+A runner uses this to share one `HttpClient` across every test instead of
+creating one per call, or to run the tests over a fake handler without a
+network. The test disposes the client it ran, not the `HttpClient` the factory
+handed it.
 
 For AWS services, `vendorParams` of `aws.test#AwsVendorParams` and
 `aws.test#S3VendorParams` set the region (default `us-west-2`), FIPS,
