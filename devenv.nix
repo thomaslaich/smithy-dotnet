@@ -73,6 +73,8 @@ in
 
         formatter.csharpier.excludes = [
           "templates/NSmithy.Templates/content/**"
+          # Third-party emitter output; formatting it would mean benchmarking edits.
+          "benchmarks/stacks/TypeSpec/emitted/**"
         ];
       };
     };
