@@ -108,19 +108,11 @@ public final class FakeClientGenerator implements Runnable {
     writer.pushState();
     try {
       writer.putContext("signature", ClientGenerator.operationSignature(writer, context, op));
-      writer.putContext(
-          "prepareInput",
-          writer.consumer(w -> {
-            if (ClientGenerator.inputIsOmittable(context.model(), op)) {
-              ClientGenerator.writePrepareInput(w, context, op);
-            }
-          }));
       writer.putContext("body", writer.consumer(w -> matcher.writeOperationBody(w, op)));
       writer.write(
           """
           public virtual ${signature:L}
           {
-              ${prepareInput:C|}
               ${body:C|}
           }
           """);

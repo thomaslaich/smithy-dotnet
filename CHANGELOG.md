@@ -13,10 +13,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
-- **Clients let callers leave out an input that needs nothing.** When every member of an operation's
-  input is optional and none is a stream, the client's method, its paginators, and the fake client
-  take the input as `{Operation}Input? input = null` and treat `null` as an empty input, so
-  `client.ListQueuesAsync()` works. Inputs with a required member or a stream are unchanged.
+- **Clients offer an overload without the input when it needs nothing.** When every member of an
+  operation's input is optional and none is a stream, the C# client interface gets overloads of
+  the operation and its paginators that take only a cancellation token, as extension methods, and
+  the F# client and its interface get the same overloads, so `client.ListQueuesAsync()` works. The
+  input-taking methods are unchanged, so implementations of the interface and subclasses of the
+  fake client are not affected.
 
 ## [0.18.2]
 

@@ -57,7 +57,7 @@ whose data the test asserts on; everything else keeps its canned response:
 internal sealed class TwoCitiesWeatherClient : FakeWeatherClient
 {
     public override Task<ListCitiesOutput> ListCitiesAsync(
-        ListCitiesInput? input = null,
+        ListCitiesInput input,
         CancellationToken cancellationToken = default
     ) =>
         Task.FromResult(

@@ -91,13 +91,25 @@ final class ClientGeneratorTest {
     assertTrue(
         generated.contains(
             "Task<global::Example.Example.Streaming.WatchOutput>"
-                + " WatchAsync(global::Example.Example.Streaming.WatchInput? input = null,"
+                + " WatchAsync(global::Example.Example.Streaming.WatchInput input,"
                 + " CancellationToken cancellationToken = default);"),
         generated);
-    // An empty input may be left out; one that carries a stream may not.
+    // An empty input may be left out, through an extension method on the interface; one that
+    // carries a stream may not.
     assertTrue(
-        generated.contains("input ??= new global::Example.Example.Streaming.WatchInput();"),
+        generated.contains("public static class StreamingServiceClientExtensions"), generated);
+    assertTrue(
+        generated.contains(
+            "public static Task<global::Example.Example.Streaming.WatchOutput>"
+                + " WatchAsync(this IStreamingServiceClient client,"
+                + " CancellationToken cancellationToken = default)"),
         generated);
+    assertTrue(
+        generated.contains(
+            "return client.WatchAsync(new global::Example.Example.Streaming.WatchInput(),"
+                + " cancellationToken);"),
+        generated);
+    assertFalse(generated.contains("UploadAsync(this IStreamingServiceClient"), generated);
     assertTrue(
         generated.contains(
             "Task<global::Example.Example.Streaming.UploadOutput>"
@@ -488,11 +500,19 @@ final class ClientGeneratorTest {
     assertTrue(
         generated.contains(
             "IAsyncEnumerable<global::Example.Example.Pages.ListThingsOutput>"
-                + " ListThingsPagesAsync(global::Example.Example.Pages.ListThingsInput? input ="
-                + " null, CancellationToken cancellationToken = default);"),
+                + " ListThingsPagesAsync(global::Example.Example.Pages.ListThingsInput input,"
+                + " CancellationToken cancellationToken = default);"),
+        generated);
+    // The paginators of an operation whose input may be left out get the overloads too.
+    assertTrue(
+        generated.contains(
+            "ListThingsPagesAsync(this ICatalogClient client,"
+                + " CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(
-        generated.contains("input ??= new global::Example.Example.Pages.ListThingsInput();"),
+        generated.contains(
+            "return client.ListThingsItemsAsync(new"
+                + " global::Example.Example.Pages.ListThingsInput(), cancellationToken);"),
         generated);
     assertTrue(generated.contains("input = input with { NextToken = token };"), generated);
     assertTrue(generated.contains("while (token is not null)"), generated);
@@ -501,8 +521,8 @@ final class ClientGeneratorTest {
     assertTrue(
         generated.contains(
             "IAsyncEnumerable<global::Example.Example.Pages.Thing>"
-                + " ListThingsItemsAsync(global::Example.Example.Pages.ListThingsInput? input ="
-                + " null, CancellationToken cancellationToken = default);"),
+                + " ListThingsItemsAsync(global::Example.Example.Pages.ListThingsInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(generated.contains("foreach (var item in items)"), generated);
     assertTrue(generated.contains("using System.Collections.Generic;"), generated);
@@ -523,6 +543,7 @@ final class ClientGeneratorTest {
             "GetThingAsync(global::Example.Example.Pages.GetThingInput input,"
                 + " CancellationToken cancellationToken = default);"),
         generated);
+    assertFalse(generated.contains("GetThingAsync(this ICatalogClient"), generated);
   }
 
   @Test

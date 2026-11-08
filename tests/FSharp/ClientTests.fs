@@ -178,13 +178,11 @@ let ``The client works through its interface and honors cancellation`` () : Task
         let handler = new StubHandler(fun _ _ -> json HttpStatusCode.OK """{}""")
         use client = client handler :> IKitchenClient
 
-        let! _ = client.PingAsync(PingInput())
+        let! _ = client.PingAsync()
         use cancelled = new CancellationTokenSource()
         cancelled.Cancel()
 
-        let! _ =
-            Assert.ThrowsAnyAsync<OperationCanceledException>(fun () ->
-                client.PingAsync(PingInput(), cancelled.Token) :> Task)
+        let! _ = Assert.ThrowsAnyAsync<OperationCanceledException>(fun () -> client.PingAsync(cancelled.Token) :> Task)
 
         let request, _ = handler.Requests[0]
         Assert.Equal(HttpMethod.Get, request.Method)

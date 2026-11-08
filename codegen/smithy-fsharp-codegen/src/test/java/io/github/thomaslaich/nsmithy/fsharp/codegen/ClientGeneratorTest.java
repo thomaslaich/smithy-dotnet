@@ -100,6 +100,25 @@ class ClientGeneratorTest {
                 + " global.System.Threading.CancellationToken ->"
                 + " global.System.Threading.Tasks.Task<global.Example.Cafe.PingOutput>"),
         client);
+    // Its input needs nothing, so the client and its interface also take only the token.
+    assertTrue(
+        client.contains(
+            "member this.PingAsync(?cancellationToken: global.System.Threading.CancellationToken) :"
+                + " global.System.Threading.Tasks.Task<global.Example.Cafe.PingOutput> ="),
+        client);
+    assertTrue(
+        client.contains(
+            "this.PingAsync(global.Example.Cafe.PingInput(), ?cancellationToken ="
+                + " cancellationToken)"),
+        client);
+    assertTrue(
+        client.contains("module ICafeClientExtensions =\n    type ICafeClient with"), client);
+    // A record input whose members are all optional is built with every member absent.
+    assertTrue(
+        client.contains(
+            "this.OrderAsync(({ Token = None } : global.Example.Cafe.OrderInput),"
+                + " ?cancellationToken = cancellationToken)"),
+        client);
   }
 
   @Test
