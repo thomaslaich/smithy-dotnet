@@ -54,6 +54,8 @@ committed, so re-checking a newer emitter is a two-command job.
 
 ## Revisiting
 
+Re-checked 2026-11-08 against 0.58.0-alpha.33: both problems are unchanged.
+
 Re-run the two commands against a newer `@typespec/http-server-csharp`. If
 `grep -rn 'Headers\[' generated/` finds header writes and the `statusCode`
 properties are gone, add a `Bench.Stack.TypeSpec.csproj` compiling
