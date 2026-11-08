@@ -224,16 +224,13 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
     Map<String, Node> params = new LinkedHashMap<>();
     model
         .getShape(shapeId.get())
-        .ifPresent(
-            shape ->
-                shape
-                    .members()
-                    .forEach(
-                        member ->
-                            member
-                                .getTrait(DefaultTrait.class)
-                                .ifPresent(
-                                    value -> params.put(member.getMemberName(), value.toNode()))));
+        .ifPresent(shape ->
+            shape
+                .members()
+                .forEach(member ->
+                    member
+                        .getTrait(DefaultTrait.class)
+                        .ifPresent(value -> params.put(member.getMemberName(), value.toNode()))));
     testCase.getVendorParams().map(ObjectNode::getStringMap).ifPresent(params::putAll);
 
     Set<String> declared = builtIns(section.service());
@@ -242,46 +239,45 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
             .collect(
                 Collectors.toMap(
                     EndpointBuiltIn::id, EndpointBuiltIn::property, (first, second) -> first));
-    params.forEach(
-        (name, value) -> {
-          switch (name) {
-            case "region" -> set(writer, declared, properties, "AWS::Region", value);
-            case "useFips" -> set(writer, declared, properties, "AWS::UseFIPS", value);
-            case "useDualstack" -> set(writer, declared, properties, "AWS::UseDualStack", value);
-            case "useAccelerate" -> set(writer, declared, properties, "AWS::S3::Accelerate", value);
-            case "useGlobalEndpoint" ->
-                set(writer, declared, properties, "AWS::S3::UseGlobalEndpoint", value);
-            case "forcePathStyle" ->
-                set(writer, declared, properties, "AWS::S3::ForcePathStyle", value);
-            case "useArnRegion" -> {
-              set(writer, declared, properties, "AWS::S3::UseArnRegion", value);
-              set(writer, declared, properties, "AWS::S3Control::UseArnRegion", value);
-            }
-            case "useMultiRegionAccessPoints" ->
-                set(
-                    writer,
-                    declared,
-                    properties,
-                    "AWS::S3::DisableMultiRegionAccessPoints",
-                    Node.from(!value.expectBooleanNode().getValue()));
-            case "useAccountIdRouting" -> {
-              if (!value.expectBooleanNode().getValue()) {
-                set(
-                    writer,
-                    declared,
-                    properties,
-                    "AWS::Auth::AccountIdEndpointMode",
-                    Node.from("disabled"));
-              }
-            }
-            case "uri" ->
-                writer.write(
-                    "configured.Endpoint = new $T($L);",
-                    RuntimeTypes.URI,
-                    CSharpNaming.formatString(value.expectStringNode().getValue()));
-            default -> {}
+    params.forEach((name, value) -> {
+      switch (name) {
+        case "region" -> set(writer, declared, properties, "AWS::Region", value);
+        case "useFips" -> set(writer, declared, properties, "AWS::UseFIPS", value);
+        case "useDualstack" -> set(writer, declared, properties, "AWS::UseDualStack", value);
+        case "useAccelerate" -> set(writer, declared, properties, "AWS::S3::Accelerate", value);
+        case "useGlobalEndpoint" ->
+            set(writer, declared, properties, "AWS::S3::UseGlobalEndpoint", value);
+        case "forcePathStyle" ->
+            set(writer, declared, properties, "AWS::S3::ForcePathStyle", value);
+        case "useArnRegion" -> {
+          set(writer, declared, properties, "AWS::S3::UseArnRegion", value);
+          set(writer, declared, properties, "AWS::S3Control::UseArnRegion", value);
+        }
+        case "useMultiRegionAccessPoints" ->
+            set(
+                writer,
+                declared,
+                properties,
+                "AWS::S3::DisableMultiRegionAccessPoints",
+                Node.from(!value.expectBooleanNode().getValue()));
+        case "useAccountIdRouting" -> {
+          if (!value.expectBooleanNode().getValue()) {
+            set(
+                writer,
+                declared,
+                properties,
+                "AWS::Auth::AccountIdEndpointMode",
+                Node.from("disabled"));
           }
-        });
+        }
+        case "uri" ->
+            writer.write(
+                "configured.Endpoint = new $T($L);",
+                RuntimeTypes.URI,
+                CSharpNaming.formatString(value.expectStringNode().getValue()));
+        default -> {}
+      }
+    });
   }
 
   private static void set(
@@ -312,12 +308,11 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
                     .getTrait(EndpointRuleSetTrait.class)
                     .map(trait -> trait.getEndpointRuleSet().getParameters()));
     return parameters
-        .map(
-            declared ->
-                declared.toList().stream()
-                    .map(Parameter::getBuiltIn)
-                    .flatMap(Optional::stream)
-                    .collect(Collectors.toSet()))
+        .map(declared ->
+            declared.toList().stream()
+                .map(Parameter::getBuiltIn)
+                .flatMap(Optional::stream)
+                .collect(Collectors.toSet()))
         .orElse(Set.of());
   }
 

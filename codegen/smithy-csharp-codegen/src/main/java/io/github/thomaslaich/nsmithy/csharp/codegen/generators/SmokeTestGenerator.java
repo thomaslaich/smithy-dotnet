@@ -3,11 +3,11 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.sections.SmokeTestConfigSection;
-import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -76,15 +76,13 @@ public final class SmokeTestGenerator implements Runnable {
       writer.putContext("interface", "I" + client);
       writer.putContext(
           "tests",
-          writer.consumer(
-              w -> {
-                for (OperationShape op : operations(context, service)) {
-                  for (SmokeTestCase testCase :
-                      op.expectTrait(SmokeTestsTrait.class).getTestCases()) {
-                    writeTest(op, testCase);
-                  }
-                }
-              }));
+          writer.consumer(w -> {
+            for (OperationShape op : operations(context, service)) {
+              for (SmokeTestCase testCase : op.expectTrait(SmokeTestsTrait.class).getTestCases()) {
+                writeTest(op, testCase);
+              }
+            }
+          }));
       writer.write(
           """
           /// <summary>The smoke tests of the service's operations, from their <c>@smokeTests</c> traits.</summary>
@@ -115,12 +113,11 @@ public final class SmokeTestGenerator implements Runnable {
               .collect(Collectors.joining(", ")));
       writer.putContext(
           "configure",
-          writer.consumer(
-              w -> {
-                w.write("var configured = new $L(config);", w.getContext("config"));
-                w.injectSection(new SmokeTestConfigSection(service, op, testCase));
-                w.write("return configured;");
-              }));
+          writer.consumer(w -> {
+            w.write("var configured = new $L(config);", w.getContext("config"));
+            w.injectSection(new SmokeTestConfigSection(service, op, testCase));
+            w.write("return configured;");
+          }));
       writer.putContext("method", CSharpNaming.typeName(op.getId().getName()) + "Async");
       writer.putContext(
           "input",
@@ -168,12 +165,11 @@ public final class SmokeTestGenerator implements Runnable {
               .filter(error -> error.getId().equals(errorId.get()))
               .findFirst()
               .map(error -> "exception is " + type(error))
-              .orElseGet(
-                  () ->
-                      writer.format(
-                          "exception is $T { ErrorCode: $L }",
-                          RuntimeTypes.SMITHY_CLIENT_EXCEPTION,
-                          CSharpNaming.formatString(errorId.get().getName())));
+              .orElseGet(() ->
+                  writer.format(
+                      "exception is $T { ErrorCode: $L }",
+                      RuntimeTypes.SMITHY_CLIENT_EXCEPTION,
+                      CSharpNaming.formatString(errorId.get().getName())));
     } else {
       List<String> types = new ArrayList<>();
       types.add(writer.typeName(RuntimeTypes.SMITHY_CLIENT_EXCEPTION));
