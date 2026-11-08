@@ -109,12 +109,12 @@ export default defineConfig({
 						{ label: 'Retry', slug: 'guides/client-configuration/retry' },
 						{ label: 'Pagination', slug: 'guides/client-configuration/pagination' },
 						{ label: 'Waiters', slug: 'guides/client-configuration/waiters' },
-						{ label: 'Smoke tests', slug: 'guides/client-configuration/smoke-tests' },
 						{ label: 'Interceptors', slug: 'guides/client-configuration/interceptors' },
 						{ label: 'Observability', slug: 'guides/client-configuration/observability' },
 						{ label: 'Transport', slug: 'guides/client-configuration/transport' },
 						{ label: 'Endpoint rules', slug: 'guides/client-configuration/endpoint-rules' },
 						{ label: 'Fake clients', slug: 'guides/client-configuration/fake-clients' },
+						{ label: 'Smoke tests', slug: 'guides/client-configuration/smoke-tests' },
 					],
 				},
 				{
