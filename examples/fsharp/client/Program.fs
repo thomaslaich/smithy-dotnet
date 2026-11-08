@@ -37,6 +37,10 @@ let run (endpoint: string) =
         | Ok lent -> printfn "Lent: %s" (describe lent.Book)
         | Error error -> printfn "Could not lend Dune: %A" error
 
+        // An input whose members are all optional may be left out.
+        let! shelf = client.ListBooksAsync()
+        printfn "On the shelf: %d books" shelf.Books.Length
+
         let! fiction = client.ListBooksAsync { Genre = Some Genre.FICTION }
         printfn "Fiction:"
 
