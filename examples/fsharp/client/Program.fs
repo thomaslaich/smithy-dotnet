@@ -1,12 +1,6 @@
 open System
 open Example.Bookshelf
 
-/// The output of a call the example expects to succeed.
-let expectOk (result: Result<'output, 'error>) =
-    match result with
-    | Ok output -> output
-    | Error error -> failwith $"Unexpected error: {error}"
-
 let describe (book: Book) =
     let status =
         match book.Status with
@@ -23,8 +17,6 @@ let run (endpoint: string) =
     task {
         use client = new BookshelfClient(Uri endpoint)
 
-        // AddBook's input is constrained, so the server may reject it with ValidationException,
-        // and the client returns a Result with that case even though the model declares no error.
         let! added =
             client.AddBookAsync
                 { Title = "Dune"
@@ -32,7 +24,10 @@ let run (endpoint: string) =
                   Genre = Genre.FICTION
                   Pages = Some 412 }
 
-        let dune = expectOk added
+        let dune =
+            match added with
+            | Ok added -> added.Book
+            | Error(AddBookError.ValidationException error) -> failwith $"Rejected: {error.Message}"
 
         let! _ =
             client.AddBookAsync
@@ -41,23 +36,25 @@ let run (endpoint: string) =
                   Genre = Genre.SCIENCE
                   Pages = None }
 
-        match! client.LendBookAsync { Id = dune.Book.Id; Reader = "Ada" } with
+        match! client.LendBookAsync { Id = dune.Id; Reader = "Ada" } with
         | Ok lent -> printfn "Lent: %s" (describe lent.Book)
         | Error error -> printfn "Could not lend Dune: %A" error
 
-        // An input whose members are all optional may be left out. The genre is an enum, which
-        // the server checks, so this operation returns a Result too.
-        let! shelf = client.ListBooksAsync()
-        printfn "On the shelf: %d books" (expectOk shelf).Books.Length
+        // An input whose members are all optional may be left out.
+        match! client.ListBooksAsync() with
+        | Ok shelf -> printfn "On the shelf: %d books" shelf.Books.Length
+        | Error(ListBooksError.ValidationException error) -> printfn "Rejected: %s" error.Message
 
-        let! fiction = client.ListBooksAsync { Genre = Some Genre.FICTION }
-        printfn "Fiction:"
+        match! client.ListBooksAsync { Genre = Some Genre.FICTION } with
+        | Ok fiction ->
+            printfn "Fiction:"
 
-        for book in (expectOk fiction).Books do
-            printfn "  %s" (describe book)
+            for book in fiction.Books do
+                printfn "  %s" (describe book)
+        | Error(ListBooksError.ValidationException error) -> printfn "Rejected: %s" error.Message
 
         // An operation returns the errors the model declares for it as a Result.
-        match! client.LendBookAsync { Id = dune.Book.Id; Reader = "Grace" } with
+        match! client.LendBookAsync { Id = dune.Id; Reader = "Grace" } with
         | Ok lent -> printfn "Lent: %s" (describe lent.Book)
         | Error(LendBookError.AlreadyLent error) -> printfn "Cannot lend Dune again: %s has it" error.Reader
         | Error(LendBookError.NoSuchBook error) -> printfn "No book with id %s" error.Id
@@ -68,9 +65,7 @@ let run (endpoint: string) =
         | Error(GetBookError.NoSuchBook error) -> printfn "No book with id %s" error.Id
         | Error(GetBookError.ValidationException error) -> printfn "Rejected: %s" error.Message
 
-        // The server validates input against the model before the handler runs. The rejection
-        // comes back as the ValidationException case, naming each member and the constraint it
-        // failed.
+        // The server validates input before the handler runs; the rejection is a case too.
         match!
             client.AddBookAsync
                 { Title = ""
@@ -78,7 +73,7 @@ let run (endpoint: string) =
                   Genre = Genre.HISTORY
                   Pages = Some 0 }
         with
-        | Ok rejected -> printfn "Unexpectedly added: %s" (describe rejected.Book)
+        | Ok added -> printfn "Added: %s" (describe added.Book)
         | Error(AddBookError.ValidationException error) ->
             printfn "Rejected: %s" error.Message
 
