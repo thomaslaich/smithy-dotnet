@@ -102,6 +102,9 @@ public final class RuntimeTypes {
       type("NSmithy.Client.SmithyOperationBinding");
   public static final Symbol SMITHY_CLIENT_EXCEPTION = type("NSmithy.Client.SmithyClientException");
   public static final Symbol SMITHY_JMESPATH = type("NSmithy.Client.SmithyJmespath");
+  public static final Symbol SMITHY_SMOKE_TEST = type("NSmithy.Client.SmithySmokeTest");
+  public static final Symbol SMITHY_SMOKE_TEST_EXPECTATION =
+      type("NSmithy.Client.SmithySmokeTestExpectation");
   public static final Symbol SMITHY_WAITER = type("NSmithy.Client.SmithyWaiter");
   public static final Symbol SMITHY_WAITER_ACCEPTOR = type("NSmithy.Client.SmithyWaiterAcceptor");
   public static final Symbol SMITHY_WAITER_OPTIONS = type("NSmithy.Client.SmithyWaiterOptions");

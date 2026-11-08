@@ -19,6 +19,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   the F# client and its interface get the same overloads, so `client.ListQueuesAsync()` works. The
   input-taking methods are unchanged, so implementations of the interface and subclasses of the
   fake client are not affected.
+- Generated smoke tests: with `generateSmokeTests`, a client gains `{Service}SmokeTests.All`,
+  one `SmithySmokeTest` per `@smokeTests` case, which runs the operation against the live
+  service and checks the expected success or error without a test framework. The AWS
+  integration applies `aws.test` vendor params such as the region, FIPS, dual-stack, and S3
+  addressing.
+- `SmokeTestConfigSection`, a code section integrations append to through Smithy's
+  `interceptors` hook to apply a smoke test's vendor params to its configuration.
 
 ## [0.18.2]
 

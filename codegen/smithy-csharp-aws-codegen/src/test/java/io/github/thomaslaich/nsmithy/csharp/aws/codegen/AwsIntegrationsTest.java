@@ -105,6 +105,107 @@ class AwsIntegrationsTest {
     assertFalse(client.contains("AwsRegion"), client);
   }
 
+  @Test
+  void smokeTestVendorParamsSetTheBuiltInsTheRulesRead() throws Exception {
+    String tests = smokeTests();
+
+    assertTrue(tests.contains("configured.Region = \"eu-west-1\";"), tests);
+    assertTrue(tests.contains("configured.UseFips = true;"), tests);
+    assertTrue(tests.contains("configured.ForcePathStyle = true;"), tests);
+    assertTrue(tests.contains("configured.Endpoint = new Uri(\"https://localhost:4566\");"), tests);
+    // The rules read neither built-in.
+    assertFalse(tests.contains("UseDualStack"), tests);
+    assertFalse(tests.contains("DisableMultiRegionAccessPoints"), tests);
+  }
+
+  @Test
+  void smokeTestVendorParamsDefaultToTheirShapesDefaults() throws Exception {
+    String tests = smokeTests();
+
+    assertTrue(tests.contains("configured.Region = \"us-west-2\";"), tests);
+    assertTrue(tests.contains("configured.UseFips = false;"), tests);
+  }
+
+  private String smokeTests() throws Exception {
+    Model assembled =
+        Model.assembler()
+            .discoverModels(AwsIntegrationsTest.class.getClassLoader())
+            .addUnparsedModel(
+                "model.smithy",
+                """
+                $version: "2"
+                metadata suppressions = [{ id: "UnstableTrait", namespace: "example.buckets" }]
+                namespace example.buckets
+
+                use aws.protocols#restXml
+                use aws.test#AwsVendorParams
+                use aws.test#S3VendorParams
+                use smithy.rules#endpointRuleSet
+                use smithy.test#smokeTests
+
+                @restXml
+                @endpointRuleSet({
+                    version: "1.0"
+                    parameters: {
+                        Region: { type: "string", builtIn: "AWS::Region" }
+                        UseFIPS: { type: "boolean", builtIn: "AWS::UseFIPS", required: true, default: false }
+                        ForcePathStyle: { type: "boolean", builtIn: "AWS::S3::ForcePathStyle", required: true, default: false }
+                    }
+                    rules: [
+                        {
+                            conditions: [{ fn: "isSet", argv: [{ ref: "Region" }] }]
+                            type: "endpoint"
+                            endpoint: { url: "https://buckets.{Region}.example.com" }
+                        }
+                        { conditions: [], type: "error", error: "Region is required" }
+                    ]
+                })
+                service Buckets {
+                    version: "2024-01-01"
+                    operations: [ListBuckets]
+                }
+
+                @readonly
+                @http(method: "GET", uri: "/")
+                @smokeTests([
+                    {
+                        id: "ListBucketsInIreland"
+                        vendorParamsShape: S3VendorParams
+                        vendorParams: {
+                            region: "eu-west-1"
+                            useFips: true
+                            forcePathStyle: true
+                            useMultiRegionAccessPoints: false
+                            uri: "https://localhost:4566"
+                        }
+                        expect: { success: {} }
+                    }
+                    {
+                        id: "ListBucketsByDefault"
+                        vendorParamsShape: AwsVendorParams
+                        expect: { success: {} }
+                    }
+                ])
+                operation ListBuckets {}
+                """)
+            .assemble()
+            .unwrap();
+    new CSharpCodegenPlugin()
+        .execute(
+            PluginContext.builder()
+                .model(assembled)
+                .fileManifest(FileManifest.create(tempDir))
+                .settings(
+                    ObjectNode.builder()
+                        .withMember("service", Node.from("example.buckets#Buckets"))
+                        .withMember("baseNamespace", Node.from(""))
+                        .withMember("generateServer", Node.from(false))
+                        .withMember("generateSmokeTests", Node.from(true))
+                        .build())
+                .build());
+    return Files.readString(tempDir.resolve("Example/Buckets/Buckets.SmokeTests.Client.g.cs"));
+  }
+
   private static String regionModel(String regionParameter, String serviceTrait) {
     return """
     $version: "2"

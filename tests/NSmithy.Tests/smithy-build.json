@@ -138,6 +138,16 @@
         }
       }
     },
+    "smoke": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.smoke#Jobs",
+          "baseNamespace": "",
+          "generateServer": false,
+          "generateSmokeTests": true
+        }
+      }
+    },
     "endpoints": {
       "plugins": {
         "csharp-codegen": {

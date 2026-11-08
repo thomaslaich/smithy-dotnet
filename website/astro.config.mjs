@@ -114,6 +114,7 @@ export default defineConfig({
 						{ label: 'Transport', slug: 'guides/client-configuration/transport' },
 						{ label: 'Endpoint rules', slug: 'guides/client-configuration/endpoint-rules' },
 						{ label: 'Fake clients', slug: 'guides/client-configuration/fake-clients' },
+						{ label: 'Smoke tests', slug: 'guides/client-configuration/smoke-tests' },
 					],
 				},
 				{

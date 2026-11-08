@@ -30,6 +30,8 @@ dependencies {
     implementation("software.amazon.smithy:smithy-jmespath:$smithyVersion")
     // @waitable: the trait, its validators (which type-check acceptor paths), and the waiter model.
     implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
+    // Public through SmokeTestConfigSection, which carries the trait's test case.
+    api("software.amazon.smithy:smithy-smoke-test-traits:$smithyVersion")
 
     // Makes the official smithy.ai trait definitions and validators available whenever the
     // C# build plugin is loaded. In particular, models can use smithy.ai#prompts without copying

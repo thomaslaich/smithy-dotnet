@@ -101,6 +101,19 @@ final class ClientExamplesGenerator {
     code.append("\n}");
   }
 
+  /**
+   * Renders {@code node} as a C# expression of the shape {@code id}, for code that runs rather than
+   * documents. Event streams have no single-expression form, so they are rejected.
+   */
+  String expression(ShapeId id, Node node) {
+    iterators.clear();
+    String expression = value(id, node);
+    if (!iterators.isEmpty()) {
+      throw new CodegenException("Event stream values cannot be rendered as an expression: " + id);
+    }
+    return expression;
+  }
+
   private String value(ShapeId id, Node node) {
     Shape shape = context.model().expectShape(id);
     if (shape.isDocumentShape()) {
