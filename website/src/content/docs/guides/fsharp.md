@@ -188,6 +188,23 @@ match! client.GetCityAsync { CityId = "SEA" } with
 | Error(GetCityError.Service error) -> handleServiceError error
 ```
 
+An operation whose input is constrained also has a `ValidationException` case:
+the server rejects a request that violates the model's constraint traits with
+`smithy.framework#ValidationException`, and the generators declare that error
+on every such operation so the `Result` can carry it (see
+[Validation](/smithy-dotnet/servers/validation/#declaring-the-error)). The
+case holds the runtime's `ValidationException`, whose `FieldList` names each
+member and the constraint it failed:
+
+```fsharp
+match! client.GetCityAsync { CityId = "SEA!" } with
+| Ok city -> printfn "%s" city.Name
+| Error(GetCityError.NoSuchResource error) -> printfn "No such %s" error.ResourceType
+| Error(GetCityError.ValidationException error) ->
+    for field in error.FieldList do
+        printfn "%s: %s" field.Path field.Message
+```
+
 Other failures are exceptions: transport failures, cancellation, and error
 responses the model does not declare for the operation. Server handlers raise
 modeled errors, as in C#.

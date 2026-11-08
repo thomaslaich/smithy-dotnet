@@ -123,6 +123,30 @@ let ``A modeled error is returned as its case`` () : Task =
     }
 
 [<Fact>]
+let ``The server's validation error is a case of a constrained operation's Result`` () : Task =
+    task {
+        let handler =
+            new StubHandler(fun _ _ ->
+                let response =
+                    json
+                        HttpStatusCode.BadRequest
+                        """{"message":"1 validation error detected. Value at '/table' failed to satisfy constraint: Member must not be null","fieldList":[{"path":"/table","message":"Value at '/table' failed to satisfy constraint: Member must not be null"}]}"""
+
+                response.Headers.Add("x-amzn-errortype", "ValidationException")
+                response)
+
+        use client = client handler
+
+        let! result = client.OrderAsync order
+
+        match result with
+        | Error(OrderError.ValidationException error) ->
+            Assert.StartsWith("1 validation error detected.", error.Message)
+            Assert.Equal("/table", (Seq.exactlyOne error.FieldList).Path)
+        | other -> failwith $"Unexpected result: {other}"
+    }
+
+[<Fact>]
 let ``A service-level error is the Service case of every operation`` () : Task =
     task {
         let handler =

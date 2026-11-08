@@ -11,6 +11,29 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **`ValidationException` is declared on constrained operations.** The server returns
+  `smithy.framework#ValidationException` for a request that violates the model's constraint traits
+  whether or not the model declares it. The C# and F# generators now declare it on every operation
+  whose input reaches a constraint the server enforces, or an enum, the way smithy-rs attaches it to
+  constrained operations, so the generated code tells the truth: operation schemas list the error,
+  smoke tests accept it, and an F# client returns it as the `ValidationException` case of the
+  operation's `Result` instead of raising it. Operations the server never validates are unchanged,
+  and so are models that declare the error themselves. The framework's shapes are added to the model
+  when it lacks them and bind to the runtime's `ValidationException` and `ValidationExceptionField`;
+  nothing on the wire changes. **F# callers** of a constrained operation get a `Result` where they
+  may have had a plain output, and a new case to match; `try ... with :? ValidationException`
+  around such a call no longer fires. See
+  [Validation](https://thomaslaich.github.io/smithy-dotnet/servers/validation/#declaring-the-error).
+
+### Added
+
+- **`attachValidationException` setting** of `csharp-codegen` and `fsharp-codegen`, default `true`.
+  Set it to `false` to declare the error in the model instead; a server then refuses to generate a
+  constrained operation whose errors, or its service's, leave out
+  `smithy.framework#ValidationException`, and names the operations to fix.
+
 ## [0.19.0]
 
 Operations whose input members are all optional no longer need an input argument, and `@smokeTests`

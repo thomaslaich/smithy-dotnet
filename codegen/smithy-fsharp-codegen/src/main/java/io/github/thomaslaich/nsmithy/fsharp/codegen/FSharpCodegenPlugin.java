@@ -4,6 +4,7 @@ import io.github.thomaslaich.nsmithy.codegen.core.GeneratedCodeFormatter;
 import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeClosures;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
+import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -54,7 +55,12 @@ public final class FSharpCodegenPlugin implements SmithyBuildPlugin {
       List<FSharpIntegration> integrations) {
     // Not performDefaultCodegenTransforms: it also copies a service's errors onto its operations,
     // but operation schemas are service-agnostic. The service schema carries those errors.
-    Model model = ModelTransformer.create().flattenAndRemoveMixins(sourceModel);
+    Model model =
+        ValidationErrors.apply(
+            ModelTransformer.create().flattenAndRemoveMixins(sourceModel),
+            settings.service(),
+            settings.attachValidationException(),
+            settings.generateServer());
     CodegenDirector<FSharpWriter, FSharpIntegration, FSharpContext, FSharpSettings> runner =
         new CodegenDirector<>();
     runner.settings(settings);

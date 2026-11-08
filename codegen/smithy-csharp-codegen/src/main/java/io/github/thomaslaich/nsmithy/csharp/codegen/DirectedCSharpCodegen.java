@@ -3,6 +3,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen;
 import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
+import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointResolverGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointRules;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientDependencyInjectionGenerator;
@@ -217,8 +218,10 @@ final class DirectedCSharpCodegen
     if (isProvided(directive.context(), directive.shape())) {
       return;
     }
-    // smithy.api#Unit maps to the runtime SmithyUnit type, so no record is generated for it.
-    if (ShapeSupport.isUnit(directive.shape().getId())) {
+    // smithy.api#Unit maps to the runtime SmithyUnit type, so no record is generated for it, and
+    // the validation model's shapes bind to the runtime's types.
+    if (ShapeSupport.isUnit(directive.shape().getId())
+        || ValidationErrors.isFrameworkShape(directive.shape().getId())) {
       return;
     }
     directive
@@ -244,7 +247,8 @@ final class DirectedCSharpCodegen
     if (isProvided(directive.context(), directive.shape())) {
       return;
     }
-    if (ShapeSupport.isValidationException(directive.shape().getId())) {
+    // The server runtime throws this one itself, so the model binds to the runtime's type.
+    if (ValidationErrors.isFrameworkShape(directive.shape().getId())) {
       return;
     }
 
@@ -291,7 +295,8 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateList(GenerateListDirective<GenerationContext, CSharpSettings> directive) {
-    if (isProvided(directive.context(), directive.shape())) {
+    if (isProvided(directive.context(), directive.shape())
+        || ValidationErrors.isFrameworkShape(directive.shape().getId())) {
       return;
     }
     writeSchema(

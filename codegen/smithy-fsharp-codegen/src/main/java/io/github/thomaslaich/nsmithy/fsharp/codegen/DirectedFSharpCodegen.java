@@ -3,6 +3,7 @@ package io.github.thomaslaich.nsmithy.fsharp.codegen;
 import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
+import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
 import java.util.Set;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.codegen.core.WriterDelegator;
@@ -106,8 +107,10 @@ final class DirectedFSharpCodegen
   @Override
   public void generateStructure(
       GenerateStructureDirective<FSharpContext, FSharpSettings> directive) {
-    // smithy.api#Unit binds to the runtime's SmithyUnit.
+    // smithy.api#Unit binds to the runtime's SmithyUnit, and the validation model's shapes to
+    // the runtime's types.
     if (ShapeSupport.isUnit(directive.shape().getId())
+        || ValidationErrors.isFrameworkShape(directive.shape().getId())
         || isProvided(directive.context(), directive.shape())) {
       return;
     }
@@ -120,7 +123,7 @@ final class DirectedFSharpCodegen
   public void generateError(GenerateErrorDirective<FSharpContext, FSharpSettings> directive) {
     // The server runtime throws smithy.framework#ValidationException itself, so the model binds to
     // the runtime's type and schema.
-    if (ShapeSupport.isValidationException(directive.shape().getId())
+    if (ValidationErrors.isFrameworkShape(directive.shape().getId())
         || isProvided(directive.context(), directive.shape())) {
       return;
     }
@@ -141,7 +144,8 @@ final class DirectedFSharpCodegen
 
   @Override
   public void generateList(GenerateListDirective<FSharpContext, FSharpSettings> directive) {
-    if (isProvided(directive.context(), directive.shape())) {
+    if (isProvided(directive.context(), directive.shape())
+        || ValidationErrors.isFrameworkShape(directive.shape().getId())) {
       return;
     }
     new SchemaGenerator(directive.context()).list(directive.shape());

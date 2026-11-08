@@ -73,6 +73,8 @@ public final class RuntimeTypes {
   public static final Symbol TRAIT = type("NSmithy.Core.Trait");
   public static final Symbol VALIDATION_EXCEPTION =
       type("NSmithy.Core.Validation.ValidationException");
+  public static final Symbol VALIDATION_EXCEPTION_FIELD =
+      type("NSmithy.Core.Validation.ValidationExceptionField");
 
   // NSmithy clients and HTTP
   public static final Symbol ENDPOINT_FUNCTIONS = type("NSmithy.Client.EndpointFunctions");

@@ -14,6 +14,8 @@
  *     "generateDependencyInjection": true, // optional; emit the IHttpClientFactory extension
  *     "generateFakes": false,             // optional; emit fakes per surface (default false)
  *     "generateSmokeTests": false,        // optional; emit @smokeTests cases (default false)
+ *     "attachValidationException": true,  // optional; declare smithy.framework#ValidationException
+ *                                         // on operations with constrained input (default true)
  *     "defaultProtocol": "aws.protocols#restJson1" // optional; the client's default protocol
  *   }
  *
@@ -58,6 +60,7 @@ public final class CSharpSettings {
   private static final String GENERATE_DEPENDENCY_INJECTION = "generateDependencyInjection";
   private static final String GENERATE_FAKES = "generateFakes";
   private static final String GENERATE_SMOKE_TESTS = "generateSmokeTests";
+  private static final String ATTACH_VALIDATION_EXCEPTION = "attachValidationException";
   private static final String DEFAULT_PROTOCOL = "defaultProtocol";
 
   private final ShapeId service;
@@ -72,6 +75,7 @@ public final class CSharpSettings {
   private final boolean generateDependencyInjection;
   private final boolean generateFakes;
   private final boolean generateSmokeTests;
+  private final boolean attachValidationException;
   private final ShapeId defaultProtocol;
 
   private CSharpSettings(
@@ -86,6 +90,7 @@ public final class CSharpSettings {
       boolean generateDependencyInjection,
       boolean generateFakes,
       boolean generateSmokeTests,
+      boolean attachValidationException,
       ShapeId defaultProtocol) {
     this.service = service;
     this.closure = closure;
@@ -98,6 +103,7 @@ public final class CSharpSettings {
     this.generateDependencyInjection = generateDependencyInjection;
     this.generateFakes = generateFakes;
     this.generateSmokeTests = generateSmokeTests;
+    this.attachValidationException = attachValidationException;
     this.defaultProtocol = defaultProtocol;
   }
 
@@ -115,6 +121,7 @@ public final class CSharpSettings {
             GENERATE_DEPENDENCY_INJECTION,
             GENERATE_FAKES,
             GENERATE_SMOKE_TESTS,
+            ATTACH_VALIDATION_EXCEPTION,
             DEFAULT_PROTOCOL));
     ShapeId service =
         config.getStringMember(SERVICE).map(node -> node.expectShapeId()).orElse(null);
@@ -141,6 +148,8 @@ public final class CSharpSettings {
         config.getBooleanMemberOrDefault(GENERATE_DEPENDENCY_INJECTION, false);
     boolean generateFakes = config.getBooleanMemberOrDefault(GENERATE_FAKES, false);
     boolean generateSmokeTests = config.getBooleanMemberOrDefault(GENERATE_SMOKE_TESTS, false);
+    boolean attachValidationException =
+        config.getBooleanMemberOrDefault(ATTACH_VALIDATION_EXCEPTION, true);
     ShapeId defaultProtocol =
         config.getStringMember(DEFAULT_PROTOCOL).map(node -> node.expectShapeId()).orElse(null);
     return new CSharpSettings(
@@ -155,6 +164,7 @@ public final class CSharpSettings {
         generateDependencyInjection,
         generateFakes,
         generateSmokeTests,
+        attachValidationException,
         defaultProtocol);
   }
 
@@ -230,6 +240,15 @@ public final class CSharpSettings {
   /** Whether to generate the service's {@code @smokeTests} cases alongside the client. */
   public boolean generateSmokeTests() {
     return generateSmokeTests;
+  }
+
+  /**
+   * Whether to declare {@code smithy.framework#ValidationException} on every operation whose input
+   * is constrained, as the server returns it for them. Default true; when false, a server's
+   * constrained operations must declare it in the model. See {@code ValidationErrors}.
+   */
+  public boolean attachValidationException() {
+    return attachValidationException;
   }
 
   /**

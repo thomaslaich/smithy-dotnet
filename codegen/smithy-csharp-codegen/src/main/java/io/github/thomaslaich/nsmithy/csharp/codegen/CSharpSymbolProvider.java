@@ -7,6 +7,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
+import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import java.util.List;
 import java.util.Optional;
@@ -157,6 +158,11 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
     // runtime's type — a generated copy would be a different type the runtime never throws.
     if (ShapeSupport.isValidationException(s.getId())) {
       return RuntimeTypes.VALIDATION_EXCEPTION.toBuilder()
+          .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
+          .build();
+    }
+    if (ValidationErrors.FIELD.equals(s.getId())) {
+      return RuntimeTypes.VALIDATION_EXCEPTION_FIELD.toBuilder()
           .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
           .build();
     }
