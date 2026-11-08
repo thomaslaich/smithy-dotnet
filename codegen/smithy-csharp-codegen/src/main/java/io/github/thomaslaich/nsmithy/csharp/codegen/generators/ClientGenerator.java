@@ -74,6 +74,7 @@ public final class ClientGenerator implements Runnable {
     // Interface — IDisposable so a client that owns its HttpClient is released via `using` or DI.
     writeInterface(model, operations, interfaceName);
     writer.write("");
+    writeInputlessOverloads(model, operations, typeName, interfaceName);
 
     // Services with no supported protocol get the interface only; there is nothing to wire.
     if (defaultProtocol.isEmpty()) {
@@ -122,17 +123,22 @@ public final class ClientGenerator implements Runnable {
 
   static String paginatorPagesSignature(
       CSharpWriter writer, GenerationContext context, OperationShape op) {
+    return writer.format(
+        "$L $LPagesAsync($L, $T cancellationToken = default)",
+        paginatorPagesReturnType(writer, context, op),
+        CSharpNaming.typeName(op.getId().getName()),
+        inputParameter(writer, context, op),
+        RuntimeTypes.CANCELLATION_TOKEN);
+  }
+
+  static String paginatorPagesReturnType(
+      CSharpWriter writer, GenerationContext context, OperationShape op) {
     SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
-    String inputType = writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape())));
-    String outputType = writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())));
     return writer.format(
-        "$T<$L> $LPagesAsync($L input, $T cancellationToken = default)",
+        "$T<$L>",
         RuntimeTypes.I_ASYNC_ENUMERABLE,
-        outputType,
-        CSharpNaming.typeName(op.getId().getName()),
-        inputType,
-        RuntimeTypes.CANCELLATION_TOKEN);
+        writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))));
   }
 
   /**
@@ -142,17 +148,20 @@ public final class ClientGenerator implements Runnable {
    */
   static Optional<String> paginatorItemsSignature(
       CSharpWriter writer, GenerationContext context, PaginationInfo info) {
-    return paginatorItemElementType(writer, context, info)
-        .map(elementType ->
+    return paginatorItemsReturnType(writer, context, info)
+        .map(returnType ->
             writer.format(
-                "$T<$L> $LItemsAsync($T input, $T cancellationToken = default)",
-                RuntimeTypes.I_ASYNC_ENUMERABLE,
-                elementType,
+                "$L $LItemsAsync($L, $T cancellationToken = default)",
+                returnType,
                 CSharpNaming.typeName(info.getOperation().getId().getName()),
-                context
-                    .symbolProvider()
-                    .toSymbol(context.model().expectShape(info.getOperation().getInputShape())),
+                inputParameter(writer, context, info.getOperation()),
                 RuntimeTypes.CANCELLATION_TOKEN));
+  }
+
+  static Optional<String> paginatorItemsReturnType(
+      CSharpWriter writer, GenerationContext context, PaginationInfo info) {
+    return paginatorItemElementType(writer, context, info)
+        .map(elementType -> writer.format("$T<$L>", RuntimeTypes.I_ASYNC_ENUMERABLE, elementType));
   }
 
   /** Renders a null-safe property access chain for a member path, e.g. {@code output.A?.B}. */
@@ -192,26 +201,49 @@ public final class ClientGenerator implements Runnable {
 
   static String operationSignature(
       CSharpWriter writer, GenerationContext context, OperationShape op) {
-    SymbolProvider sp = context.symbolProvider();
-    Model model = context.model();
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
-    String inputType =
-        hasInput ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) : null;
-    String outputType =
-        hasOutput ? writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))) : null;
-    String returnType =
-        hasOutput
-            ? writer.typeName(RuntimeTypes.TASK) + "<" + outputType + ">"
-            : writer.typeName(RuntimeTypes.TASK);
-    String params = hasInput ? inputType + " input, " : "";
+    String params = hasInput ? inputParameter(writer, context, op) + ", " : "";
     return writer.format(
-        "$L $L($L$T cancellationToken = default)",
-        returnType,
-        name,
+        "$L $LAsync($L$T cancellationToken = default)",
+        operationReturnType(writer, context, op),
+        CSharpNaming.typeName(op.getId().getName()),
         params,
         RuntimeTypes.CANCELLATION_TOKEN);
+  }
+
+  static String operationReturnType(
+      CSharpWriter writer, GenerationContext context, OperationShape op) {
+    if (ShapeSupport.isUnit(op.getOutputShape())) {
+      return writer.typeName(RuntimeTypes.TASK);
+    }
+    String outputType =
+        writer.typeName(
+            context.symbolProvider().toSymbol(context.model().expectShape(op.getOutputShape())));
+    return writer.typeName(RuntimeTypes.TASK) + "<" + outputType + ">";
+  }
+
+  /** The input parameter of a client method. */
+  static String inputParameter(CSharpWriter writer, GenerationContext context, OperationShape op) {
+    return writer.typeName(
+            context.symbolProvider().toSymbol(context.model().expectShape(op.getInputShape())))
+        + " input";
+  }
+
+  /**
+   * Whether a caller may leave the input out: every member of the input structure is optional, so
+   * an empty input is a valid one, and none of them is a stream, which the caller must supply. Such
+   * an operation gets overloads without the input, as extension methods on the interface.
+   */
+  static boolean inputIsOmittable(Model model, OperationShape op) {
+    if (ShapeSupport.isUnit(op.getInputShape())) {
+      return false;
+    }
+    StructureShape input = model.expectShape(op.getInputShape(), StructureShape.class);
+    return input.members().stream()
+        .allMatch(m ->
+            ShapeSupport.isOptionalParameter(m)
+                && !ShapeSupport.isStreamingBlobMember(model, m)
+                && !ShapeSupport.isEventStreamMember(model, m));
   }
 
   // =====================================================================
@@ -254,6 +286,87 @@ public final class ClientGenerator implements Runnable {
           """);
     } finally {
       writer.popState();
+    }
+  }
+
+  /**
+   * Overloads without the input for the operations whose input may be left out: extension methods
+   * on the interface, so every implementation has them, the generated client and fakes included,
+   * without implementing them.
+   */
+  private void writeInputlessOverloads(
+      Model model, List<OperationShape> operations, String typeName, String interfaceName) {
+    List<OperationShape> omittable =
+        operations.stream().filter(op -> inputIsOmittable(model, op)).collect(Collectors.toList());
+    if (omittable.isEmpty()) {
+      return;
+    }
+    writer.pushState();
+    try {
+      writer.putContext("extensions", typeName + "Extensions");
+      writer.putContext(
+          "overloads",
+          writer.consumer(w -> {
+            for (OperationShape op : omittable) {
+              String name = CSharpNaming.typeName(op.getId().getName());
+              writeInputlessOverload(
+                  w, op, interfaceName, operationReturnType(w, context, op), name + "Async");
+              paginationInfo(context, service, op)
+                  .ifPresent(info -> {
+                    writeInputlessOverload(
+                        w,
+                        op,
+                        interfaceName,
+                        paginatorPagesReturnType(w, context, op),
+                        name + "PagesAsync");
+                    paginatorItemsReturnType(w, context, info)
+                        .ifPresent(returnType ->
+                            writeInputlessOverload(
+                                w, op, interfaceName, returnType, name + "ItemsAsync"));
+                  });
+            }
+          }));
+      writer.writeXmlDocs(
+          "Overloads of " + interfaceName + " for the operations whose input may be left out.",
+          Map.of());
+      writer.write(
+          """
+          public static class ${extensions:L}
+          {
+              ${overloads:C|}
+          }
+          """);
+      writer.write("");
+    } finally {
+      writer.popState();
+    }
+  }
+
+  private void writeInputlessOverload(
+      CSharpWriter w, OperationShape op, String interfaceName, String returnType, String method) {
+    w.pushState();
+    try {
+      w.putContext("returnType", returnType);
+      w.putContext("method", method);
+      w.putContext("interfaceName", interfaceName);
+      w.putContext("cancellationToken", RuntimeTypes.CANCELLATION_TOKEN);
+      w.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      w.putContext(
+          "input",
+          w.typeName(
+              context.symbolProvider().toSymbol(context.model().expectShape(op.getInputShape()))));
+      w.writeXmlDocs(op, Map.of());
+      w.write(
+          """
+          public static ${returnType:L} ${method:L}(this ${interfaceName:L} client, ${cancellationToken:T} cancellationToken = default)
+          {
+              ${argumentNullException:T}.ThrowIfNull(client);
+              return client.${method:L}(new ${input:L}(), cancellationToken);
+          }
+          """);
+      w.write("");
+    } finally {
+      w.popState();
     }
   }
 

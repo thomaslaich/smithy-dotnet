@@ -40,6 +40,16 @@ var client = new WeatherClient(
 
 The endpoint argument wins over `config.Endpoint` when both are supplied.
 
+Each operation is an async method that takes the operation's input record. When
+every member of the input is optional and none is a stream, the interface also
+has an overload without the input, as an extension method, so a call that needs
+nothing passes nothing:
+
+```csharp
+var cities = await client.ListCitiesAsync();
+var page = await client.ListCitiesAsync(new() { PageSize = 10 });
+```
+
 ## Configuration object
 
 `{Service}ClientConfig` is a per-service subclass of `SmithyClientConfig`. The

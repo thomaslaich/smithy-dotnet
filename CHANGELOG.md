@@ -11,6 +11,15 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Clients offer an overload without the input when it needs nothing.** When every member of an
+  operation's input is optional and none is a stream, the C# client interface gets overloads of
+  the operation and its paginators that take only a cancellation token, as extension methods, and
+  the F# client and its interface get the same overloads, so `client.ListQueuesAsync()` works. The
+  input-taking methods are unchanged, so implementations of the interface and subclasses of the
+  fake client are not affected.
+
 ## [0.18.2]
 
 A fix for five AWS services whose documentation broke the generated code under 0.18.1.

@@ -12,7 +12,7 @@ internal static class CityReport
     public static async Task<IReadOnlyList<string>> NorthernCityNamesAsync(IWeatherClient client)
     {
         var names = new List<string>();
-        await foreach (var summary in client.ListCitiesItemsAsync(new ListCitiesInput()))
+        await foreach (var summary in client.ListCitiesItemsAsync())
         {
             var city = await client.GetCityAsync(new GetCityInput(summary.CityId));
             if (city.Coordinates.Latitude > 45)
@@ -90,11 +90,23 @@ public class FakeClientTests
     }
 
     [Fact]
+    public async Task LeavingOutTheInputCallsTheOverriddenOperation()
+    {
+        // The overload without the input is an extension method on the interface
+        // that calls the virtual input-taking method, so an override answers it.
+        using var client = new TwoCitiesWeatherClient();
+
+        var cities = await client.ListCitiesAsync();
+
+        Assert.Equal(2, cities.Items.Count);
+    }
+
+    [Fact]
     public async Task PlaceholderValuesAreDeterministic()
     {
         using var client = new FakeWeatherClient();
 
-        var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
+        var time = await client.GetCurrentTimeAsync();
 
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1704067200), time.Time);
     }

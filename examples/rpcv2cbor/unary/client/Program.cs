@@ -18,7 +18,7 @@ if (args.Contains("--debug"))
 
 using var client = new WeatherClient(new Uri(endpoint), config);
 
-var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
+var time = await client.GetCurrentTimeAsync();
 Console.WriteLine($"Current time: {time.Time:u}");
 
 // Paginate through all cities, 3 per page. The generated pages paginator repeats the call

@@ -81,6 +81,9 @@ final class ClientGenerator {
             .sorted(Comparator.comparing(operation -> operation.getId().toString()))
             .toList();
     List<String> generatedNames = new ArrayList<>(List.of(client, config, clientInterface));
+    if (operations.stream().anyMatch(this::inputIsOmittable)) {
+      generatedNames.add(clientInterface + "Extensions");
+    }
     if (!serviceErrors().isEmpty()) {
       generatedNames.add(serviceErrorTypeName());
     }
@@ -93,6 +96,7 @@ final class ClientGenerator {
     writeServiceErrorType(writer);
     operations.forEach(operation -> writeErrorType(writer, operation));
     writeInterface(writer, clientInterface, operations);
+    writeInterfaceOverloads(writer, clientInterface, operations);
 
     // A service with no protocol the client knows gets the interface only.
     Optional<ProtocolInfo> protocol =
@@ -264,6 +268,10 @@ final class ClientGenerator {
             operations.forEach(operation -> {
               w.write("");
               writeOperation(w, operation);
+              if (inputIsOmittable(operation)) {
+                w.write("");
+                writeInputlessOverload(w, operation);
+              }
             })));
     context.put("forwards", forwards);
     writer.writeTemplate(
@@ -482,6 +490,94 @@ final class ClientGenerator {
             ${/canBind}\
         """,
         context);
+  }
+
+  /**
+   * Whether a caller may leave the input out: every member of the input is optional or has a
+   * default, so an empty input is a valid one, and none of them is a stream, which the caller must
+   * supply. Such an operation also gets an overload that takes only the cancellation token.
+   */
+  private boolean inputIsOmittable(OperationShape operation) {
+    if (ShapeSupport.isUnit(operation.getInputShape())) {
+      return false;
+    }
+    StructureShape input = model.expectShape(operation.getInputShape(), StructureShape.class);
+    return input.members().stream()
+        .allMatch(member ->
+            (FSharpMembers.isOptional(member) || FSharpMembers.usesDefault(member))
+                && !ShapeSupport.isStreamingBlobMember(model, member)
+                && !ShapeSupport.isEventStreamMember(model, member));
+  }
+
+  /**
+   * The empty input of an omittable operation: every optional member absent, every default used.
+   */
+  private String emptyInput(OperationShape operation) {
+    StructureShape input = model.expectShape(operation.getInputShape(), StructureShape.class);
+    String type = schemas.operationType(operation.getInputShape());
+    if (input.members().isEmpty()) {
+      return type + "()";
+    }
+    String fields =
+        input.members().stream()
+            .map(member ->
+                FSharpNaming.fieldName(member)
+                    + " = "
+                    + (FSharpMembers.usesDefault(member)
+                        ? FSharpLiterals.defaultValue(context, member)
+                        : "None"))
+            .collect(Collectors.joining("; "));
+    return "({ " + fields + " } : " + type + ")";
+  }
+
+  /** The overload of an omittable operation that takes only the cancellation token. */
+  private void writeInputlessOverload(FSharpWriter writer, OperationShape operation) {
+    Map<String, Object> values = new HashMap<>();
+    values.put("docs", FSharpWriter.docs(operation));
+    values.put("method", methodName(operation));
+    values.put("cancellationToken", CANCELLATION_TOKEN);
+    values.put("returns", returnType(operation));
+    values.put("input", emptyInput(operation));
+    writer.writeTemplate(
+        """
+        ${?docs}
+        ${docs:L|}
+        ${/docs}
+        member this.${method:L}(?cancellationToken: ${cancellationToken:L}) : ${returns:L} =
+            this.${method:L}(${input:L}, ?cancellationToken = cancellationToken)\
+        """,
+        values);
+  }
+
+  /** The same overloads on the interface, as extension members, so a caller holding it has them. */
+  private void writeInterfaceOverloads(
+      FSharpWriter writer, String clientInterface, List<OperationShape> operations) {
+    List<OperationShape> omittable = operations.stream().filter(this::inputIsOmittable).toList();
+    if (omittable.isEmpty()) {
+      return;
+    }
+    Map<String, Object> values = new HashMap<>();
+    values.put("interface", clientInterface);
+    values.put(
+        "overloads",
+        writer.consumer(w -> {
+          for (int i = 0; i < omittable.size(); i++) {
+            if (i > 0) {
+              w.write("");
+            }
+            writeInputlessOverload(w, omittable.get(i));
+          }
+        }));
+    writer.writeTemplate(
+        """
+        /// <summary>Overloads of <c>${interface:L}</c> for the operations whose input may be left out.</summary>
+        [<AutoOpen>]
+        module ${interface:L}Extensions =
+            type ${interface:L} with
+                ${overloads:C|}
+
+        """,
+        values);
   }
 
   private String methodName(OperationShape operation) {

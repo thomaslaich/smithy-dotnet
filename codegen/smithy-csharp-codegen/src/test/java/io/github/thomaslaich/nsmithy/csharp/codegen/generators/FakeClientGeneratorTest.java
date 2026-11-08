@@ -119,6 +119,14 @@ final class FakeClientGeneratorTest {
                 + " CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(generated.contains("public virtual void Dispose() { }"), generated);
+    // The overloads without the input are extension methods on the interface, so the fake and
+    // its subclasses implement the input-taking method only.
+    assertTrue(
+        generated.contains(
+            "public virtual Task<ListCitiesOutput> ListCitiesAsync(ListCitiesInput input,"
+                + " CancellationToken cancellationToken = default)"),
+        generated);
+    assertFalse(generated.contains("ClientExtensions"), generated);
   }
 
   @Test

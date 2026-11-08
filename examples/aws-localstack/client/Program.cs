@@ -11,7 +11,7 @@ using var dynamoDb = new DynamoDB20120810Client(
     endpoint,
     new() { AuthSchemes = { new AwsSigV4AuthScheme("dynamodb", region, credentials) } }
 );
-var tables = await dynamoDb.ListTablesAsync(new ListTablesInput());
+var tables = await dynamoDb.ListTablesAsync();
 var tableNames = tables.TableNames ?? [];
 Console.WriteLine(
     $"AWS JSON / DynamoDB ListTables: {tableNames.Count} table(s) [{string.Join(", ", tableNames)}]"
@@ -21,7 +21,7 @@ using var s3 = new S3Client(
     endpoint,
     new() { AuthSchemes = { new AwsSigV4AuthScheme("s3", region, credentials) } }
 );
-var buckets = await s3.ListBucketsAsync(new ListBucketsInput());
+var buckets = await s3.ListBucketsAsync();
 var bucketNames = buckets.Buckets?.Select(b => b.Name) ?? [];
 Console.WriteLine(
     $"restXml / S3 ListBuckets: {buckets.Buckets?.Count ?? 0} bucket(s) [{string.Join(", ", bucketNames)}]"
@@ -31,7 +31,7 @@ using var lambda = new LambdaClient(
     endpoint,
     new() { AuthSchemes = { new AwsSigV4AuthScheme("lambda", region, credentials) } }
 );
-var functions = await lambda.ListFunctionsAsync(new ListFunctionsInput());
+var functions = await lambda.ListFunctionsAsync();
 var functionNames = functions.Functions?.Select(f => f.FunctionName) ?? [];
 Console.WriteLine(
     $"restJson1 / Lambda ListFunctions: {functions.Functions?.Count ?? 0} function(s) [{string.Join(", ", functionNames)}]"
@@ -41,7 +41,7 @@ using var sqs = new SQSClient(
     endpoint,
     new() { AuthSchemes = { new AwsSigV4AuthScheme("sqs", region, credentials) } }
 );
-var queues = await sqs.ListQueuesAsync(new ListQueuesInput());
+var queues = await sqs.ListQueuesAsync();
 var queueUrls = queues.QueueUrls ?? [];
 Console.WriteLine(
     $"AWS Query / SQS ListQueues: {queueUrls.Count} queue(s) [{string.Join(", ", queueUrls)}]"
@@ -51,7 +51,7 @@ using var ec2 = new EC2Client(
     endpoint,
     new() { AuthSchemes = { new AwsSigV4AuthScheme("ec2", region, credentials) } }
 );
-var regions = await ec2.DescribeRegionsAsync(new DescribeRegionsInput());
+var regions = await ec2.DescribeRegionsAsync();
 var regionNames = regions.Regions?.Select(value => value.Name) ?? [];
 Console.WriteLine(
     $"EC2 Query / EC2 DescribeRegions: {regions.Regions?.Count ?? 0} region(s) [{string.Join(", ", regionNames)}]"
