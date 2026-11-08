@@ -24,9 +24,8 @@ No sockets anywhere. Throughput and tail latency under load are not measured.
 | `nsmithy` client | Generated client | Subject |
 | `hand-written` | `HttpClient` and `System.Text.Json` source-gen | Ceiling |
 | `nswag` | Generated from the emitted OpenAPI | Third party |
+| `typespec` | MVC controllers from `@typespec/http-server-csharp` 0.58.0-alpha.33 | Third party. Serves 4 of the 12 scenarios, see `stacks/TypeSpec/README.md`. |
 | gRPC | NSmithy client and server with the schema-driven Proto codec against Grpc.Net with Google.Protobuf messages | Subject and ceiling |
-
-TypeSpec is wired up but excluded. See `stacks/TypeSpec/README.md`.
 
 ## Contract
 
@@ -51,7 +50,10 @@ validate by hand so they do the same work.
    golden captures in `contract/golden/` (status, contract headers, body length
    and hash) and every client against the same reference server (method, path,
    query, headers, body, parsed values). Transport headers and trace ids are
-   excluded. When the contract changes on purpose, re-record with
+   excluded, and `Content-Type` is compared by media type only. A stack may
+   declare scenarios it cannot serve: the gate checks that each one really
+   differs, and the server suite skips them, so the stack is compared on the
+   rest. When the contract changes on purpose, re-record with
    `just bench-capture` and review the diff.
 2. **Shared business logic.** Every stack calls the same `Bench.Domain` methods.
 3. **Mapping stays in.** Stacks map domain records into their own DTOs. Real

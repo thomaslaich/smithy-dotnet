@@ -11,6 +11,7 @@
     <Project Path="stacks/GrpcNet/Bench.Stack.GrpcNet.csproj" />
     <Project Path="stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
     <Project Path="stacks/NSmithyGrpc/Bench.Stack.NSmithyGrpc.csproj" />
+    <Project Path="stacks/TypeSpec/Bench.Stack.TypeSpec.csproj" />
   </Folder>
   <Folder Name="/suites/">
     <Project Path="Benchmarks.Micro/Bench.Micro.csproj" />

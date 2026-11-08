@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -13,8 +14,9 @@ namespace Bench.Hosting;
 /// <remarks>
 /// Transport-level headers (<c>Date</c>, <c>Server</c>, <c>Content-Length</c>,
 /// framing headers) are excluded: they vary by host and by run without saying
-/// anything about whether two stacks serve the same contract. Everything that
-/// remains is contract.
+/// anything about whether two stacks serve the same contract. <c>Content-Type</c>
+/// is reduced to its media type, since a <c>charset</c> parameter says nothing
+/// about a JSON body. Everything that remains is contract.
 /// <para>
 /// Large bodies are recorded as a hash plus a length rather than inline, so the
 /// golden files stay reviewable in a diff. The comparison is exact either way.
@@ -65,7 +67,12 @@ public sealed record WireCapture(
             if (IgnoredHeaders.Contains(header.Key))
                 continue;
 
-            headers[header.Key] = string.Join(", ", header.Value);
+            headers[header.Key] = header.Key.Equals(
+                "Content-Type",
+                StringComparison.OrdinalIgnoreCase
+            )
+                ? MediaTypeHeaderValue.Parse(header.Value.First()).MediaType!
+                : string.Join(", ", header.Value);
         }
 
         return new WireCapture(

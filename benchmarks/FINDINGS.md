@@ -1,8 +1,9 @@
 # Findings
 
 Open problems the suite has surfaced. Numbers come from the committed reports
-under `results/` (REST JSON from 2026-10-28, gRPC, CBOR and XML from
-2026-10-08), Tiered PGO off, ratios within one report. Fixed items are in git
+under `results/` (REST JSON server from 2026-11-08, REST JSON codec and
+client from 2026-10-28, gRPC, CBOR and XML from 2026-10-08), Tiered PGO off,
+ratios within one report. Fixed items are in git
 history: `git log --grep '^perf'`.
 
 ## Open
@@ -38,18 +39,32 @@ mutable DTOs. Closing it needs a pooled body buffer and a span-based codec API.
 
 ### HTTP binding on the server
 
-`ServerBenchmarks` `search-items`: 18.3 µs and 22.5 KB against 9.15 µs and
-14.1 KB for the minimal API, a 2.0× gap. `get-item-hit` is 1.25× and
-`list-items-100` 0.95×, so the body is not the difference. The scenario's six
+`ServerBenchmarks` `search-items`: 16.4 µs and 20.8 KB against 9.7 µs and
+14.1 KB for the minimal API, a 1.7× gap. `get-item-hit` is 1.12× and
+`list-items-100` 0.87×, so the body is not the difference. The scenario's six
 query parameters, four request headers and one response header are the likely
 cost. Not yet attributed.
 
 ### A modeled error costs an exception
 
-`get-item-miss` is 17.4 µs against 5.2 µs in the report. Measured awaited, as
+`get-item-miss` is 16.4 µs against 6.1 µs in the report. Measured awaited, as
 Kestrel runs requests, the gap is about 2×, of which about 2 µs is the throw and
 catch. The exception object and message cost nothing measurable. Removing the
 throw needs a way for a handler to return a modeled error instead of raising it.
+
+### The TypeSpec server costs 1.5× the hand-written MVC baseline on fixed overhead
+
+`ServerBenchmarks`, on the four scenarios it serves. `get-item-hit` is 15.4 µs
+and 14.0 KB against 10.3 µs and 13.0 KB for hand-written MVC and 6.9 µs and
+11.5 KB for NSmithy. The gap narrows with payload: 1.24× MVC on
+`list-items-100` and 1.19× on `list-items-10000`, with allocations within 1 %
+of MVC at every size. So it is mostly a fixed per-request cost, about 5 µs over
+the same hosting model, not a serialization cost. Not yet attributed. The
+generated models route every constrained string through a `JsonConverter`
+that runs `Regex.IsMatch` on write, and the host uses reflection-based
+`System.Text.Json`, which are the two visible differences from the MVC
+baseline. Against NSmithy the end-to-end gap is 2.2× on `get-item-hit` and
+1.5× on the list scenarios.
 
 ### Proto codec against Google.Protobuf
 
@@ -83,9 +98,11 @@ that is explained, do not quote "n % of hand-written" for this scenario.
 
 - No socket-level suite. Throughput, tail latency under concurrency and RSS are
   not measured.
-- No third-party server. TypeSpec's C# server emitter (0.58.0-alpha) cannot
-  serve the contract. NSwag clients discard response headers; the suite reads
-  `x-total-count` through its `ProcessResponse` hook.
+- The TypeSpec server is compared on `get-item-hit` and the three `list-items`
+  sizes only. Its emitter (0.58.0-alpha.33) puts response headers and status
+  codes into the body and does not enforce query constraints, so the other
+  eight scenarios are unserved. NSwag clients discard response headers; the
+  suite reads `x-total-count` through its `ProcessResponse` hook.
 - CBOR and XML have codec coverage only, no client or server suite.
 - No wide structures. The widest shape has six members, so the linear member
   scan on the read path is never stressed.

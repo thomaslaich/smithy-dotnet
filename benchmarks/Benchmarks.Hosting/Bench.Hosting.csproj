@@ -18,5 +18,6 @@
     <ProjectReference Include="../stacks/GrpcNet/Bench.Stack.GrpcNet.csproj" />
     <ProjectReference Include="../stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
     <ProjectReference Include="../stacks/NSmithyGrpc/Bench.Stack.NSmithyGrpc.csproj" />
+    <ProjectReference Include="../stacks/TypeSpec/Bench.Stack.TypeSpec.csproj" />
   </ItemGroup>
 </Project>
