@@ -11,20 +11,25 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.19.0]
+
+Operations whose input members are all optional no longer need an input argument, and `@smokeTests`
+cases generate runnable smoke tests.
+
 ### Added
 
-- **Clients offer an overload without the input when it needs nothing.** When every member of an
-  operation's input is optional and none is a stream, the C# client interface gets overloads of
-  the operation and its paginators that take only a cancellation token, as extension methods, and
-  the F# client and its interface get the same overloads, so `client.ListQueuesAsync()` works. The
-  input-taking methods are unchanged, so implementations of the interface and subclasses of the
-  fake client are not affected.
-- Generated smoke tests: with `generateSmokeTests`, a client gains `{Service}SmokeTests.All`,
-  one `SmithySmokeTest` per `@smokeTests` case, which runs the operation against the live
-  service and checks the expected success or error without a test framework. The AWS
-  integration applies `aws.test` vendor params such as the region, FIPS, dual-stack, and S3
-  addressing.
-- `SmokeTestConfigSection`, a code section integrations append to through Smithy's
+- **Overloads without the input.** When every member of an operation's input is optional and none
+  is a stream, the C# client interface gets overloads of the operation and its paginators that take
+  only a cancellation token, as extension methods in `{Service}ClientExtensions`, and the F# client
+  and its interface get the same overloads, so `client.ListQueuesAsync()` works. The input-taking
+  methods are unchanged, so implementations of the interface and subclasses of the fake client are
+  not affected.
+- **`generateSmokeTests` setting of `csharp-codegen`.** A client gains `{Service}SmokeTests.All`,
+  one `SmithySmokeTest` per `@smokeTests` case, which runs the operation against the live service
+  and checks the expected success or error without a test framework. The AWS integration applies
+  `aws.test` vendor params such as the region, FIPS, dual-stack, and S3 addressing. See
+  [Smoke tests](https://thomaslaich.github.io/smithy-dotnet/guides/client-configuration/smoke-tests/).
+- **`SmokeTestConfigSection`**, a code section integrations append to through Smithy's
   `interceptors` hook to apply a smoke test's vendor params to its configuration.
 
 ## [0.18.2]
@@ -953,7 +958,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.2...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.2...v0.19.0
 [0.18.2]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.17.0...v0.18.0
