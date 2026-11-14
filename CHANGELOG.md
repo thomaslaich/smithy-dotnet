@@ -27,6 +27,14 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   declares the error get a `Result` where they may have had a plain output, and a new case to
   match; `try ... with :? ValidationException` around such a call no longer fires. See
   [Validation](https://thomaslaich.github.io/smithy-dotnet/servers/validation/#declaring-the-error).
+- **Structure builders record which required members were read.** Every generated builder derives
+  from `StructBuilder` (or `LargeStructBuilder` past 64 required members), and
+  `StructSchema.ReadMember` and `CompleteMembers` decide once, for every codec and HTTP binding,
+  whether a required member nobody set fails or is filled. Behaviour does not change: a server
+  still rejects an omitted required member, including one with a default, except an empty
+  `@httpPayload`, which keeps its default. **BREAKING** for hand-written structure schemas: a
+  builder with required members must derive from `StructBuilder`, and readers call `ReadMember`
+  instead of `DeserializeMember`.
 
 ### Added
 
