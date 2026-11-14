@@ -13,6 +13,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **Servers serialize response bodies into pooled memory.** The REST, RPCv2 and gRPC servers write
+  a unary response body into pooled memory the response owns rather than a new array, and gRPC
+  frames it in place, which cuts what a large response allocates by up to a third.
 - **A server requires the model to declare `ValidationException`.** The server returns
   `smithy.framework#ValidationException` for a request that violates the model's constraint traits,
   and the model is the contract for every client of the service, whichever toolchain generates it.
@@ -47,6 +50,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Codecs serialize into an `IBufferWriter<byte>`.** `ICodec<T>` and
+  `IProjectionCodec<T, TBuilder>` can write into one; the JSON, CBOR and proto codecs do so
+  directly, and other codecs copy their array in. `SmithyPooledBuffer` is a growable buffer of
+  pooled memory, and `SmithyHttpServerResponse.SingleChunk(SmithyPooledBuffer)` a body that owns
+  one. `SmithyHttpServerResponse` is now `IDisposable` and returns that memory when disposed.
 - **`attachValidationException` setting** of `csharp-codegen` and `fsharp-codegen`, default
   `false`, for a model the project does not own: the generator declares
   `smithy.framework#ValidationException` on every operation whose input is constrained, so a

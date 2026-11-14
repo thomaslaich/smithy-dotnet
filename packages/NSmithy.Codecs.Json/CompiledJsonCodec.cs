@@ -1,3 +1,4 @@
+using System.Buffers;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 
@@ -22,19 +23,31 @@ internal sealed class CompiledJsonCodec<T>(
     public byte[] Serialize(T value)
     {
         var buffer = PooledByteBufferWriterCache.Rent(sizeHint);
-        var writer = JsonWriterCache.Rent(buffer);
         try
         {
-            var serializer = JsonShapeSerializer.ForRoot(writer, root, materializeTopLevelDefaults);
-            schema.Write(MemberIndex.Root, value, ref serializer);
-            writer.Flush();
+            Serialize(value, buffer);
             sizeHint = buffer.WrittenCount;
             return buffer.WrittenSpan.ToArray();
         }
         finally
         {
-            JsonWriterCache.Return(writer);
             PooledByteBufferWriterCache.Return(buffer);
+        }
+    }
+
+    public void Serialize(T value, IBufferWriter<byte> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        var writer = JsonWriterCache.Rent(destination);
+        try
+        {
+            var serializer = JsonShapeSerializer.ForRoot(writer, root, materializeTopLevelDefaults);
+            schema.Write(MemberIndex.Root, value, ref serializer);
+            writer.Flush();
+        }
+        finally
+        {
+            JsonWriterCache.Return(writer);
         }
     }
 
@@ -62,7 +75,22 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
     public byte[] Serialize(T value)
     {
         var buffer = PooledByteBufferWriterCache.Rent(sizeHint);
-        var writer = JsonWriterCache.Rent(buffer);
+        try
+        {
+            Serialize(value, buffer);
+            sizeHint = buffer.WrittenCount;
+            return buffer.WrittenSpan.ToArray();
+        }
+        finally
+        {
+            PooledByteBufferWriterCache.Return(buffer);
+        }
+    }
+
+    public void Serialize(T value, IBufferWriter<byte> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        var writer = JsonWriterCache.Rent(destination);
         try
         {
             JsonShapeSerializer.WriteObject(
@@ -73,13 +101,10 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
                 value
             );
             writer.Flush();
-            sizeHint = buffer.WrittenCount;
-            return buffer.WrittenSpan.ToArray();
         }
         finally
         {
             JsonWriterCache.Return(writer);
-            PooledByteBufferWriterCache.Return(buffer);
         }
     }
 

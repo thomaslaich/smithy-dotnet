@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace NSmithy.Core.Serde;
 
 // Codecs serialize Smithy shapes to and from the wire. The wire is always bytes;
@@ -6,6 +8,9 @@ namespace NSmithy.Core.Serde;
 public interface ICodec<TValue>
 {
     byte[] Serialize(TValue value);
+
+    void Serialize(TValue value, IBufferWriter<byte> destination) =>
+        destination.Write(Serialize(value));
 
     TValue Deserialize(byte[] payload);
 }
@@ -75,6 +80,9 @@ public interface IProjectionCodecFactory : ICodecFactory
 public interface IProjectionCodec<TValue, in TBuilder>
 {
     byte[] Serialize(TValue value);
+
+    void Serialize(TValue value, IBufferWriter<byte> destination) =>
+        destination.Write(Serialize(value));
 
     void ReadInto(byte[] payload, TBuilder builder);
 }
