@@ -6,6 +6,7 @@ use alloy#simpleRestJson
 use aws.protocols#restJson1
 use smithy.protocols#rpcv2Cbor
 use smithy.protocols#rpcv2Json
+use smithy.framework#ValidationException
 use example.shared#Money
 use smithy.ai#prompts
 
@@ -54,7 +55,7 @@ operation Order {
         @required
         receipt: Receipt
     }
-    errors: [OutOfStock, Throttled]
+    errors: [OutOfStock, Throttled, ValidationException]
 }
 
 @readonly
@@ -70,6 +71,7 @@ operation CloseTable {
         @httpLabel
         table: String
     }
+    errors: [ValidationException]
 }
 
 structure OrderForTableArguments {

@@ -2,6 +2,7 @@ $version: "2"
 
 namespace example.weather
 
+use smithy.framework#ValidationException
 use smithy.protocols#rpcv2Cbor
 
 /// Provides weather forecasts.
@@ -15,6 +16,7 @@ service Weather {
     version: "2006-03-01"
     resources: [City]
     operations: [GetCurrentTime, GetFlakyForecast]
+    errors: [ValidationException]
 }
 
 /// A city with a geographic location and an associated weather forecast.

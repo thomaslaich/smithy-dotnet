@@ -3,6 +3,7 @@ $version: "2"
 namespace example.deployments
 
 use aws.protocols#restJson1
+use smithy.framework#ValidationException
 use smithy.waiters#waitable
 
 /// Deploys releases. A deployment runs in the background after it is created.
@@ -10,6 +11,7 @@ use smithy.waiters#waitable
 service Deployments {
     version: "2026-01-01"
     operations: [CreateDeployment, GetDeployment]
+    errors: [ValidationException]
 }
 
 /// Starts a deployment and returns at once, while it is still pending.

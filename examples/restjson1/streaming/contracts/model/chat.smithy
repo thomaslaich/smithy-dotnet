@@ -4,11 +4,13 @@ namespace example.chat
 
 use aws.protocols#restJson1
 use smithy.api#streaming
+use smithy.framework#ValidationException
 
 @restJson1
 service ChatService {
     version: "2026-07-30"
     operations: [WatchRoom, UploadTranscript, Chat]
+    errors: [ValidationException]
 }
 
 /// Server-streaming over restJson1: one request, many AWS event-stream frames.

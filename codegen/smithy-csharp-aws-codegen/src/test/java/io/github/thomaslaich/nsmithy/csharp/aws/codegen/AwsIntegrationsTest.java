@@ -277,6 +277,9 @@ class AwsIntegrationsTest {
                     ObjectNode.builder()
                         .withMember("service", Node.from(service))
                         .withMember("baseNamespace", Node.from(""))
+                        // A client of an AWS service; its model does not declare
+                        // ValidationException.
+                        .withMember("generateServer", Node.from(false))
                         .build())
                 .build());
     return Files.readString(tempDir.resolve(file));

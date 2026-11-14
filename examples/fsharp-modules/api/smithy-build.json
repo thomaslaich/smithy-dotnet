@@ -2,6 +2,6 @@
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"]
+    "dependencies": ["software.amazon.smithy:smithy-validation-model:1.74.1", "software.amazon.smithy:smithy-aws-traits:1.74.1"]
   }
 }

@@ -38,6 +38,7 @@ dependencies {
     // the unstable trait definition into each contracts project.
     runtimeOnly("software.amazon.smithy.java:smithy-ai-traits:$smithyAiTraitsVersion")
 
+    testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")

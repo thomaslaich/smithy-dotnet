@@ -2,10 +2,13 @@ $version: "2"
 
 namespace nsmithy.tests.cbor
 
+use smithy.framework#ValidationException
+
 /// Shapes the cbor tests exercise, generated so the tests use the same schemas a consumer would.
 service Fixtures {
     version: "1"
     operations: [UseShapes]
+    errors: [ValidationException]
 }
 
 operation UseShapes {

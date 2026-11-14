@@ -14,8 +14,8 @@ import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
 
 /**
- * {@code smithy.framework#ValidationException} on the operations whose input the server validates:
- * a case of the operation's error union, bound to the runtime's type.
+ * {@code smithy.framework#ValidationException}, which a model declares on the operations whose
+ * input the server validates: a case of the operation's error union, bound to the runtime's type.
  */
 class ValidationExceptionTest {
 
@@ -33,6 +33,7 @@ class ValidationExceptionTest {
       namespace example.cafe
 
       use aws.protocols#restJson1
+      use smithy.framework#ValidationException
 
       @restJson1
       service Cafe {
@@ -40,7 +41,7 @@ class ValidationExceptionTest {
           operations: [Order, Browse, Ping]
       }
 
-      /// A constrained input and an error of its own.
+      /// A constrained input, so the model declares the error next to the operation's own.
       @http(method: "POST", uri: "/orders")
       operation Order {
           input := {
@@ -52,7 +53,7 @@ class ValidationExceptionTest {
               @required
               id: String
           }
-          errors: [SoldOut]
+          errors: [SoldOut, ValidationException]
       }
 
       /// An input the server never validates, and no errors.
@@ -78,6 +79,12 @@ class ValidationExceptionTest {
       @httpError(409)
       structure SoldOut {}
       """;
+
+  /** The same model without the declaration. */
+  private static final String UNDECLARED =
+      MODEL
+          .replace("use smithy.framework#ValidationException\n", "")
+          .replace("errors: [SoldOut, ValidationException]", "errors: [SoldOut]");
 
   /** A stand-in for the AWS traits package, which defines the real trait. */
   private static final String REST_JSON_1 =
@@ -150,12 +157,9 @@ class ValidationExceptionTest {
   }
 
   @Test
-  void attachingCanBeTurnedOffForAClient() {
+  void aClientFollowsAModelThatDoesNotDeclareTheError() {
     String client =
-        generate(
-                settings()
-                    .withMember("attachValidationException", false)
-                    .withMember("generateServer", false))
+        generate(UNDECLARED, settings().withMember("generateServer", false))
             .expectFileString(CLIENT);
 
     assertTrue(
@@ -165,15 +169,23 @@ class ValidationExceptionTest {
   }
 
   @Test
-  void aServerThatDoesNotAttachMustDeclareTheError() {
+  void aServerRequiresTheModelToDeclareTheError() {
     CodegenException error =
-        assertThrows(
-            CodegenException.class,
-            () -> generate(settings().withMember("attachValidationException", false)));
+        assertThrows(CodegenException.class, () -> generate(UNDECLARED, settings()));
 
     assertTrue(
         error.getMessage().startsWith("Operation example.cafe#Order takes input"),
         error.getMessage());
+  }
+
+  @Test
+  void attachingDeclaresTheErrorForAModelThatDoesNot() {
+    String client =
+        generate(UNDECLARED, settings().withMember("attachValidationException", true))
+            .expectFileString(CLIENT);
+
+    assertTrue(client.contains("type OrderError =\n    | SoldOut of"), client);
+    assertTrue(client.contains("| ValidationException of"), client);
   }
 
   private static ObjectNode.Builder settings() {
@@ -181,10 +193,15 @@ class ValidationExceptionTest {
   }
 
   private static MockManifest generate(ObjectNode.Builder settings) {
+    return generate(MODEL, settings);
+  }
+
+  private static MockManifest generate(String source, ObjectNode.Builder settings) {
     Model model =
         Model.assembler()
+            .discoverModels() // the validation model's shapes
             .addUnparsedModel("rest-json-1.smithy", REST_JSON_1)
-            .addUnparsedModel("model.smithy", MODEL)
+            .addUnparsedModel("model.smithy", source)
             .assemble()
             .unwrap();
     MockManifest manifest = new MockManifest();

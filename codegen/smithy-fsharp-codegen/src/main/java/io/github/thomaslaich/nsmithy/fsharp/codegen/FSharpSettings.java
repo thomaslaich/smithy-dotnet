@@ -10,8 +10,8 @@
  *     "baseNamespace": "MyOrg",                // optional; prepended to PascalCase(smithyNamespace)
  *     "generateClient": true,                  // optional; emit the service's client (default true)
  *     "generateServer": true,                  // optional; emit the service's server (default true)
- *     "attachValidationException": true,       // optional; declare smithy.framework#ValidationException
- *                                              // on operations with constrained input (default true)
+ *     "attachValidationException": false,      // optional; declare smithy.framework#ValidationException
+ *                                              // for a model you do not own (default false)
  *     "defaultProtocol": "aws.protocols#restJson1" // optional; the client's default protocol
  *   }
  *
@@ -106,7 +106,7 @@ public final class FSharpSettings {
         config.getStringMemberOrDefault(BASE_NAMESPACE, ""),
         config.getBooleanMemberOrDefault(GENERATE_CLIENT, true),
         config.getBooleanMemberOrDefault(GENERATE_SERVER, true),
-        config.getBooleanMemberOrDefault(ATTACH_VALIDATION_EXCEPTION, true),
+        config.getBooleanMemberOrDefault(ATTACH_VALIDATION_EXCEPTION, false),
         config.getStringMember(DEFAULT_PROTOCOL).map(StringNode::expectShapeId).orElse(null));
   }
 
@@ -166,8 +166,8 @@ public final class FSharpSettings {
 
   /**
    * Whether to declare {@code smithy.framework#ValidationException} on every operation whose input
-   * is constrained, as the server returns it for them. Default true; when false, a server's
-   * constrained operations must declare it in the model. See {@code ValidationErrors}.
+   * is constrained, for a model the project does not own. Default false: a server's constrained
+   * operations must declare it in the model. See {@code ValidationErrors}.
    */
   public boolean attachValidationException() {
     return attachValidationException;

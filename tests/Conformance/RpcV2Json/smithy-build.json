@@ -7,6 +7,7 @@
       }
     ],
     "dependencies": [
+      "software.amazon.smithy:smithy-validation-model:1.74.1",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "software.amazon.smithy:smithy-protocol-traits:1.74.1",
       "software.amazon.smithy:smithy-protocol-tests:1.74.1"
@@ -26,6 +27,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "smithy.protocoltests.rpcv2Json#RpcV2JsonProtocol",
           "baseNamespace": ""
         }

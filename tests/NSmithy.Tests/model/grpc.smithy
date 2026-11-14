@@ -3,11 +3,13 @@ $version: "2"
 namespace nsmithy.tests.grpc
 
 use alloy.proto#protoIndex
+use smithy.framework#ValidationException
 
 /// Shapes the grpc tests exercise, generated so the tests use the same schemas a consumer would.
 service Fixtures {
     version: "1"
     operations: [SayHello, WatchConstrained, Watch, Upload, Chat, UseShapes]
+    errors: [ValidationException]
 }
 
 operation SayHello {

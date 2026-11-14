@@ -6,11 +6,13 @@ use alloy.proto#grpc
 use alloy.proto#protoIndex
 use alloy.proto#protoNumType
 use smithy.api#streaming
+use smithy.framework#ValidationException
 
 @grpc
 service ChatService {
     version: "2026-06-24"
     operations: [WatchRoom, UploadTranscript, Chat]
+    errors: [ValidationException]
 }
 
 /// Server-streaming: one request, many events.

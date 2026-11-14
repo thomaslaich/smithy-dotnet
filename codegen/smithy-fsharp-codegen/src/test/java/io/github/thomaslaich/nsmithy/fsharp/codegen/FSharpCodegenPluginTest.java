@@ -24,6 +24,7 @@ class FSharpCodegenPluginTest {
       $version: "2"
       namespace a.kitchen
 
+      use smithy.framework#ValidationException
       use z.shared#Money
 
       service Kitchen {
@@ -40,7 +41,7 @@ class FSharpCodegenPluginTest {
           output := {
               receipt: Receipt
           }
-          errors: [OutOfStock]
+          errors: [OutOfStock, ValidationException]
       }
 
       structure Dish {
@@ -229,7 +230,7 @@ class FSharpCodegenPluginTest {
   }
 
   private static MockManifest generate(ObjectNode settings, String... models) {
-    var assembler = Model.assembler();
+    var assembler = Model.assembler().discoverModels(); // the validation model's shapes
     for (int i = 0; i < models.length; i++) {
       assembler.addUnparsedModel("model" + i + ".smithy", models[i]);
     }

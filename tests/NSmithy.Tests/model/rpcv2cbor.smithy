@@ -2,10 +2,13 @@ $version: "2"
 
 namespace nsmithy.tests.rpcv2cbor
 
+use smithy.framework#ValidationException
+
 /// Shapes the rpcv2cbor tests exercise, generated so the tests use the same schemas a consumer would.
 service Fixtures {
     version: "1"
     operations: [Watch, WatchWithInitial, Upload, UploadWithInitial, Chat, Talk, Converse]
+    errors: [ValidationException]
 }
 
 structure Echo {
