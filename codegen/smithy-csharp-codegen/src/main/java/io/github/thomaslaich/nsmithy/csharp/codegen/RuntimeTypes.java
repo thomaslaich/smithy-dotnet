@@ -61,6 +61,8 @@ public final class RuntimeTypes {
   public static final Symbol MAP_SCHEMA = type("NSmithy.Core.Serde.MapSchema");
   public static final Symbol SHAPE_KIND = type("NSmithy.Core.ShapeKind");
   public static final Symbol STRUCT_SCHEMA = type("NSmithy.Core.Serde.StructSchema");
+  public static final Symbol STRUCT_BUILDER = type("NSmithy.Core.Serde.StructBuilder");
+  public static final Symbol LARGE_STRUCT_BUILDER = type("NSmithy.Core.Serde.LargeStructBuilder");
   public static final Symbol UNION_SCHEMA = type("NSmithy.Core.Serde.UnionSchema");
   public static final Symbol MISSING_REQUIRED_MEMBER_EXCEPTION =
       type("NSmithy.Core.Serde.MissingRequiredMemberException");

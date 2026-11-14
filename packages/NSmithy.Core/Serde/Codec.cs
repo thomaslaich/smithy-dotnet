@@ -34,6 +34,13 @@ public sealed record CodecFactoryOptions
     /// top-level structure. Ignored by formats that do not support it.
     /// </summary>
     public KeyValuePair<string, string>? Discriminator { get; init; }
+
+    /// <summary>
+    /// How the codec holds what it reads to the model, overriding the factory's own mode, which is
+    /// <see cref="WireReadMode.Strict"/> unless the factory says otherwise. Clients read responses
+    /// and errors <see cref="WireReadMode.Lenient"/>; see <see cref="WireReadMode"/>.
+    /// </summary>
+    public WireReadMode? ReadMode { get; init; }
 }
 
 /// <summary>Creates complete codecs from Smithy schemas.</summary>

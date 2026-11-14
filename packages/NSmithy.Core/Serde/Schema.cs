@@ -310,6 +310,12 @@ public sealed class MemberSchema
 
     public bool IsRequired { get; }
 
+    internal bool HasDefault =>
+        MemberTraits.TryGetValue(DefaultTrait, out var trait)
+        && trait.Value.Kind != DocumentKind.Null;
+
+    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
+
     /// <summary>The effective trait: one on the member wins over the same trait on its target.</summary>
     public Trait? GetTrait(ShapeId id) =>
         MemberTraits.TryGetValue(id, out var trait) ? trait : Target.GetTrait(id);
@@ -349,6 +355,13 @@ public interface IStructSchema<T> : IStructSchema
 
     T BuildEmpty();
 
+    /// <summary>
+    /// Builds the structure a client reads from an empty payload: each required member at its zero
+    /// value (see <see cref="StructSchema{T, TBuilder}.CompleteMembers"/>), and each other member
+    /// at its modeled default or unset.
+    /// </summary>
+    T BuildZeroValue();
+
     /// <summary>Writes each member of <paramref name="value"/> under its index.</summary>
     void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer, allows ref struct;
@@ -372,6 +385,8 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     private readonly MemberSchema[] members;
     private readonly Dictionary<string, MemberSchema> membersByName;
 
+    private readonly RequiredMembers required;
+
     protected StructSchema(
         ShapeId id,
         IEnumerable<MemberSchema> members,
@@ -386,6 +401,7 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
             member => member,
             StringComparer.Ordinal
         );
+        required = new RequiredMembers(id, this.members, typeof(TBuilder));
     }
 
     public IReadOnlyList<MemberSchema> Members => members;
@@ -414,7 +430,11 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     public abstract void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer, allows ref struct;
 
-    public abstract void DeserializeMember<TDeserializer>(
+    /// <summary>
+    /// Sets the member at <paramref name="index"/> on <paramref name="builder"/>. Generated code
+    /// implements it; readers call <see cref="ReadMember"/>, which also records the member as set.
+    /// </summary>
+    protected abstract void DeserializeMember<TDeserializer>(
         TBuilder builder,
         int index,
         ref TDeserializer deserializer
@@ -426,6 +446,94 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     public abstract T Build(TBuilder builder);
 
     public T BuildEmpty() => Build(CreateTypedBuilder());
+
+    /// <summary>
+    /// Reads one member into <paramref name="builder"/> and records that the payload set it. Every
+    /// reader goes through here rather than <see cref="DeserializeMember"/>, so
+    /// <see cref="CompleteMembers"/> knows which required members arrived.
+    /// </summary>
+    public void ReadMember<TDeserializer>(
+        TBuilder builder,
+        int index,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct
+    {
+        MarkMemberSet(builder, index);
+        DeserializeMember(builder, index, ref deserializer);
+    }
+
+    /// <summary>
+    /// Records that a binding supplied a member without reading a value, such as an empty
+    /// <c>@httpPayload</c>, which keeps the member's modeled default.
+    /// </summary>
+    public void MarkMemberSet(TBuilder builder, int index)
+    {
+        var ordinal = required.OrdinalOf(index);
+        if (ordinal >= 0)
+        {
+            Presence(builder).MarkSet(ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Finishes reading <paramref name="builder"/>: each required member no reader set, including
+    /// one with a modeled default, throws <see cref="MissingRequiredMemberException"/>, as a server
+    /// rejects it. Read <see cref="WireReadMode.Lenient"/>, as a client reads, it instead takes its
+    /// zero value, Smithy's client error correction: <c>false</c>, <c>0</c>, an empty string,
+    /// blob, list, or map, the epoch, a null document, an enum's unknown value, or a structure
+    /// completed the same way. A member with a modeled default keeps it, and a union, which has no
+    /// zero value, still throws. A null a payload sent for a member never sets it, so it counts as
+    /// missing.
+    /// </summary>
+    public void CompleteMembers(TBuilder builder, WireReadMode mode)
+    {
+        if (required.Count == 0)
+        {
+            return;
+        }
+
+        var presence = Presence(builder);
+        for (var ordinal = 0; ordinal < required.Count; ordinal++)
+        {
+            if (presence.IsSet(ordinal))
+            {
+                continue;
+            }
+
+            var index = required.IndexOf(ordinal);
+            if (mode == WireReadMode.Strict)
+            {
+                throw new MissingRequiredMemberException(members[index].Name);
+            }
+
+            FillMissingMember(builder, index);
+        }
+    }
+
+    // The constructor checked that a builder with required members to track is a StructBuilder.
+    private static StructBuilder Presence(TBuilder builder) =>
+        System.Runtime.CompilerServices.Unsafe.As<TBuilder, StructBuilder>(ref builder);
+
+    /// <inheritdoc cref="IStructSchema{T}.BuildZeroValue"/>
+    public T BuildZeroValue()
+    {
+        var builder = CreateTypedBuilder();
+        CompleteMembers(builder, WireReadMode.Lenient);
+        return Build(builder);
+    }
+
+    // A member with a modeled default already holds it; any other takes its target's zero value.
+    private void FillMissingMember(TBuilder builder, int index)
+    {
+        if (members[index].HasDefault)
+        {
+            return;
+        }
+
+        var deserializer = new ZeroValueDeserializer(members[index].Name);
+        DeserializeMember(builder, index, ref deserializer);
+    }
 
     public void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer, allows ref struct =>
@@ -453,7 +561,7 @@ public sealed class UnitSchema : StructSchema<SmithyUnit, SmithyUnit>
         ref TSerializer serializer
     ) { }
 
-    public override void DeserializeMember<TDeserializer>(
+    protected override void DeserializeMember<TDeserializer>(
         SmithyUnit builder,
         int index,
         ref TDeserializer deserializer

@@ -65,7 +65,7 @@ public sealed record class MenuItem(Food Food, float Price);
 namespace Example.Pizza.Schemas;
 public static partial class MenuItemSchema
 {
-    public sealed class Builder { /* ... */ }
+    public sealed class Builder : StructBuilder { /* ... */ }
 
     public static Schema<MenuItem> Schema { get; } = new GeneratedSchema();
 
@@ -133,7 +133,7 @@ references:
 // structure Rating { @required title: String, @range(min: 1, max: 5) score: Integer, author: User }
 public static partial class RatingSchema
 {
-    public sealed class Builder
+    public sealed class Builder : StructBuilder
     {
         public string? Title { get; set; }
         public int? Score { get; set; }
@@ -168,7 +168,7 @@ public static partial class RatingSchema
             Target2.Write(2, value.Author, ref serializer);
         }
 
-        public override void DeserializeMember<TDeserializer>(
+        protected override void DeserializeMember<TDeserializer>(
             Builder builder,
             int index,
             ref TDeserializer deserializer)
@@ -204,9 +204,39 @@ a type that says whether it is present, such as F#'s `option`. Each member costs
 a delegate call and a generic virtual call more than generated straight-line
 code.
 
-`Build` is where a required member absent from the payload fails, throwing
-where the codec can turn it into a modeled error. A defaulted member's builder
-property starts at its modeled default, so an absent member keeps it.
+Every builder derives from `StructBuilder`, which records which members a
+reader set. Readers set a member through `StructSchema.ReadMember`, never by
+calling `DeserializeMember` directly, so presence is tracked in one place for
+every codec and HTTP binding. A defaulted member's builder property starts at
+its modeled default, and a value-type member at zero, so the property alone
+cannot tell an absent member from a sent one; the builder can.
+
+Whoever reads the last member of a structure calls
+`StructSchema.CompleteMembers` before `Build`: a codec at the end of each
+structure it reads, and an HTTP protocol once it has read the URI, headers,
+query, payload, and body into one builder. On a server, a required member no
+reader set fails with `MissingRequiredMemberException`, which the runtime turns
+into a modeled error. That includes a required member with a default, which the
+spec still requires a caller to send, and a member sent as null, which never
+counts as set. The one exception is an empty `@httpPayload`, which keeps the
+member's default and counts as sent.
+
+A client is not authoritative for `@required`, so it reads outputs and errors
+`WireReadMode.Lenient`. A required member no reader set then takes its zero
+value, Smithy's
+[client error correction](https://smithy.io/2.0/spec/aggregate-types.html#client-error-correction):
+`false`, `0`, an empty string, blob, list, or map, the epoch, a null document,
+an enum's unknown value, or a structure filled the same way. A member with a
+modeled default keeps it. `CompleteMembers` runs the member's own
+`DeserializeMember` against a deserializer that returns zero values, so no
+generated code knows about it, and `BuildZeroValue` completes a fresh builder
+the same way. A union has no zero value and still fails.
+
+Protocol Buffers is the exception: proto3 leaves a zero value off the wire, so
+presence says nothing about what the sender meant. Its codec records presence
+but never completes. An absent repeated or map field reads as an empty
+collection, and the generated `Build` still rejects a required member that
+stayed unset.
 
 For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
 that references the input and output schemas, the operation traits, and the
@@ -467,6 +497,13 @@ implements only `ICodecFactory`, because gRPC always encodes complete messages.
 `FromMember` applies traits declared on the member, for a payload member whose
 traits control its target's wire representation (`@xmlName`,
 `@timestampFormat`).
+
+A codec reads `WireReadMode.Strict`, as a server reads, unless
+`CodecFactoryOptions.ReadMode` says otherwise. The protocols pass
+`WireReadMode.Lenient` for what a client reads: a `date-time` with a UTC
+offset is accepted, and a required member nobody set takes its zero value. A
+reader that does not say which side it is on therefore keeps the server's
+rules.
 
 A projection codec reads into a builder rather than producing a value. A
 protocol creates one builder per request, lets the HTTP binding deserializer and

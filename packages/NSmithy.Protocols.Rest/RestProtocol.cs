@@ -165,19 +165,11 @@ public static class RestProtocol
         var labels = ExtractLabels(binding.UriTemplate, request.RequestUri);
         var query = ParseQuery(request.RequestUri);
 
-        // A member bound to the URI or headers is never seen by the body codec, so this is the only
-        // place its absence is still observable: once the builder is finalized a missing value-type
-        // member has already defaulted, and neither the finalizer nor the validator can tell it from
-        // a value the caller actually sent.
         foreach (var label in bound.Labels)
         {
             if (labels.TryGetValue(label.MemberName, out var value))
             {
                 bound.ReadText(builder, label, value);
-            }
-            else if (label.IsRequired)
-            {
-                throw new MissingRequiredMemberException(label.MemberName);
             }
         }
 
@@ -186,10 +178,6 @@ public static class RestProtocol
             if (TryGetFirstHeader(request.Headers, header.Name, out var value))
             {
                 bound.ReadHeader(builder, header, value);
-            }
-            else if (header.IsRequired)
-            {
-                throw new MissingRequiredMemberException(header.MemberName);
             }
         }
 
@@ -200,10 +188,6 @@ public static class RestProtocol
             if (query.TryGetValue(parameter.Name, out var values) && values.Count > 0)
             {
                 bound.ReadQuery(builder, parameter, values);
-            }
-            else if (parameter.IsRequired)
-            {
-                throw new MissingRequiredMemberException(parameter.MemberName);
             }
         }
 
@@ -228,6 +212,9 @@ public static class RestProtocol
             codec.ReadInto(content, builder);
         }
 
+        // The builder saw every binding, so this is where a required member the caller left out
+        // anywhere (URI, headers, query, payload, or body) is rejected.
+        bound.Schema.CompleteMembers(builder, WireReadMode.Strict);
         return bound.Schema.Build(builder);
     }
 
@@ -344,6 +331,9 @@ public static class RestProtocol
             );
         }
 
+        // A client is not authoritative for @required: a member the service left out anywhere is
+        // read as its zero value (Smithy's client error correction) instead of failing the call.
+        bound.Schema.CompleteMembers(builder, WireReadMode.Lenient);
         return bound.Schema.Build(builder);
     }
 
@@ -395,7 +385,11 @@ public static class RestProtocol
             {
                 bound.BodyCodec = bound.CompileBodyCodec(
                     codecFactory,
-                    new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
+                    new CodecFactoryOptions
+                    {
+                        MaterializeTopLevelDefaults = true,
+                        ReadMode = WireReadMode.Lenient,
+                    }
                 );
             }
 

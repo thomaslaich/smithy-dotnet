@@ -96,7 +96,7 @@ internal sealed record AotInput(
     string DisplayName
 );
 
-internal sealed class AotInputBuilder
+internal sealed class AotInputBuilder : StructBuilder
 {
     public string? UserId { get; set; }
 
@@ -144,7 +144,7 @@ internal sealed class AotInputSchema()
         Schemas.String.Write(3, value.DisplayName, ref serializer);
     }
 
-    public override void DeserializeMember<TDeserializer>(
+    protected override void DeserializeMember<TDeserializer>(
         AotInputBuilder builder,
         int index,
         ref TDeserializer deserializer

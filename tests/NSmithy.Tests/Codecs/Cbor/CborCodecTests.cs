@@ -21,6 +21,29 @@ public sealed class CborCodecTests
     }
 
     [Fact]
+    public void CborCodecFillsMissingAndNullRequiredMembersWhenAsked()
+    {
+        var writer = new CborWriter();
+        writer.WriteStartMap(1);
+        writer.WriteTextString("name");
+        writer.WriteNull();
+        writer.WriteEndMap();
+        var payload = writer.Encode();
+
+        var filling = CborCodecFactory.Default.FromSchema(
+            PersonSchema.Schema,
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
+        );
+        var strict = CborCodecFactory.Default.FromSchema(PersonSchema.Schema);
+
+        Assert.Equal(
+            new Person(Name: "", Age: 0, Address: new Address("")),
+            filling.Deserialize(payload)
+        );
+        Assert.Throws<MissingRequiredMemberException>(() => strict.Deserialize(payload));
+    }
+
+    [Fact]
     public void CborCodecReadsHalfPrecisionFloat()
     {
         var writer = new CborWriter();

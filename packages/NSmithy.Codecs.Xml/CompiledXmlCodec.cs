@@ -9,6 +9,7 @@ namespace NSmithy.Codecs.Xml;
 internal sealed class CompiledXmlCodec<T>(
     Schema<T> schema,
     bool materializeTopLevelDefaults,
+    WireReadMode mode,
     IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
     string? defaultNamespaceUri = null,
     string? defaultNamespacePrefix = null
@@ -47,7 +48,7 @@ internal sealed class CompiledXmlCodec<T>(
             Encoding.UTF8.GetString(payload),
             LoadOptions.PreserveWhitespace
         );
-        var deserializer = new XmlShapeDeserializer(element, null, root);
+        var deserializer = new XmlShapeDeserializer(element, null, root, mode);
         return schema.Read(ref deserializer);
     }
 }
@@ -55,6 +56,7 @@ internal sealed class CompiledXmlCodec<T>(
 internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
     StructProjection<T, TBuilder> projection,
     bool materializeTopLevelDefaults,
+    WireReadMode mode,
     string? defaultRootName,
     string? defaultNamespaceUri,
     string? defaultNamespacePrefix
@@ -103,6 +105,6 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
             Encoding.UTF8.GetString(payload),
             LoadOptions.PreserveWhitespace
         );
-        XmlShapeDeserializer.ReadMembers(element, plan, projection.Source, builder);
+        XmlShapeDeserializer.ReadMembers(element, plan, projection.Source, builder, mode);
     }
 }

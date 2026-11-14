@@ -19,8 +19,27 @@ service Fixtures {
         Chat
         ListItems
         ListCities
+        GetQuota
+        GetBadge
     ]
     errors: [ValidationException]
+}
+
+/// A client fills the required members a response leaves out.
+@readonly
+@http(method: "GET", uri: "/quota")
+operation GetQuota {
+    output := {
+        @required
+        @httpHeader("X-Region")
+        region: String
+
+        @required
+        limit: Integer
+
+        @required
+        owners: StringMap
+    }
 }
 
 @readonly
@@ -224,4 +243,23 @@ operation ListItems {
 @http(method: "GET", uri: "/cities")
 operation ListCities {
     input: ListInput
+}
+
+/// A client fills the required members of an @httpPayload structure the same way.
+@readonly
+@http(method: "GET", uri: "/badge")
+operation GetBadge {
+    output := {
+        @required
+        @httpPayload
+        badge: Badge
+    }
+}
+
+structure Badge {
+    @required
+    label: String
+
+    @required
+    level: Integer
 }

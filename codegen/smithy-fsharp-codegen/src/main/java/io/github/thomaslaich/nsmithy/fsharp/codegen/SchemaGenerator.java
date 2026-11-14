@@ -152,6 +152,13 @@ final class SchemaGenerator {
     }
     Map<String, Object> templateContext = new HashMap<>();
     templateContext.put("builder", builder);
+    // One presence bit per required member: an int64 holds 64, and the rare larger structure
+    // derives from a builder that keeps the rest.
+    templateContext.put(
+        "builderBase",
+        members.stream().filter(ShapeSupport::isRequired).count() > 64
+            ? "LargeStructBuilder"
+            : "StructBuilder");
     templateContext.put("properties", properties);
     templateContext.put("impl", impl);
     templateContext.put("type", type);
@@ -164,10 +171,12 @@ final class SchemaGenerator {
     writer.writeTemplate(
         """
         ${^properties}
-        type ${builder:L}() = class end
+        type ${builder:L}() =
+            inherit global.NSmithy.Core.Serde.${builderBase:L}()
         ${/properties}
         ${?properties}
         type ${builder:L}() =
+            inherit global.NSmithy.Core.Serde.${builderBase:L}()
             ${#properties}
             member val ${key:L}: ${value:L} voption = ValueNone with get, set
             ${/properties}

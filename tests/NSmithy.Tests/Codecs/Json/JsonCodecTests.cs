@@ -196,6 +196,80 @@ public sealed class JsonCodecTests
     }
 
     [Fact]
+    public void JsonCodecFillsMissingRequiredMembersWithZeroValues()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(
+            CorrectedSchema.Schema,
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
+        );
+
+        var decoded = codec.DeserializeText("{}");
+
+        Assert.Equal("", decoded.Text);
+        Assert.Equal(0, decoded.Count);
+        Assert.False(decoded.Flag);
+        Assert.Equal(DateTimeOffset.UnixEpoch, decoded.At);
+        Assert.Empty(decoded.Data);
+        Assert.Empty(decoded.Tags);
+        Assert.Empty(decoded.Counts);
+        Assert.Equal("", decoded.Status.Value);
+        Assert.Equal((Priority)0, decoded.Priority);
+        Assert.Equal(new Customer(""), decoded.Buyer);
+        Assert.Equal("kept", decoded.Kept);
+        Assert.Null(decoded.Note);
+    }
+
+    [Fact]
+    public void JsonCodecFillsNullRequiredMemberAndKeepsSentOnes()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(
+            OrderSchema.Schema,
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
+        );
+
+        Assert.Equal(
+            new Order(new Customer("")),
+            codec.DeserializeText("""{"buyer":{"name":null}}""")
+        );
+        Assert.Equal(
+            new Order(new Customer("Ada")),
+            codec.DeserializeText("""{"buyer":{"name":"Ada"}}""")
+        );
+    }
+
+    [Fact]
+    public void JsonCodecStillRejectsMissingRequiredUnionWhenFilling()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(
+            CorrectedChoiceSchema.Schema,
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
+        );
+
+        // A union has no zero value to fill in.
+        var ex = Assert.Throws<MissingRequiredMemberException>(() => codec.DeserializeText("{}"));
+
+        Assert.Equal("choice", ex.MemberName);
+    }
+
+    [Fact]
+    public void JsonCodecTracksRequiredMembersPastTheFirst64()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(WideSchema.Schema);
+        var allButOne = string.Join(
+            ",",
+            Enumerable.Range(0, 70).Where(i => i != 66).Select(i => $"\"m{i}\":{i}")
+        );
+
+        var missing = Assert.Throws<MissingRequiredMemberException>(() =>
+            codec.DeserializeText("{" + allButOne + "}")
+        );
+        var complete = codec.DeserializeText("{" + allButOne + ",\"m66\":66}");
+
+        Assert.Equal("m66", missing.MemberName);
+        Assert.Equal(69, complete.M69);
+    }
+
+    [Fact]
     public void JsonCodecReportsPathOfNestedMissingRequiredMember()
     {
         var codec = JsonCodecFactory.Default.FromSchema(OrderSchema.Schema);

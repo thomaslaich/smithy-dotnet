@@ -209,6 +209,13 @@ public final class SchemaGenerator {
       writer.putContext("type", context.symbolProvider().toSymbol(shape));
       writer.putContext("schema", RuntimeTypes.SCHEMA);
       writer.putContext("structSchema", RuntimeTypes.STRUCT_SCHEMA);
+      // One presence bit per required member: a long holds 64, and the rare larger structure
+      // derives from a builder that keeps the rest.
+      writer.putContext(
+          "structBuilder",
+          members.stream().filter(ShapeSupport::isRequired).count() > 64
+              ? RuntimeTypes.LARGE_STRUCT_BUILDER
+              : RuntimeTypes.STRUCT_BUILDER);
       writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
       writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
       writer.putContext(
@@ -275,7 +282,7 @@ public final class SchemaGenerator {
           """
           public static partial class ${schemaClass:L}
           {
-              public sealed class ${builderClass:L}
+              public sealed class ${builderClass:L} : ${structBuilder:T}
               {
                   ${builderProperties:C|}
               }
@@ -305,7 +312,7 @@ public final class SchemaGenerator {
                       ${writes:C|}
                   }
 
-                  public override void DeserializeMember<TDeserializer>(
+                  protected override void DeserializeMember<TDeserializer>(
                       ${builderClass:L} builder,
                       int index,
                       ref TDeserializer deserializer)

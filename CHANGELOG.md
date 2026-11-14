@@ -27,6 +27,23 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   declares the error get a `Result` where they may have had a plain output, and a new case to
   match; `try ... with :? ValidationException` around such a call no longer fires. See
   [Validation](https://thomaslaich.github.io/smithy-dotnet/servers/validation/#declaring-the-error).
+- **Structure builders record which required members were read.** Every generated builder derives
+  from `StructBuilder` (or `LargeStructBuilder` past 64 required members), and
+  `StructSchema.ReadMember` and `CompleteMembers` decide once, for every codec and HTTP binding,
+  whether a required member nobody set fails or is filled. Behaviour does not change: a server
+  still rejects an omitted required member, including one with a default, except an empty
+  `@httpPayload`, which keeps its default. **BREAKING** for hand-written structure schemas: a
+  builder with required members must derive from `StructBuilder`, and readers call `ReadMember`
+  instead of `DeserializeMember`.
+- **Codecs read strictly unless told otherwise.** `CodecFactoryOptions.ReadMode` picks a codec's
+  `WireReadMode`, and the protocols pass `Lenient` for the responses and errors a client reads.
+  **BREAKING:** `JsonCodecFactory` reads `WireReadMode.Strict`, as the CBOR and XML factories do,
+  and loses its `readMode` constructor parameter and `JsonCodecFactory.Strict`. Code that reads a
+  peer's payloads through `JsonCodecFactory.Default` rejects a `date-time` with a UTC offset and a
+  missing required member; pass `ReadMode = WireReadMode.Lenient` to read as a client.
+- **awsJson and rpcv2Json servers reject a `date-time` with a UTC offset.** They shared one codec
+  factory with their clients and read requests leniently; they now read them `Strict`, as restJson1
+  servers already did and Smithy's protocol tests require. Clients still accept the offset.
 
 ### Added
 
@@ -44,6 +61,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`smithy.framework` shapes in gRPC services.** `ValidationException` and its field shapes carry
   no `@protoIndex`, so the `.proto` generator numbers their fields by declaration order, as the
   proto codec does, instead of failing.
+- **Clients fill required members a response leaves out.** Clients no longer throw
+  `MissingRequiredMemberException` when an output or error omits a `@required` member, or sends it
+  as null: the member takes its zero value (`""`, `0`, `false`, an empty collection, the epoch, an
+  enum's unknown value), as Smithy's client error correction describes. Members with a modeled
+  default keep it, and a required union still fails. Servers still reject a request that omits a
+  required member. ([#349](https://github.com/thomaslaich/smithy-dotnet/issues/349))
 
 ## [0.19.0]
 

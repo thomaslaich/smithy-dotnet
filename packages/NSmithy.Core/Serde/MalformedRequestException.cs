@@ -54,7 +54,7 @@ public static class MalformedRequestSchema
 {
     public static readonly ShapeId Id = ShapeId.Parse("smithy.framework#MalformedRequest");
 
-    public sealed class Builder
+    public sealed class Builder : StructBuilder
     {
         public string? Message { get; set; }
     }
@@ -82,7 +82,7 @@ public static class MalformedRequestSchema
             ref TSerializer serializer
         ) => Target0.Write(0, value.Message, ref serializer);
 
-        public override void DeserializeMember<TDeserializer>(
+        protected override void DeserializeMember<TDeserializer>(
             Builder builder,
             int index,
             ref TDeserializer deserializer

@@ -25,6 +25,12 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
     private static readonly ShapeId AwsQueryError = ShapeId.Parse("aws.protocols#awsQueryError");
     private static readonly XmlCodecFactory CodecFactory = XmlCodecFactory.Default;
 
+    // A client fills a required member the service left out rather than failing the call.
+    private static readonly CodecFactoryOptions ClientRead = new()
+    {
+        ReadMode = WireReadMode.Lenient,
+    };
+
     public IServiceProtocol ForService(ServiceSchema service)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -87,7 +93,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
                 operation.Input
             );
             outputSchema = operation.Output;
-            responseCodec = CodecFactory.FromSchema(operation.Output);
+            responseCodec = CodecFactory.FromSchema(operation.Output, ClientRead);
             outputIsSmithyUnit = typeof(TOutput) == typeof(SmithyUnit);
             outputIsUnit = outputIsSmithyUnit || Schemas.IsSyntheticUnit(operation.Output);
             this.kind = kind;
@@ -191,7 +197,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         private static QueryError CompileError<TError>(OperationErrorSchema<TError> error)
             where TError : Exception
         {
-            var codec = CodecFactory.FromSchema(error.Schema);
+            var codec = CodecFactory.FromSchema(error.Schema, ClientRead);
             var queryError = QueryErrorTrait(error.Schema);
             return new QueryError(
                 error.Id,
@@ -268,5 +274,5 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         Encoding.UTF8.GetBytes(element.ToString(SaveOptions.DisableFormatting));
 
     private static T CreateEmptyOutput<T>(Schema<T> schema) =>
-        schema.Resolved is IStructSchema<T> structure ? structure.BuildEmpty() : default!;
+        schema.Resolved is IStructSchema<T> structure ? structure.BuildZeroValue() : default!;
 }

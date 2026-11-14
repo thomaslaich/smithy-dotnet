@@ -151,7 +151,7 @@ public class ProtoSerializationBenchmarks
 
     public sealed record ProtoValue(string Name, int Count);
 
-    public sealed class ProtoValueBuilder
+    public sealed class ProtoValueBuilder : StructBuilder
     {
         public string? Name { get; set; }
 
@@ -191,7 +191,7 @@ public class ProtoSerializationBenchmarks
             serializer.WriteInteger(1, value.Count);
         }
 
-        public override void DeserializeMember<TDeserializer>(
+        protected override void DeserializeMember<TDeserializer>(
             ProtoValueBuilder builder,
             int index,
             ref TDeserializer deserializer

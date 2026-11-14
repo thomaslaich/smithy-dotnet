@@ -20,7 +20,7 @@ public sealed class RestXmlProtocol : IProtocol
     public IServiceProtocol ForService(ServiceSchema service) =>
         new RestServiceProtocol(
             service,
-            _ => new XmlRestBodyCodecFactory(service),
+            readMode => new XmlRestBodyCodecFactory(service, readMode),
             DeserializeErrorType,
             rawStringPayloads: true,
             errorTypeHeader: null
@@ -58,9 +58,11 @@ public sealed class RestXmlProtocol : IProtocol
         private static readonly ShapeId XmlNamespaceId = ShapeId.Parse("smithy.api#xmlNamespace");
 
         private readonly XmlCodecFactory codecFactory;
+        private readonly WireReadMode readMode;
 
-        public XmlRestBodyCodecFactory(ServiceSchema service)
+        public XmlRestBodyCodecFactory(ServiceSchema service, WireReadMode readMode)
         {
+            this.readMode = readMode;
             if (service.GetTrait(XmlNamespaceId) is not { HasValue: true } trait)
             {
                 codecFactory = XmlCodecFactory.Default;
@@ -80,18 +82,27 @@ public sealed class RestXmlProtocol : IProtocol
         public string BlobContentType => "application/octet-stream";
 
         public ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null) =>
-            codecFactory.FromSchema(schema, options);
+            codecFactory.FromSchema(schema, ReadingAs(options));
 
         public ICodec<T> FromMember<T>(
             Schema<T> target,
             IReadOnlyDictionary<ShapeId, Trait> memberTraits,
             CodecFactoryOptions? options = null
-        ) => codecFactory.FromMember(target, memberTraits, options);
+        ) => codecFactory.FromMember(target, memberTraits, ReadingAs(options));
 
         public IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(
             StructProjection<T, TBuilder> projection,
             CodecFactoryOptions? options = null
-        ) => codecFactory.FromProjection(projection, options);
+        ) => codecFactory.FromProjection(projection, ReadingAs(options));
+
+        // Codecs read by this side's rules unless the caller picked a mode.
+        private CodecFactoryOptions ReadingAs(CodecFactoryOptions? options) =>
+            options?.ReadMode is not null
+                ? options
+                : (options ?? CodecFactoryOptions.Default) with
+                {
+                    ReadMode = readMode,
+                };
 
         public byte[] PrepareErrorBody(byte[] content)
         {

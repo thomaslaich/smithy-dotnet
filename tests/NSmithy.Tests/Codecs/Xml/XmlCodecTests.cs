@@ -78,4 +78,21 @@ public sealed class XmlCodecTests
         Assert.Equal(expectedXml, xml);
         Assert.Equal(input, decoded);
     }
+
+    [Fact]
+    public void XmlCodecFillsMissingRequiredMembersWhenAsked()
+    {
+        const string xml = "<Person><address/></Person>";
+        var filling = XmlCodecFactory.Default.FromSchema(
+            PersonSchema.Schema,
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
+        );
+        var strict = XmlCodecFactory.Default.FromSchema(PersonSchema.Schema);
+
+        Assert.Equal(
+            new Person(Name: "", Age: 0, Address: new Address("")),
+            filling.DeserializeText(xml)
+        );
+        Assert.Throws<MissingRequiredMemberException>(() => strict.DeserializeText(xml));
+    }
 }
