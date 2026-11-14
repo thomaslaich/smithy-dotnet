@@ -1,6 +1,8 @@
 using Bench.Corpus;
 using Bench.Hosting;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Filters;
 
 namespace Bench.Micro;
 
@@ -14,11 +16,13 @@ namespace Bench.Micro;
 /// "how fast is this stack at serving this contract", but a regression here
 /// does not say <em>where</em> it is, which is what the codec suite is for.
 /// <para>
-/// Every stack in this comparison is verified byte-identical on every scenario
-/// by the parity gate before these numbers mean anything.
+/// Every stack in this comparison is verified byte-identical by the parity gate
+/// on every scenario it is measured on. A stack that cannot serve a scenario
+/// declares so in <see cref="BenchStacks"/>, and that pair is left out here.
 /// </para>
 /// </remarks>
 [MemoryDiagnoser]
+[Config(typeof(ServedScenariosOnly))]
 public class ServerBenchmarks
 {
     private BenchServer server = null!;
@@ -67,5 +71,17 @@ public class ServerBenchmarks
         using var response = await server.Client.SendAsync(message);
         var body = await response.Content.ReadAsByteArrayAsync();
         return body.Length;
+    }
+
+    private sealed class ServedScenariosOnly : ManualConfig
+    {
+        public ServedScenariosOnly() =>
+            AddFilter(
+                new SimpleFilter(benchmark =>
+                    BenchStacks
+                        .ByName((string)benchmark.Parameters[nameof(Stack)])
+                        .Serves((string)benchmark.Parameters[nameof(Scenario)])
+                )
+            );
     }
 }

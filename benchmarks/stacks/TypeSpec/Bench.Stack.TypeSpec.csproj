@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Bench.Stacks.TypeSpec</RootNamespace>
+    <AssemblyName>Bench.Stack.TypeSpec</AssemblyName>
+    <!-- Generated third-party code does not meet this repo's analyzer bar, and
+         editing it to comply would mean benchmarking edits rather than output. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591;CS8618;CS8601;CS8602;CS8603;CS8604;CS8625;CA1812;CA1861;CA2227</NoWarn>
+    <!-- The emitter also writes a Program.cs and docs; only generated/ is compiled. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);node_modules/**;emitted/Program.cs</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- The emitter targets the Web SDK, whose implicit usings the generated
+         code relies on; this project uses the plain SDK with a framework reference. -->
+    <Using Include="Microsoft.AspNetCore.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Benchmarks.Domain/Bench.Domain.csproj" />
+  </ItemGroup>
+</Project>
