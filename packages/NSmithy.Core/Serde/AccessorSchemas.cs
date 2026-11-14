@@ -104,7 +104,7 @@ public abstract class AccessorStructSchema<T, TBuilder>(
         }
     }
 
-    public sealed override void DeserializeMember<TDeserializer>(
+    protected sealed override void DeserializeMember<TDeserializer>(
         TBuilder builder,
         int index,
         ref TDeserializer deserializer

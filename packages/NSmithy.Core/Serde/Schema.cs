@@ -430,7 +430,11 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     public abstract void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer, allows ref struct;
 
-    public abstract void DeserializeMember<TDeserializer>(
+    /// <summary>
+    /// Sets the member at <paramref name="index"/> on <paramref name="builder"/>. Generated code
+    /// implements it; readers call <see cref="ReadMember"/>, which also records the member as set.
+    /// </summary>
+    protected abstract void DeserializeMember<TDeserializer>(
         TBuilder builder,
         int index,
         ref TDeserializer deserializer
@@ -557,7 +561,7 @@ public sealed class UnitSchema : StructSchema<SmithyUnit, SmithyUnit>
         ref TSerializer serializer
     ) { }
 
-    public override void DeserializeMember<TDeserializer>(
+    protected override void DeserializeMember<TDeserializer>(
         SmithyUnit builder,
         int index,
         ref TDeserializer deserializer

@@ -362,7 +362,6 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
                 continue;
             }
 
-            // A null leaves the member unset, so a required one counts as missing.
             var member = members[index];
             if (reader.TokenType == JsonTokenType.Null)
             {

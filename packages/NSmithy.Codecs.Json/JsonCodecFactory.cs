@@ -26,7 +26,6 @@ public sealed class JsonCodecFactory(
 
     public static JsonCodecFactory Strict { get; } = new(WireReadMode.Strict);
 
-    /// <summary>Reads as a client reads responses; see <see cref="WireReadMode"/>.</summary>
     public static JsonCodecFactory Lenient { get; } = new(WireReadMode.Lenient);
 
     public ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null)

@@ -168,7 +168,7 @@ public static partial class RatingSchema
             Target2.Write(2, value.Author, ref serializer);
         }
 
-        public override void DeserializeMember<TDeserializer>(
+        protected override void DeserializeMember<TDeserializer>(
             Builder builder,
             int index,
             ref TDeserializer deserializer)

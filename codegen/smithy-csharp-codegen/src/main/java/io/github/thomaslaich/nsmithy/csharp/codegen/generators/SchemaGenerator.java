@@ -312,7 +312,7 @@ public final class SchemaGenerator {
                       ${writes:C|}
                   }
 
-                  public override void DeserializeMember<TDeserializer>(
+                  protected override void DeserializeMember<TDeserializer>(
                       ${builderClass:L} builder,
                       int index,
                       ref TDeserializer deserializer)

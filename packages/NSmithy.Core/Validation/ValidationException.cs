@@ -96,7 +96,7 @@ public static class ValidationExceptionFieldSchema
             Target1.Write(1, value.Message, ref serializer);
         }
 
-        public override void DeserializeMember<TDeserializer>(
+        protected override void DeserializeMember<TDeserializer>(
             Builder builder,
             int index,
             ref TDeserializer deserializer
@@ -153,7 +153,7 @@ public static class ValidationExceptionSchema
             Target1.Write(1, value.FieldList, ref serializer);
         }
 
-        public override void DeserializeMember<TDeserializer>(
+        protected override void DeserializeMember<TDeserializer>(
             Builder builder,
             int index,
             ref TDeserializer deserializer
