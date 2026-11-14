@@ -85,7 +85,7 @@ public sealed class XmlCodecTests
         const string xml = "<Person><address/></Person>";
         var filling = XmlCodecFactory.Default.FromSchema(
             PersonSchema.Schema,
-            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
         );
         var strict = XmlCodecFactory.Default.FromSchema(PersonSchema.Schema);
 

@@ -9,14 +9,14 @@ namespace NSmithy.Codecs.Cbor;
 
 /// <summary>
 /// Reads one CBOR value, described by the plan of the member it belongs to. An aggregate read
-/// walks the value and hands each member, element, entry, or case back to the schema. With
-/// <c>fillMissing</c>, as a client reads, a required member left out or sent as null is read as its
-/// zero value instead of failing.
+/// walks the value and hands each member, element, entry, or case back to the schema. Read
+/// <see cref="WireReadMode.Lenient"/>, as a client reads, a required member left out or sent as
+/// null is read as its zero value instead of failing.
 /// </summary>
 internal readonly struct CborShapeDeserializer(
     CborReader reader,
     CborMemberPlan entry,
-    bool fillMissing
+    WireReadMode mode
 ) : IShapeDeserializer
 {
     public bool TryReadNull()
@@ -98,22 +98,22 @@ internal readonly struct CborShapeDeserializer(
         }
 
         var builder = schema.CreateTypedBuilder();
-        ReadMembers(reader, entry.Shape!, schema, builder, fillMissing);
-        schema.CompleteMembers(builder, fillMissing);
+        ReadMembers(reader, entry.Shape!, schema, builder, mode);
+        schema.CompleteMembers(builder, mode);
         return schema.Build(builder);
     }
 
     /// <summary>
     /// Reads the members of a structure into <paramref name="builder"/>. An explicit null for a
     /// required member leaves it unset, so it counts as missing; an optional one reads it rather
-    /// than taking its default. <paramref name="fillMissing"/> is passed on to nested structures.
+    /// than taking its default. <paramref name="mode"/> is passed on to nested structures.
     /// </summary>
     internal static void ReadMembers<T, TBuilder>(
         CborReader reader,
         CborShapePlan plan,
         StructSchema<T, TBuilder> schema,
         TBuilder builder,
-        bool fillMissing
+        WireReadMode mode
     )
     {
         var members = plan.Members;
@@ -135,7 +135,7 @@ internal readonly struct CborShapeDeserializer(
                 continue;
             }
 
-            var nested = new CborShapeDeserializer(reader, member, fillMissing);
+            var nested = new CborShapeDeserializer(reader, member, mode);
             try
             {
                 schema.ReadMember(builder, index, ref nested);
@@ -181,7 +181,7 @@ internal readonly struct CborShapeDeserializer(
                 continue;
             }
 
-            var nested = new CborShapeDeserializer(reader, element, fillMissing);
+            var nested = new CborShapeDeserializer(reader, element, mode);
             try
             {
                 schema.DeserializeElement(builder, ref nested);
@@ -227,7 +227,7 @@ internal readonly struct CborShapeDeserializer(
                 continue;
             }
 
-            var nested = new CborShapeDeserializer(reader, value, fillMissing);
+            var nested = new CborShapeDeserializer(reader, value, mode);
             try
             {
                 schema.DeserializeEntry(builder, key, ref nested);
@@ -264,7 +264,7 @@ internal readonly struct CborShapeDeserializer(
             throw new InvalidOperationException($"Unknown union member '{name}'.");
         }
 
-        var nested = new CborShapeDeserializer(reader, plan.Members[index], fillMissing);
+        var nested = new CborShapeDeserializer(reader, plan.Members[index], mode);
         var value = schema.DeserializeCase(index, ref nested);
         while (reader.PeekState() != CborReaderState.EndMap)
         {

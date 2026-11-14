@@ -35,6 +35,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `@httpPayload`, which keeps its default. **BREAKING** for hand-written structure schemas: a
   builder with required members must derive from `StructBuilder`, and readers call `ReadMember`
   instead of `DeserializeMember`.
+- **Codecs read strictly unless told otherwise.** `CodecFactoryOptions.ReadMode` picks a codec's
+  `WireReadMode`, and the protocols pass `Lenient` for the responses and errors a client reads.
+  **BREAKING:** `JsonCodecFactory` now defaults to `WireReadMode.Strict`, as the CBOR and XML
+  factories do, so code that reads a peer's payloads through `JsonCodecFactory.Default` rejects a
+  `date-time` with a UTC offset and a missing required member; use `JsonCodecFactory.Lenient` or
+  `ReadMode = WireReadMode.Lenient` to read as a client.
 
 ### Added
 

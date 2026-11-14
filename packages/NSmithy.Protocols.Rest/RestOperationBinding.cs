@@ -139,7 +139,7 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
                 new CodecFactoryOptions
                 {
                     MaterializeTopLevelDefaults = true,
-                    FillMissingRequiredMembers = true,
+                    ReadMode = WireReadMode.Lenient,
                     DefaultRootName = operation.Id.Name + "Response",
                 }
             );

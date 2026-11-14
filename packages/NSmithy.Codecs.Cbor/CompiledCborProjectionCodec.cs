@@ -6,7 +6,7 @@ namespace NSmithy.Codecs.Cbor;
 internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
     StructProjection<T, TBuilder> projection,
     bool materializeTopLevelDefaults,
-    bool fillMissing
+    WireReadMode mode
 ) : IProjectionCodec<T, TBuilder>
 {
     private readonly StructSchema<T, TBuilder> source = projection.Source;
@@ -60,6 +60,6 @@ internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
             throw new InvalidOperationException("Expected CBOR map for structure projection.");
         }
 
-        CborShapeDeserializer.ReadMembers(reader, plan, source, builder, fillMissing);
+        CborShapeDeserializer.ReadMembers(reader, plan, source, builder, mode);
     }
 }

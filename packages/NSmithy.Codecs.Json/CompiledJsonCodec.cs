@@ -7,7 +7,6 @@ internal sealed class CompiledJsonCodec<T>(
     Schema<T> schema,
     bool materializeTopLevelDefaults,
     WireReadMode readMode,
-    bool fillMissing,
     JsonPlans plans,
     IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
     KeyValuePair<string, string>? discriminator = null
@@ -42,7 +41,7 @@ internal sealed class CompiledJsonCodec<T>(
     public T Deserialize(byte[] payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        return JsonShapeDeserializer.ReadPayload(payload, schema, root, readMode, fillMissing);
+        return JsonShapeDeserializer.ReadPayload(payload, schema, root, readMode);
     }
 }
 
@@ -50,7 +49,6 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
     StructProjection<T, TBuilder> projection,
     bool materializeTopLevelDefaults,
     WireReadMode readMode,
-    bool fillMissing,
     JsonPlans plans
 ) : IProjectionCodec<T, TBuilder>
 {
@@ -90,13 +88,6 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
         ArgumentNullException.ThrowIfNull(payload);
         ArgumentNullException.ThrowIfNull(builder);
 
-        JsonShapeDeserializer.ReadPayloadMembers(
-            payload,
-            plan,
-            source,
-            builder,
-            readMode,
-            fillMissing
-        );
+        JsonShapeDeserializer.ReadPayloadMembers(payload, plan, source, builder, readMode);
     }
 }

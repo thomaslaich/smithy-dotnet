@@ -17,7 +17,7 @@ public sealed class CborCodecFactory : IProjectionCodecFactory
             schema,
             resolved.MaterializeTopLevelDefaults,
             resolved.Discriminator,
-            resolved.FillMissingRequiredMembers
+            resolved.ReadMode ?? WireReadMode.Strict
         );
     }
 
@@ -31,7 +31,7 @@ public sealed class CborCodecFactory : IProjectionCodecFactory
         return new CompiledCborProjectionCodec<T, TBuilder>(
             projection,
             resolved.MaterializeTopLevelDefaults,
-            resolved.FillMissingRequiredMembers
+            resolved.ReadMode ?? WireReadMode.Strict
         );
     }
 }

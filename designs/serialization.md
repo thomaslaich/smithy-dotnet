@@ -221,8 +221,8 @@ spec still requires a caller to send, and a member sent as null, which never
 counts as set. The one exception is an empty `@httpPayload`, which keeps the
 member's default and counts as sent.
 
-A client is not authoritative for `@required`, so it completes outputs and
-errors with `fillMissing`. A required member no reader set then takes its zero
+A client is not authoritative for `@required`, so it reads outputs and errors
+`WireReadMode.Lenient`. A required member no reader set then takes its zero
 value, Smithy's
 [client error correction](https://smithy.io/2.0/spec/aggregate-types.html#client-error-correction):
 `false`, `0`, an empty string, blob, list, or map, the epoch, a null document,
@@ -496,6 +496,13 @@ implements only `ICodecFactory`, because gRPC always encodes complete messages.
 `FromMember` applies traits declared on the member, for a payload member whose
 traits control its target's wire representation (`@xmlName`,
 `@timestampFormat`).
+
+A codec reads `WireReadMode.Strict`, as a server reads, unless
+`CodecFactoryOptions.ReadMode` says otherwise. The protocols pass
+`WireReadMode.Lenient` for what a client reads: a `date-time` with a UTC
+offset is accepted, and a required member nobody set takes its zero value. A
+reader that does not say which side it is on therefore keeps the server's
+rules.
 
 A projection codec reads into a builder rather than producing a value. A
 protocol creates one builder per request, lets the HTTP binding deserializer and

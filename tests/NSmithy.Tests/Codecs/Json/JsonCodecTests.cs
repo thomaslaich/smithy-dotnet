@@ -200,7 +200,7 @@ public sealed class JsonCodecTests
     {
         var codec = JsonCodecFactory.Default.FromSchema(
             CorrectedSchema.Schema,
-            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
         );
 
         var decoded = codec.DeserializeText("{}");
@@ -224,7 +224,7 @@ public sealed class JsonCodecTests
     {
         var codec = JsonCodecFactory.Default.FromSchema(
             OrderSchema.Schema,
-            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
         );
 
         Assert.Equal(
@@ -242,7 +242,7 @@ public sealed class JsonCodecTests
     {
         var codec = JsonCodecFactory.Default.FromSchema(
             CorrectedChoiceSchema.Schema,
-            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
         );
 
         // A union has no zero value to fill in.

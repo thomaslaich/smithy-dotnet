@@ -257,7 +257,7 @@ public abstract class RpcV2Protocol : IProtocol
         // rather than failing.
         var codec = codecFactory.FromSchema(
             outputSchema,
-            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
         );
 
         return new ResponseStrategy<TOutput>(
@@ -541,7 +541,7 @@ public abstract class RpcV2Protocol : IProtocol
                 new CodecFactoryOptions
                 {
                     MaterializeTopLevelDefaults = isOutput,
-                    FillMissingRequiredMembers = isOutput,
+                    ReadMode = isOutput ? WireReadMode.Lenient : WireReadMode.Strict,
                 }
             );
 
@@ -555,7 +555,7 @@ public abstract class RpcV2Protocol : IProtocol
                 initialPayload.Length > 0
                     ? builder => InitialCodec.ReadInto(initialPayload, builder)
                     : null,
-                fillMissing: isOutput
+                readMode: isOutput ? WireReadMode.Lenient : WireReadMode.Strict
             );
     }
 

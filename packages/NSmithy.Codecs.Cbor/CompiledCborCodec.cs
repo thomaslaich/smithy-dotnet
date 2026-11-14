@@ -7,7 +7,7 @@ internal sealed class CompiledCborCodec<T>(
     Schema<T> schema,
     bool materializeTopLevelDefaults,
     KeyValuePair<string, string>? discriminator,
-    bool fillMissing
+    WireReadMode mode
 ) : ICodec<T>
 {
     private readonly CborMemberPlan root = new CborPlans().ForRoot(schema, discriminator);
@@ -36,7 +36,7 @@ internal sealed class CompiledCborCodec<T>(
         }
 
         var reader = new CborReader(payload, CborConformanceMode.Lax);
-        var deserializer = new CborShapeDeserializer(reader, root, fillMissing);
+        var deserializer = new CborShapeDeserializer(reader, root, mode);
         return schema.Read(ref deserializer);
     }
 }

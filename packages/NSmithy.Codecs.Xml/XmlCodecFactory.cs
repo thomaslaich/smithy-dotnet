@@ -20,7 +20,7 @@ public sealed class XmlCodecFactory(
         return new CompiledXmlCodec<T>(
             schema,
             resolved.MaterializeTopLevelDefaults,
-            resolved.FillMissingRequiredMembers,
+            resolved.ReadMode ?? WireReadMode.Strict,
             memberTraits: null,
             defaultNamespaceUri,
             defaultNamespacePrefix
@@ -38,7 +38,7 @@ public sealed class XmlCodecFactory(
         return new CompiledXmlCodec<T>(
             target,
             resolved.MaterializeTopLevelDefaults,
-            resolved.FillMissingRequiredMembers,
+            resolved.ReadMode ?? WireReadMode.Strict,
             memberTraits,
             defaultNamespaceUri,
             defaultNamespacePrefix
@@ -55,7 +55,7 @@ public sealed class XmlCodecFactory(
         return new CompiledXmlProjectionCodec<T, TBuilder>(
             projection,
             resolved.MaterializeTopLevelDefaults,
-            resolved.FillMissingRequiredMembers,
+            resolved.ReadMode ?? WireReadMode.Strict,
             resolved.DefaultRootName,
             defaultNamespaceUri,
             defaultNamespacePrefix

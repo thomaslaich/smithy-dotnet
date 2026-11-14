@@ -28,7 +28,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
     // A client fills a required member the service left out rather than failing the call.
     private static readonly CodecFactoryOptions ClientRead = new()
     {
-        FillMissingRequiredMembers = true,
+        ReadMode = WireReadMode.Lenient,
     };
 
     public IServiceProtocol ForService(ServiceSchema service)

@@ -69,7 +69,7 @@ public sealed class CodecErrorReader(
         // out rather than failing.
         var codec = codecs.FromSchema(
             schema.Schema,
-            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
         );
         return response => codec.Deserialize(payload(response));
     }

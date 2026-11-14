@@ -32,7 +32,7 @@ public sealed class CborCodecTests
 
         var filling = CborCodecFactory.Default.FromSchema(
             PersonSchema.Schema,
-            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+            new CodecFactoryOptions { ReadMode = WireReadMode.Lenient }
         );
         var strict = CborCodecFactory.Default.FromSchema(PersonSchema.Schema);
 

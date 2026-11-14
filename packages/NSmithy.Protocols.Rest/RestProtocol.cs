@@ -214,7 +214,7 @@ public static class RestProtocol
 
         // The builder saw every binding, so this is where a required member the caller left out
         // anywhere (URI, headers, query, payload, or body) is rejected.
-        bound.Schema.CompleteMembers(builder, fillMissing: false);
+        bound.Schema.CompleteMembers(builder, WireReadMode.Strict);
         return bound.Schema.Build(builder);
     }
 
@@ -333,7 +333,7 @@ public static class RestProtocol
 
         // A client is not authoritative for @required: a member the service left out anywhere is
         // read as its zero value (Smithy's client error correction) instead of failing the call.
-        bound.Schema.CompleteMembers(builder, fillMissing: true);
+        bound.Schema.CompleteMembers(builder, WireReadMode.Lenient);
         return bound.Schema.Build(builder);
     }
 
@@ -388,7 +388,7 @@ public static class RestProtocol
                     new CodecFactoryOptions
                     {
                         MaterializeTopLevelDefaults = true,
-                        FillMissingRequiredMembers = true,
+                        ReadMode = WireReadMode.Lenient,
                     }
                 );
             }

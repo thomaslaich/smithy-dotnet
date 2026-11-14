@@ -36,13 +36,11 @@ public sealed record CodecFactoryOptions
     public KeyValuePair<string, string>? Discriminator { get; init; }
 
     /// <summary>
-    /// Whether a required member missing from the payload, or sent as null, is read as its zero
-    /// value (see <see cref="StructSchema{T, TBuilder}.FillMissingMember"/>) instead of failing.
-    /// Clients set it for responses and errors: Smithy treats a client as non-authoritative for
-    /// <c>@required</c>, and a service that is ahead of or behind the client's model may omit one.
-    /// A server leaves it off and rejects the request.
+    /// How the codec holds what it reads to the model, overriding the factory's own mode, which is
+    /// <see cref="WireReadMode.Strict"/> unless the factory says otherwise. Clients read responses
+    /// and errors <see cref="WireReadMode.Lenient"/>; see <see cref="WireReadMode"/>.
     /// </summary>
-    public bool FillMissingRequiredMembers { get; init; }
+    public WireReadMode? ReadMode { get; init; }
 }
 
 /// <summary>Creates complete codecs from Smithy schemas.</summary>

@@ -19,20 +19,11 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
     private JsonMemberPlan entry;
     private readonly WireReadMode mode;
 
-    // A client reads a required member its peer left out as its zero value; a server rejects it.
-    private readonly bool fillMissing;
-
-    private JsonShapeDeserializer(
-        byte[] payload,
-        JsonMemberPlan entry,
-        WireReadMode mode,
-        bool fillMissing
-    )
+    private JsonShapeDeserializer(byte[] payload, JsonMemberPlan entry, WireReadMode mode)
     {
         reader = new Utf8JsonReader(payload);
         this.entry = entry;
         this.mode = mode;
-        this.fillMissing = fillMissing;
     }
 
     /// <summary>Reads a whole payload, rejecting anything that is not one JSON value.</summary>
@@ -40,11 +31,10 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         byte[] payload,
         Schema<T> schema,
         JsonMemberPlan root,
-        WireReadMode mode,
-        bool fillMissing
+        WireReadMode mode
     )
     {
-        var deserializer = new JsonShapeDeserializer(payload, root, mode, fillMissing);
+        var deserializer = new JsonShapeDeserializer(payload, root, mode);
         try
         {
             Start(ref deserializer.reader);
@@ -64,11 +54,10 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         JsonShapePlan plan,
         StructSchema<T, TBuilder> schema,
         TBuilder builder,
-        WireReadMode mode,
-        bool fillMissing
+        WireReadMode mode
     )
     {
-        var deserializer = new JsonShapeDeserializer(payload, null!, mode, fillMissing);
+        var deserializer = new JsonShapeDeserializer(payload, null!, mode);
         try
         {
             Start(ref deserializer.reader);
@@ -339,7 +328,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
     {
         var builder = schema.CreateTypedBuilder();
         ReadMembers(entry.Shape!, schema, builder);
-        schema.CompleteMembers(builder, fillMissing);
+        schema.CompleteMembers(builder, mode);
         return schema.Build(builder);
     }
 

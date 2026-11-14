@@ -506,11 +506,11 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     /// <summary>
     /// Finishes reading <paramref name="builder"/>: each required member no reader set, including
     /// one with a modeled default, throws <see cref="MissingRequiredMemberException"/>, as a server
-    /// rejects it. With <paramref name="fillMissing"/>, as a client reads, it instead takes its zero
-    /// value (see <see cref="FillMissingMember"/>). A null a payload sent for a member never sets
-    /// it, so it counts as missing.
+    /// rejects it. Read <see cref="WireReadMode.Lenient"/>, as a client reads, it instead takes its
+    /// zero value (see <see cref="FillMissingMember"/>). A null a payload sent for a member never
+    /// sets it, so it counts as missing.
     /// </summary>
-    public void CompleteMembers(TBuilder builder, bool fillMissing)
+    public void CompleteMembers(TBuilder builder, WireReadMode mode)
     {
         if (required.Length == 0)
         {
@@ -527,7 +527,7 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
 
             var index = required[ordinal];
 
-            if (!fillMissing)
+            if (mode == WireReadMode.Strict)
             {
                 throw new MissingRequiredMemberException(members[index].Name);
             }
