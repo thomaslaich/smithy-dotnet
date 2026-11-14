@@ -58,7 +58,7 @@ internal struct ZeroValueDeserializer(string memberName) : IShapeDeserializer
         var members = schema.Members;
         for (var index = 0; index < members.Count; index++)
         {
-            if (members[index] is { IsRequired: true, HasDefault: false })
+            if (members[index].IsRequired && !members[index].HasDefault)
             {
                 memberName = members[index].Name;
                 schema.DeserializeMember(builder, index, ref this);

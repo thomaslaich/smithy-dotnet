@@ -310,10 +310,6 @@ public sealed class MemberSchema
 
     public bool IsRequired { get; }
 
-    /// <summary>
-    /// Whether the member has a modeled default, which its builder starts with. A
-    /// <c>@default(null)</c> declares that it has none.
-    /// </summary>
     internal bool HasDefault =>
         MemberTraits.TryGetValue(DefaultTrait, out var trait)
         && trait.Value.Kind != DocumentKind.Null;
