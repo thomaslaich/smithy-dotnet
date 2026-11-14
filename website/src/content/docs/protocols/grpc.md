@@ -62,8 +62,11 @@ operation GetCity {
 ```
 
 `@protoIndex` is the protobuf field number and is part of the stable wire
-contract. Omitting it from an input or output member is a model error.
-`@protoNumType` selects integer encodings such as `sint32`, `uint64`, or
+contract. Omitting it from an input or output member is a model error. The
+exception is the shapes of `smithy.framework`, such as `ValidationException`,
+which come from `smithy-validation-model` without `@protoIndex`: their fields
+are numbered by declaration order, in the codec and in the generated `.proto`
+alike. `@protoNumType` selects integer encodings such as `sint32`, `uint64`, or
 `fixed32`.
 
 ## Server
