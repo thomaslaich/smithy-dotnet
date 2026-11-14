@@ -155,8 +155,11 @@ builder.Services.AddMcpServer().WithSmithyService<WeatherServiceDefinition>()
 
 Each operation is a method that takes the input record and an optional
 `CancellationToken`, and returns a `Task`. An operation whose input members are
-all optional also has an overload without the input. An operation that declares
-errors returns its output as a `Result` with a union of those errors:
+all optional also has an overload without the input. In a project that
+generates only the client, every input member is an `option` (see
+[Member optionality](/smithy-dotnet/reference/generated-code/#member-optionality)).
+An operation that declares errors returns its output as a `Result` with a union
+of those errors:
 
 ```fsharp title="Program.fs"
 open System
