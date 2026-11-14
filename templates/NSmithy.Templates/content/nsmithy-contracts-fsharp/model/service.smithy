@@ -12,6 +12,7 @@ use smithy.protocols#rpcv2Cbor
 use alloy.proto#grpc
 use alloy.proto#protoIndex
 //#endif
+use smithy.framework#ValidationException
 
 /// A hello world service. Replace this with your service definition.
 //#if (IsRestJson1)
@@ -51,4 +52,5 @@ operation SayHello {
 //#endif
         message: String
     }
+    errors: [ValidationException]
 }

@@ -3,12 +3,14 @@
   "sources": ["model"],
   "maven": {
     "dependencies": [
+      "software.amazon.smithy:smithy-validation-model:1.74.1",
       "com.disneystreaming.alloy:alloy-core:0.3.40"
     ]
   },
   "plugins": {
     "contracts-jar": {
       "dependencies": [
+        "software.amazon.smithy:smithy-validation-model:1.74.1",
         "com.disneystreaming.alloy:alloy-core:0.3.40"
       ]
     }

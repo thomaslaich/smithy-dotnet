@@ -11,6 +11,7 @@
       }
     ],
     "dependencies": [
+      "software.amazon.smithy:smithy-validation-model:1.74.1",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "software.amazon.smithy:smithy-aws-traits:1.74.1",
       "software.amazon.smithy:smithy-aws-protocol-tests:1.74.1"
@@ -30,6 +31,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "aws.protocoltests.restjson#RestJson",
           "baseNamespace": "",
           "generateDependencyInjection": true
@@ -49,6 +51,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "restjsonone.local#AcceptHeaderStarHarness",
           "baseNamespace": ""
         }
@@ -67,6 +70,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "com.amazonaws.apigateway#BackplaneControlService",
           "baseNamespace": ""
         }
@@ -85,6 +89,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "com.amazonaws.glacier#Glacier",
           "baseNamespace": "Auxiliary"
         }

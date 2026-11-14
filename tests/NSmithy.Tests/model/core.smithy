@@ -2,6 +2,8 @@ $version: "2"
 
 namespace nsmithy.tests.core
 
+use smithy.framework#ValidationException
+
 /// Shapes the core tests exercise, generated so the tests use the same schemas a consumer would.
 service Fixtures {
     version: "1"
@@ -10,6 +12,7 @@ service Fixtures {
         GetUser
         UseShapes
     ]
+    errors: [ValidationException]
 }
 
 @http(method: "PUT", uri: "/users/{userId}")

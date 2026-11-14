@@ -3,12 +3,14 @@ $version: "2"
 namespace example.chat
 
 use smithy.api#streaming
+use smithy.framework#ValidationException
 use smithy.protocols#rpcv2Cbor
 
 @rpcv2Cbor
 service ChatService {
     version: "2026-07-28"
     operations: [WatchRoom, UploadTranscript, Chat]
+    errors: [ValidationException]
 }
 
 /// Server-streaming: one request, many events.

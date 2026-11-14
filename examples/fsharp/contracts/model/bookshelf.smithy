@@ -3,6 +3,7 @@ $version: "2"
 namespace example.bookshelf
 
 use aws.protocols#restJson1
+use smithy.framework#ValidationException
 
 /// A shelf of books that readers can add to, look up, and lend.
 @restJson1
@@ -33,6 +34,7 @@ operation AddBook {
         @required
         book: Book
     }
+    errors: [ValidationException]
 }
 
 /// Looks up one book.
@@ -48,7 +50,7 @@ operation GetBook {
         @required
         book: Book
     }
-    errors: [NoSuchBook]
+    errors: [NoSuchBook, ValidationException]
 }
 
 /// Lists the books on the shelf, optionally of one genre.
@@ -63,6 +65,7 @@ operation ListBooks {
         @required
         books: Books
     }
+    errors: [ValidationException]
 }
 
 /// Lends a book to a reader. A book that is already lent cannot be lent again.
@@ -80,7 +83,7 @@ operation LendBook {
         @required
         book: Book
     }
-    errors: [NoSuchBook, AlreadyLent]
+    errors: [NoSuchBook, AlreadyLent, ValidationException]
 }
 
 structure Book {

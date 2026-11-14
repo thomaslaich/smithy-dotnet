@@ -2,12 +2,15 @@ $version: "2"
 
 namespace nsmithy.tests.json
 
+use smithy.framework#ValidationException
+
 /// Shapes the json tests exercise, generated so the tests use the same schemas a consumer would.
 service Fixtures {
     version: "1"
     operations: [
         UseShapes
     ]
+    errors: [ValidationException]
 }
 
 operation UseShapes {

@@ -6,6 +6,7 @@ use alloy.proto#grpc
 use alloy.proto#protoIndex
 use alloy.proto#protoNumType
 use alloy.proto#protoInlinedOneOf
+use smithy.framework#ValidationException
 
 /// A library management service that demonstrates NSmithy proto-codegen features:
 /// @protoNumType (uint32, fixed64), @sparse maps, @protoInlinedOneOf, intEnum,
@@ -21,6 +22,7 @@ service LibraryService {
         SearchBooks
         UploadBooks
     ]
+    errors: [ValidationException]
 }
 
 // ─── Operations ──────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ use alloy#jsonUnknown
 use alloy#discriminated
 use alloy#preserveKeyOrder
 use smithy.api#httpApiKeyAuth
+use smithy.framework#ValidationException
 
 /// A pizza restaurant administration service.
 ///
@@ -16,7 +17,7 @@ use smithy.api#httpApiKeyAuth
 @httpApiKeyAuth(name: "X-Api-Key", in: "header")
 service PizzaAdminService {
     version: "1.0.0",
-    errors: [GenericServerError, GenericClientError],
+    errors: [GenericServerError, GenericClientError, ValidationException],
     operations: [AddMenuItem, GetMenu, Version, Health, AuthenticatedHealth, HeaderEndpoint, RoundTrip, GetEnum, GetIntEnum, CustomCode, HttpPayloadWithDefault, HttpPayloadRequiredWithDefault, OpenUnions, Primitives, PreserveOrder]
 }
 

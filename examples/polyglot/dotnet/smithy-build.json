@@ -18,7 +18,8 @@
       "plugins": {
         "csharp-codegen": {
           "service": "example.java.hello#HelloService",
-          "baseNamespace": ""
+          "baseNamespace": "",
+          "generateServer": false
         }
       }
     }

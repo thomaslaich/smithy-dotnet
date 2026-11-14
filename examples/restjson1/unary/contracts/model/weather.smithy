@@ -4,6 +4,7 @@ namespace example.weather
 
 use aws.protocols#restJson1
 use smithy.ai#prompts
+use smithy.framework#ValidationException
 
 /// Provides weather forecasts.
 ///
@@ -23,6 +24,7 @@ service Weather {
     version: "2006-03-01"
     resources: [City]
     operations: [GetCurrentTime, GetFlakyForecast]
+    errors: [ValidationException]
 }
 
 /// A city with a geographic location and an associated weather forecast.

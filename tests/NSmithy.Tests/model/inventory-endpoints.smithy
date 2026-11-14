@@ -3,6 +3,7 @@ metadata suppressions = [{ id: "UnstableTrait", namespace: "nsmithy.tests.invent
 namespace nsmithy.tests.inventory
 
 use alloy#simpleRestJson
+use smithy.framework#ValidationException
 use smithy.rules#clientContextParams
 use smithy.rules#endpointRuleSet
 
@@ -36,6 +37,7 @@ use smithy.rules#endpointRuleSet
 service Inventory {
     version: "1"
     operations: [GetStock]
+    errors: [ValidationException]
 }
 
 @readonly

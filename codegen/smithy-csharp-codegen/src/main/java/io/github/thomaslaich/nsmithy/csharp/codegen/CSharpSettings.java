@@ -14,8 +14,8 @@
  *     "generateDependencyInjection": true, // optional; emit the IHttpClientFactory extension
  *     "generateFakes": false,             // optional; emit fakes per surface (default false)
  *     "generateSmokeTests": false,        // optional; emit @smokeTests cases (default false)
- *     "attachValidationException": true,  // optional; declare smithy.framework#ValidationException
- *                                         // on operations with constrained input (default true)
+ *     "attachValidationException": false, // optional; declare smithy.framework#ValidationException
+ *                                         // for a model you do not own (default false)
  *     "defaultProtocol": "aws.protocols#restJson1" // optional; the client's default protocol
  *   }
  *
@@ -149,7 +149,7 @@ public final class CSharpSettings {
     boolean generateFakes = config.getBooleanMemberOrDefault(GENERATE_FAKES, false);
     boolean generateSmokeTests = config.getBooleanMemberOrDefault(GENERATE_SMOKE_TESTS, false);
     boolean attachValidationException =
-        config.getBooleanMemberOrDefault(ATTACH_VALIDATION_EXCEPTION, true);
+        config.getBooleanMemberOrDefault(ATTACH_VALIDATION_EXCEPTION, false);
     ShapeId defaultProtocol =
         config.getStringMember(DEFAULT_PROTOCOL).map(node -> node.expectShapeId()).orElse(null);
     return new CSharpSettings(
@@ -244,8 +244,8 @@ public final class CSharpSettings {
 
   /**
    * Whether to declare {@code smithy.framework#ValidationException} on every operation whose input
-   * is constrained, as the server returns it for them. Default true; when false, a server's
-   * constrained operations must declare it in the model. See {@code ValidationErrors}.
+   * is constrained, for a model the project does not own. Default false: a server's constrained
+   * operations must declare it in the model. See {@code ValidationErrors}.
    */
   public boolean attachValidationException() {
     return attachValidationException;

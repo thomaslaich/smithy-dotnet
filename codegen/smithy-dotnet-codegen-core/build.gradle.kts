@@ -19,6 +19,7 @@ dependencies {
     api("software.amazon.smithy:smithy-utils:$smithyVersion")
     implementation("software.amazon.smithy:smithy-jsonschema:$smithyVersion")
 
+    testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")

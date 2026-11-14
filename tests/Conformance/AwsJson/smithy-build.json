@@ -7,6 +7,7 @@
       }
     ],
     "dependencies": [
+      "software.amazon.smithy:smithy-validation-model:1.74.1",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "software.amazon.smithy:smithy-aws-traits:1.74.1",
       "software.amazon.smithy:smithy-aws-protocol-tests:1.74.1"
@@ -26,6 +27,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "aws.protocoltests.json#JsonProtocol",
           "baseNamespace": ""
         }
@@ -44,6 +46,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "com.amazonaws.machinelearning#AmazonML_20141212",
           "baseNamespace": "Auxiliary"
         }

@@ -2,6 +2,8 @@ $version: "2"
 
 namespace nsmithy.tests.server
 
+use smithy.framework#ValidationException
+
 /// Shapes the server tests exercise, generated so the tests use the same schemas a consumer would.
 service Fixtures {
     version: "1"
@@ -9,6 +11,7 @@ service Fixtures {
         CreateUser
         RenameUser
     ]
+    errors: [ValidationException]
 }
 
 @http(method: "POST", uri: "/users")

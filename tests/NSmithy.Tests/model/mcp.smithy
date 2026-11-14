@@ -3,6 +3,7 @@ $version: "2"
 namespace nsmithy.tests.mcp
 
 use smithy.ai#prompts
+use smithy.framework#ValidationException
 
 /// Shapes the mcp tests exercise, generated so the tests use the same schemas a consumer would.
 @prompts({
@@ -16,6 +17,7 @@ service Fixtures {
     operations: [
         LookupWeather
     ]
+    errors: [ValidationException]
 }
 
 /// Looks up the weather for a place.

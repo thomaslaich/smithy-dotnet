@@ -3,6 +3,7 @@
   "sources": ["model"],
   "maven": {
     "dependencies": [
+      "software.amazon.smithy:smithy-validation-model:1.74.1",
       "software.amazon.smithy:smithy-aws-traits:1.74.1",
       "software.amazon.smithy.java:smithy-ai-traits:1.8.0"
     ]
@@ -10,6 +11,7 @@
   "plugins": {
     "contracts-jar": {
       "dependencies": [
+        "software.amazon.smithy:smithy-validation-model:1.74.1",
         "software.amazon.smithy:smithy-aws-traits:1.74.1",
         "software.amazon.smithy.java:smithy-ai-traits:1.8.0"
       ]

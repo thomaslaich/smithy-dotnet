@@ -2,6 +2,8 @@ $version: "2"
 
 namespace example.shop
 
+use smithy.framework#ValidationException
+
 /// Captures a payment for an order.
 @http(method: "POST", uri: "/orders/{orderId}/payments", code: 201)
 operation CapturePayment {
@@ -19,5 +21,5 @@ operation CapturePayment {
         paymentId: String
     }
 
-    errors: [OrderNotFound]
+    errors: [OrderNotFound, ValidationException]
 }

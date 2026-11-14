@@ -17,7 +17,7 @@ let main args =
     use client = new HelloServiceClient(Uri endpoint)
     //#endif
 
-    // The server validates the input, so the operation returns a Result.
+    // The model declares ValidationException on SayHello, so the operation returns a Result.
     match client.SayHelloAsync({ Name = "world" }).GetAwaiter().GetResult() with
     | Ok response ->
         printfn "%s" response.Message

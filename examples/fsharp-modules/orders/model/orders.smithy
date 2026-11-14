@@ -2,6 +2,8 @@ $version: "2"
 
 namespace example.shop
 
+use smithy.framework#ValidationException
+
 /// Places an order for the given total.
 @http(method: "POST", uri: "/orders", code: 201)
 operation PlaceOrder {
@@ -14,4 +16,5 @@ operation PlaceOrder {
         @required
         orderId: String
     }
+    errors: [ValidationException]
 }
