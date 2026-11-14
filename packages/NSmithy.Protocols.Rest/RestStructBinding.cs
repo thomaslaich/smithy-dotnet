@@ -69,19 +69,19 @@ internal sealed class RestStructBinding<T, TBuilder>
     public void ReadText(TBuilder builder, HttpMemberPlan plan, string text)
     {
         var deserializer = HttpTextDeserializer.Single(plan.Format, text);
-        Schema.DeserializeMember(builder, plan.Index, ref deserializer);
+        Schema.ReadMember(builder, plan.Index, ref deserializer);
     }
 
     public void ReadHeader(TBuilder builder, HttpMemberPlan plan, string text)
     {
         var deserializer = HttpTextDeserializer.Header(plan.Format, text);
-        Schema.DeserializeMember(builder, plan.Index, ref deserializer);
+        Schema.ReadMember(builder, plan.Index, ref deserializer);
     }
 
     public void ReadQuery(TBuilder builder, HttpMemberPlan plan, IReadOnlyList<string> values)
     {
         var deserializer = HttpTextDeserializer.Many(plan.Format, values);
-        Schema.DeserializeMember(builder, plan.Index, ref deserializer);
+        Schema.ReadMember(builder, plan.Index, ref deserializer);
     }
 
     public void ReadPrefixHeaders(
@@ -109,7 +109,7 @@ internal sealed class RestStructBinding<T, TBuilder>
         }
 
         var deserializer = HttpTextDeserializer.Map(plan.Format, entries);
-        Schema.DeserializeMember(builder, plan.Index, ref deserializer);
+        Schema.ReadMember(builder, plan.Index, ref deserializer);
     }
 
     public void ReadQueryParams(TBuilder builder, Dictionary<string, IReadOnlyList<string>> query)
@@ -123,7 +123,7 @@ internal sealed class RestStructBinding<T, TBuilder>
             plan.Format,
             query.Where(entry => entry.Value.Count > 0)
         );
-        Schema.DeserializeMember(builder, plan.Index, ref deserializer);
+        Schema.ReadMember(builder, plan.Index, ref deserializer);
     }
 
     public void ReadStatusCode(TBuilder builder, int statusCode)
@@ -158,21 +158,26 @@ internal sealed class RestStructBinding<T, TBuilder>
                         : Stream.Null
                 );
             var events = new HttpPayloadDeserializer(plan, [], stream);
-            Schema.DeserializeMember(builder, plan.Index, ref events);
+            Schema.ReadMember(builder, plan.Index, ref events);
             return;
         }
 
         if (plan.PayloadKind == PayloadKind.StreamingBlob && streamingContent is not null)
         {
             var streaming = new HttpPayloadDeserializer(plan, [], streamingContent);
-            Schema.DeserializeMember(builder, plan.Index, ref streaming);
+            Schema.ReadMember(builder, plan.Index, ref streaming);
             return;
         }
 
         // An empty body keeps the value the builder started with: the payload's modeled default,
-        // or none.
+        // which then counts as sent, or none.
         if (content is null or { Length: 0 })
         {
+            if (plan.Member.HasTrait(DefaultTrait))
+            {
+                Schema.MarkMemberSet(builder, plan.Index);
+            }
+
             return;
         }
 
@@ -183,7 +188,7 @@ internal sealed class RestStructBinding<T, TBuilder>
                 ? new MemoryStream(content, writable: false)
                 : null
         );
-        Schema.DeserializeMember(builder, plan.Index, ref payload);
+        Schema.ReadMember(builder, plan.Index, ref payload);
     }
 
     private static bool IsTransportManagedHeader(string name) =>

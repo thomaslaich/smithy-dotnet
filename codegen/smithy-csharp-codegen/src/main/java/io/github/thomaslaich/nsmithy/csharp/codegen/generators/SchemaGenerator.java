@@ -209,6 +209,7 @@ public final class SchemaGenerator {
       writer.putContext("type", context.symbolProvider().toSymbol(shape));
       writer.putContext("schema", RuntimeTypes.SCHEMA);
       writer.putContext("structSchema", RuntimeTypes.STRUCT_SCHEMA);
+      writer.putContext("structBuilder", RuntimeTypes.STRUCT_BUILDER);
       writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
       writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
       writer.putContext(
@@ -275,7 +276,7 @@ public final class SchemaGenerator {
           """
           public static partial class ${schemaClass:L}
           {
-              public sealed class ${builderClass:L}
+              public sealed class ${builderClass:L} : ${structBuilder:T}
               {
                   ${builderProperties:C|}
               }

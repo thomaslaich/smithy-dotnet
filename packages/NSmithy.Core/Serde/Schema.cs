@@ -389,6 +389,9 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     private readonly MemberSchema[] members;
     private readonly Dictionary<string, MemberSchema> membersByName;
 
+    // The indices of the required members, whose presence the builder records.
+    private readonly int[] required;
+
     protected StructSchema(
         ShapeId id,
         IEnumerable<MemberSchema> members,
@@ -403,6 +406,17 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
             member => member,
             StringComparer.Ordinal
         );
+        required =
+        [
+            .. Enumerable.Range(0, this.members.Length).Where(i => this.members[i].IsRequired),
+        ];
+        if (required.Length > 0 && !typeof(StructBuilder).IsAssignableFrom(typeof(TBuilder)))
+        {
+            throw new InvalidOperationException(
+                $"Structure schema '{id}' has required members, so its builder "
+                    + $"'{typeof(TBuilder).Name}' must derive from {nameof(StructBuilder)}."
+            );
+        }
     }
 
     public IReadOnlyList<MemberSchema> Members => members;
@@ -443,6 +457,73 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     public abstract T Build(TBuilder builder);
 
     public T BuildEmpty() => Build(CreateTypedBuilder());
+
+    /// <summary>
+    /// Reads one member into <paramref name="builder"/> and records that the payload set it. Every
+    /// reader goes through here rather than <see cref="DeserializeMember"/>, so
+    /// <see cref="CompleteMembers"/> knows which required members arrived.
+    /// </summary>
+    public void ReadMember<TDeserializer>(
+        TBuilder builder,
+        int index,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct
+    {
+        if (required.Length > 0)
+        {
+            Presence(builder).MarkSet(index);
+        }
+
+        DeserializeMember(builder, index, ref deserializer);
+    }
+
+    /// <summary>
+    /// Records that a binding supplied a member without reading a value, such as an empty
+    /// <c>@httpPayload</c>, which keeps the member's modeled default.
+    /// </summary>
+    public void MarkMemberSet(TBuilder builder, int index)
+    {
+        if (required.Length > 0)
+        {
+            Presence(builder).MarkSet(index);
+        }
+    }
+
+    /// <summary>
+    /// Finishes reading <paramref name="builder"/>: each required member no reader set, including
+    /// one with a modeled default, throws <see cref="MissingRequiredMemberException"/>, as a server
+    /// rejects it. With <paramref name="fillMissing"/>, as a client reads, it instead takes its zero
+    /// value (see <see cref="FillMissingMember"/>). A null a payload sent for a member never sets
+    /// it, so it counts as missing.
+    /// </summary>
+    public void CompleteMembers(TBuilder builder, bool fillMissing)
+    {
+        if (required.Length == 0)
+        {
+            return;
+        }
+
+        var presence = Presence(builder);
+        foreach (var index in required)
+        {
+            if (presence.IsSet(index))
+            {
+                continue;
+            }
+
+            if (!fillMissing)
+            {
+                throw new MissingRequiredMemberException(members[index].Name);
+            }
+
+            FillMissingMember(builder, index);
+        }
+    }
+
+    // The constructor checked that a builder with required members to track is a StructBuilder.
+    private static StructBuilder Presence(TBuilder builder) =>
+        System.Runtime.CompilerServices.Unsafe.As<TBuilder, StructBuilder>(ref builder);
 
     /// <inheritdoc cref="IStructSchema{T}.BuildZeroValue"/>
     public T BuildZeroValue()

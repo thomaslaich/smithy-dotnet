@@ -57,17 +57,21 @@ public sealed class EventStreamBinding<TShape, TBuilder, TEvent>
 
     /// <summary>
     /// Builds a value carrying <paramref name="events"/>. <paramref name="readInitialMembers"/>
-    /// fills the other members first, for protocols that send them ahead of the stream.
+    /// fills the other members first, for protocols that send them ahead of the stream. A required
+    /// member they leave out fails, or with <paramref name="fillMissing"/>, as a client reads, takes
+    /// its zero value (see <see cref="StructSchema{T, TBuilder}.CompleteMembers"/>).
     /// </summary>
     public TShape Build(
         IAsyncEnumerable<TEvent> events,
-        Action<TBuilder>? readInitialMembers = null
+        Action<TBuilder>? readInitialMembers = null,
+        bool fillMissing = false
     )
     {
         var builder = Structure.CreateTypedBuilder();
         readInitialMembers?.Invoke(builder);
         var deserializer = new EventSource<TEvent>(events);
-        Structure.DeserializeMember(builder, index, ref deserializer);
+        Structure.ReadMember(builder, index, ref deserializer);
+        Structure.CompleteMembers(builder, fillMissing);
         return Structure.Build(builder);
     }
 }

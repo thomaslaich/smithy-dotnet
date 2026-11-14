@@ -99,13 +99,14 @@ internal readonly struct CborShapeDeserializer(
 
         var builder = schema.CreateTypedBuilder();
         ReadMembers(reader, entry.Shape!, schema, builder, fillMissing);
+        schema.CompleteMembers(builder, fillMissing);
         return schema.Build(builder);
     }
 
     /// <summary>
-    /// Reads the members of a structure into <paramref name="builder"/>. An explicit null is a
-    /// present value: a required member rejects it (or, with <paramref name="fillMissing"/>, reads
-    /// it as missing), and an optional one reads it rather than taking its default.
+    /// Reads the members of a structure into <paramref name="builder"/>. An explicit null for a
+    /// required member leaves it unset, so it counts as missing; an optional one reads it rather
+    /// than taking its default. <paramref name="fillMissing"/> is passed on to nested structures.
     /// </summary>
     internal static void ReadMembers<T, TBuilder>(
         CborReader reader,
@@ -116,8 +117,6 @@ internal readonly struct CborShapeDeserializer(
     )
     {
         var members = plan.Members;
-        Span<bool> seen = members.Length <= 64 ? stackalloc bool[64] : new bool[members.Length];
-
         reader.ReadStartMap();
         while (reader.PeekState() != CborReaderState.EndMap)
         {
@@ -133,19 +132,13 @@ internal readonly struct CborShapeDeserializer(
             if (reader.PeekState() == CborReaderState.Null && member.IsRequired)
             {
                 reader.ReadNull();
-                if (!fillMissing)
-                {
-                    throw new MissingRequiredMemberException(member.Name);
-                }
-
                 continue;
             }
 
-            seen[index] = true;
             var nested = new CborShapeDeserializer(reader, member, fillMissing);
             try
             {
-                schema.DeserializeMember(builder, index, ref nested);
+                schema.ReadMember(builder, index, ref nested);
             }
             catch (MissingRequiredMemberException exception)
             {
@@ -155,26 +148,6 @@ internal readonly struct CborShapeDeserializer(
         }
 
         reader.ReadEndMap();
-        for (var index = 0; index < members.Length; index++)
-        {
-            if (seen[index] || !plan.IsIncluded(index))
-            {
-                continue;
-            }
-
-            var member = members[index];
-            // An absent member keeps the value its builder started with: its modeled default, or
-            // none.
-            if (member.IsRequired)
-            {
-                if (!fillMissing)
-                {
-                    throw new MissingRequiredMemberException(member.Name);
-                }
-
-                schema.FillMissingMember(builder, index);
-            }
-        }
     }
 
     public TCollection ReadList<TCollection, TElement, TBuilder>(

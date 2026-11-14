@@ -164,10 +164,12 @@ final class SchemaGenerator {
     writer.writeTemplate(
         """
         ${^properties}
-        type ${builder:L}() = class end
+        type ${builder:L}() =
+            inherit global.NSmithy.Core.Serde.StructBuilder()
         ${/properties}
         ${?properties}
         type ${builder:L}() =
+            inherit global.NSmithy.Core.Serde.StructBuilder()
             ${#properties}
             member val ${key:L}: ${value:L} voption = ValueNone with get, set
             ${/properties}

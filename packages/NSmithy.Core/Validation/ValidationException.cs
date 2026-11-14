@@ -61,7 +61,7 @@ public sealed record ValidationExceptionField(string Path, string Message);
 
 public static class ValidationExceptionFieldSchema
 {
-    public sealed class Builder
+    public sealed class Builder : StructBuilder
     {
         public string? Path { get; set; }
 
@@ -119,7 +119,7 @@ public static class ValidationExceptionSchema
 {
     public static readonly ShapeId Id = ShapeId.Parse("smithy.framework#ValidationException");
 
-    public sealed class Builder
+    public sealed class Builder : StructBuilder
     {
         public string? Message { get; set; }
 

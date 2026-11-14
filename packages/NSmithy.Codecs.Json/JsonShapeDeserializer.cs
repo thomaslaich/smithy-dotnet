@@ -72,7 +72,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         try
         {
             Start(ref deserializer.reader);
-            deserializer.ReadMembers(plan, schema, builder, projection: true);
+            deserializer.ReadMembers(plan, schema, builder);
             End(ref deserializer.reader);
         }
         catch (JsonException exception)
@@ -338,7 +338,8 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
     public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema)
     {
         var builder = schema.CreateTypedBuilder();
-        ReadMembers(entry.Shape!, schema, builder, projection: false);
+        ReadMembers(entry.Shape!, schema, builder);
+        schema.CompleteMembers(builder, fillMissing);
         return schema.Build(builder);
     }
 
@@ -349,8 +350,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
     private void ReadMembers<T, TBuilder>(
         JsonShapePlan plan,
         StructSchema<T, TBuilder> schema,
-        TBuilder builder,
-        bool projection
+        TBuilder builder
     )
     {
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -373,14 +373,10 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
                 continue;
             }
 
+            // A null leaves the member unset, so a required one counts as missing.
             var member = members[index];
             if (reader.TokenType == JsonTokenType.Null)
             {
-                if (projection && member.IsRequired && !fillMissing)
-                {
-                    throw new MissingRequiredMemberException(member.Name);
-                }
-
                 continue;
             }
 
@@ -389,7 +385,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
             entry = member;
             try
             {
-                schema.DeserializeMember(builder, index, ref this);
+                schema.ReadMember(builder, index, ref this);
             }
             catch (MissingRequiredMemberException exception)
             {
@@ -398,26 +394,6 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
             }
 
             entry = outer;
-        }
-
-        for (var index = 0; index < members.Length; index++)
-        {
-            if (seen[index] || !plan.IsIncluded(index))
-            {
-                continue;
-            }
-
-            // An absent member keeps the value its builder started with: its modeled default, or
-            // none.
-            if (members[index].IsRequired)
-            {
-                if (!fillMissing)
-                {
-                    throw new MissingRequiredMemberException(members[index].Name);
-                }
-
-                schema.FillMissingMember(builder, index);
-            }
         }
     }
 

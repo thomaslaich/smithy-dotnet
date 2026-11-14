@@ -54,7 +54,7 @@ public static class MalformedRequestSchema
 {
     public static readonly ShapeId Id = ShapeId.Parse("smithy.framework#MalformedRequest");
 
-    public sealed class Builder
+    public sealed class Builder : StructBuilder
     {
         public string? Message { get; set; }
     }

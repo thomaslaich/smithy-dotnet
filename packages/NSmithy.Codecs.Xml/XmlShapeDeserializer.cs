@@ -72,16 +72,17 @@ internal readonly struct XmlShapeDeserializer(
 
         var builder = schema.CreateTypedBuilder();
         ReadMembers(element, entry.Shape!, schema, builder, fillMissing);
+        schema.CompleteMembers(builder, fillMissing);
         return schema.Build(builder);
     }
 
     /// <summary>
     /// Reads each member the plan includes from its attribute or child element. An absent member
-    /// is left unset, or rejected when it is required (read as its zero value with
-    /// <paramref name="fillMissing"/>). A null <paramref name="element"/> is an empty payload.
+    /// is left unset; whoever builds the structure decides whether a required one may be.
+    /// <paramref name="fillMissing"/> is passed on to nested structures.
     /// </summary>
     internal static void ReadMembers<T, TBuilder>(
-        XElement? element,
+        XElement element,
         XmlShapePlan plan,
         StructSchema<T, TBuilder> schema,
         TBuilder builder,
@@ -96,12 +97,6 @@ internal readonly struct XmlShapeDeserializer(
             }
 
             var member = plan.Members[index];
-            if (element is null)
-            {
-                Missing(member, index);
-                continue;
-            }
-
             if (member.IsAttribute)
             {
                 var attribute = element.Attribute(AttributeName(element, member.ElementName));
@@ -113,11 +108,7 @@ internal readonly struct XmlShapeDeserializer(
                         member,
                         fillMissing
                     );
-                    schema.DeserializeMember(builder, index, ref nested);
-                }
-                else
-                {
-                    Missing(member, index);
+                    schema.ReadMember(builder, index, ref nested);
                 }
 
                 continue;
@@ -137,7 +128,7 @@ internal readonly struct XmlShapeDeserializer(
                     element,
                     member.ElementName
                 );
-                schema.DeserializeMember(builder, index, ref items);
+                schema.ReadMember(builder, index, ref items);
                 continue;
             }
 
@@ -158,27 +149,8 @@ internal readonly struct XmlShapeDeserializer(
             if (child is not null)
             {
                 var nested = new XmlShapeDeserializer(child, null, member, fillMissing);
-                schema.DeserializeMember(builder, index, ref nested);
+                schema.ReadMember(builder, index, ref nested);
             }
-            else
-            {
-                Missing(member, index);
-            }
-        }
-
-        void Missing(XmlMemberPlan member, int index)
-        {
-            if (!member.IsRequired)
-            {
-                return;
-            }
-
-            if (!fillMissing)
-            {
-                throw new MissingRequiredMemberException(member.Name);
-            }
-
-            schema.FillMissingMember(builder, index);
         }
     }
 

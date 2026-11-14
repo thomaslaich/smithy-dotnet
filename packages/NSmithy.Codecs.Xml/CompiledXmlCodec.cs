@@ -96,16 +96,15 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
     {
         ArgumentNullException.ThrowIfNull(payload);
         ArgumentNullException.ThrowIfNull(builder);
-        // An empty body has no members; a client still fills the required ones.
-        var element =
-            payload.Length == 0
-                ? null
-                : XElement.Parse(Encoding.UTF8.GetString(payload), LoadOptions.PreserveWhitespace);
-        if (element is null && !fillMissing)
+        if (payload.Length == 0)
         {
             return;
         }
 
+        var element = XElement.Parse(
+            Encoding.UTF8.GetString(payload),
+            LoadOptions.PreserveWhitespace
+        );
         XmlShapeDeserializer.ReadMembers(element, plan, projection.Source, builder, fillMissing);
     }
 }

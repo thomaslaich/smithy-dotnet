@@ -186,7 +186,7 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
                                 WireType.Len
                             )
                         );
-                        schema.DeserializeMember(builder, field.Member, ref all);
+                        schema.ReadMember(builder, field.Member, ref all);
                     }
 
                     reader.SkipField(wireType);
@@ -201,7 +201,7 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
                     field.Case
                 );
                 reading = member;
-                schema.DeserializeMember(builder, field.Member, ref nested);
+                schema.ReadMember(builder, field.Member, ref nested);
                 reading = null;
             }
         }
@@ -226,7 +226,7 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
                     member.FieldNumber,
                     new ProtoOccurrence(message.Start + message.Length, 0, WireType.Len)
                 );
-                schema.DeserializeMember(builder, index, ref none);
+                schema.ReadMember(builder, index, ref none);
             }
         }
     }

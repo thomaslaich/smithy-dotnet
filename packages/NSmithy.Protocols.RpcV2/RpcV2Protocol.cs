@@ -212,7 +212,7 @@ public abstract class RpcV2Protocol : IProtocol
         var binding = new EventStreamShapeBinding<TInput, TEvent, TBuilder>(
             stream,
             codecFactory,
-            materializeTopLevelDefaults: false
+            isOutput: false
         );
         return new RequestStrategy<TInput>(
             (request, input, cancellationToken) =>
@@ -306,7 +306,7 @@ public abstract class RpcV2Protocol : IProtocol
         var binding = new EventStreamShapeBinding<TOutput, TEvent, TBuilder>(
             stream,
             codecFactory,
-            materializeTopLevelDefaults: true
+            isOutput: true
         );
         return new ResponseStrategy<TOutput>(
             (output, cancellationToken) =>
@@ -530,15 +530,18 @@ public abstract class RpcV2Protocol : IProtocol
     private sealed class EventStreamShapeBinding<TShape, TEvent, TBuilder>(
         EventStreamBinding<TShape, TBuilder, TEvent> stream,
         IProjectionCodecFactory codecFactory,
-        bool materializeTopLevelDefaults
+        bool isOutput
     )
     {
+        // A request does not materialize top-level defaults, and only a client reads an output, so
+        // it fills a required member the service left out rather than failing.
         public IProjectionCodec<TShape, TBuilder> InitialCodec { get; } =
             codecFactory.FromProjection(
                 stream.InitialMembers,
                 new CodecFactoryOptions
                 {
-                    MaterializeTopLevelDefaults = materializeTopLevelDefaults,
+                    MaterializeTopLevelDefaults = isOutput,
+                    FillMissingRequiredMembers = isOutput,
                 }
             );
 
@@ -551,7 +554,8 @@ public abstract class RpcV2Protocol : IProtocol
                 events,
                 initialPayload.Length > 0
                     ? builder => InitialCodec.ReadInto(initialPayload, builder)
-                    : null
+                    : null,
+                fillMissing: isOutput
             );
     }
 
