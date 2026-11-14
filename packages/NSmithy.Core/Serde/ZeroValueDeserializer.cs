@@ -4,79 +4,60 @@ namespace NSmithy.Core.Serde;
 
 /// <summary>
 /// Supplies the zero value of whatever a schema reads, which is how a client fills a required
-/// member its peer left out (Smithy's client error correction). A structure gets its required
-/// members without a default filled the same way, and its other members keep the values its
-/// builder starts with.
-/// A union has no zero value, so reading one fails as a missing member.
+/// member its peer left out (Smithy's client error correction; see
+/// <see cref="StructSchema{T, TBuilder}.CompleteMembers"/>). A union has no zero value, so reading
+/// one fails as the missing member <c>memberName</c>.
 /// </summary>
-internal struct ZeroValueDeserializer(string memberName) : IShapeDeserializer
+internal readonly struct ZeroValueDeserializer(string memberName) : IShapeDeserializer
 {
-    private string memberName = memberName;
+    public bool TryReadNull() => false;
 
-    public readonly bool TryReadNull() => false;
+    public bool ReadBoolean() => false;
 
-    public readonly bool ReadBoolean() => false;
+    public sbyte ReadByte() => 0;
 
-    public readonly sbyte ReadByte() => 0;
+    public short ReadShort() => 0;
 
-    public readonly short ReadShort() => 0;
+    public int ReadInteger() => 0;
 
-    public readonly int ReadInteger() => 0;
+    public long ReadLong() => 0;
 
-    public readonly long ReadLong() => 0;
+    public float ReadFloat() => 0;
 
-    public readonly float ReadFloat() => 0;
+    public double ReadDouble() => 0;
 
-    public readonly double ReadDouble() => 0;
+    public BigInteger ReadBigInteger() => BigInteger.Zero;
 
-    public readonly BigInteger ReadBigInteger() => BigInteger.Zero;
+    public decimal ReadBigDecimal() => 0;
 
-    public readonly decimal ReadBigDecimal() => 0;
+    public string ReadString() => string.Empty;
 
-    public readonly string ReadString() => string.Empty;
+    public byte[] ReadBlob() => [];
 
-    public readonly byte[] ReadBlob() => [];
+    public DateTimeOffset ReadTimestamp() => DateTimeOffset.UnixEpoch;
 
-    public readonly DateTimeOffset ReadTimestamp() => DateTimeOffset.UnixEpoch;
-
-    public readonly Document ReadDocument() => Document.Null;
+    public Document ReadDocument() => Document.Null;
 
     // An open enum reads an unrecognized value as its unknown variant.
-    public readonly string ReadStringEnum() => string.Empty;
+    public string ReadStringEnum() => string.Empty;
 
-    public readonly int ReadIntEnum() => 0;
+    public int ReadIntEnum() => 0;
 
-    public readonly Stream ReadStream() => Stream.Null;
+    public Stream ReadStream() => Stream.Null;
 
-    public readonly IAsyncEnumerable<TEvent> ReadEventStream<TEvent>(Schema<TEvent> eventSchema) =>
+    public IAsyncEnumerable<TEvent> ReadEventStream<TEvent>(Schema<TEvent> eventSchema) =>
         AsyncEnumerable.Empty<TEvent>();
 
-    public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema)
-    {
-        var builder = schema.CreateTypedBuilder();
-        var outer = memberName;
-        var members = schema.Members;
-        for (var index = 0; index < members.Count; index++)
-        {
-            if (members[index].IsRequired && !members[index].HasDefault)
-            {
-                memberName = members[index].Name;
-                schema.DeserializeMember(builder, index, ref this);
-            }
-        }
+    public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema) => schema.BuildZeroValue();
 
-        memberName = outer;
-        return schema.Build(builder);
-    }
-
-    public readonly TCollection ReadList<TCollection, TElement, TBuilder>(
+    public TCollection ReadList<TCollection, TElement, TBuilder>(
         ListSchema<TCollection, TElement, TBuilder> schema
     ) => schema.Build(schema.CreateTypedBuilder());
 
-    public readonly TDictionary ReadMap<TDictionary, TValue, TBuilder>(
+    public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
         MapSchema<TDictionary, TValue, TBuilder> schema
     ) => schema.Build(schema.CreateTypedBuilder());
 
-    public readonly T ReadUnion<T>(UnionSchema<T> schema) =>
+    public T ReadUnion<T>(UnionSchema<T> schema) =>
         throw new MissingRequiredMemberException(memberName);
 }

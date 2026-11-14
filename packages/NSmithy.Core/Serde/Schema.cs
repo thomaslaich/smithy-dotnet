@@ -357,7 +357,7 @@ public interface IStructSchema<T> : IStructSchema
 
     /// <summary>
     /// Builds the structure a client reads from an empty payload: each required member at its zero
-    /// value (see <see cref="StructSchema{T, TBuilder}.FillMissingMember"/>), and each other member
+    /// value (see <see cref="StructSchema{T, TBuilder}.CompleteMembers"/>), and each other member
     /// at its modeled default or unset.
     /// </summary>
     T BuildZeroValue();
@@ -385,10 +385,7 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     private readonly MemberSchema[] members;
     private readonly Dictionary<string, MemberSchema> membersByName;
 
-    // The indices of the required members, whose presence the builder records, and each member's
-    // position among them (its presence bit), or -1 for a member that is not required.
-    private readonly int[] required;
-    private readonly int[] ordinals;
+    private readonly RequiredMembers required;
 
     protected StructSchema(
         ShapeId id,
@@ -404,28 +401,7 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
             member => member,
             StringComparer.Ordinal
         );
-        required =
-        [
-            .. Enumerable.Range(0, this.members.Length).Where(i => this.members[i].IsRequired),
-        ];
-        ordinals = new int[this.members.Length];
-        Array.Fill(ordinals, -1);
-        for (var ordinal = 0; ordinal < required.Length; ordinal++)
-        {
-            ordinals[required[ordinal]] = ordinal;
-        }
-
-        var builderBase =
-            required.Length > 64 ? typeof(LargeStructBuilder)
-            : required.Length > 0 ? typeof(StructBuilder)
-            : null;
-        if (builderBase is not null && !builderBase.IsAssignableFrom(typeof(TBuilder)))
-        {
-            throw new InvalidOperationException(
-                $"Structure schema '{id}' has {required.Length} required members, so its builder "
-                    + $"'{typeof(TBuilder).Name}' must derive from {builderBase.Name}."
-            );
-        }
+        required = new RequiredMembers(id, this.members, typeof(TBuilder));
     }
 
     public IReadOnlyList<MemberSchema> Members => members;
@@ -479,11 +455,7 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     )
         where TDeserializer : struct, IShapeDeserializer, allows ref struct
     {
-        if (ordinals[index] >= 0)
-        {
-            Presence(builder).MarkSet(ordinals[index]);
-        }
-
+        MarkMemberSet(builder, index);
         DeserializeMember(builder, index, ref deserializer);
     }
 
@@ -493,9 +465,10 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     /// </summary>
     public void MarkMemberSet(TBuilder builder, int index)
     {
-        if (ordinals[index] >= 0)
+        var ordinal = required.OrdinalOf(index);
+        if (ordinal >= 0)
         {
-            Presence(builder).MarkSet(ordinals[index]);
+            Presence(builder).MarkSet(ordinal);
         }
     }
 
@@ -503,26 +476,28 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     /// Finishes reading <paramref name="builder"/>: each required member no reader set, including
     /// one with a modeled default, throws <see cref="MissingRequiredMemberException"/>, as a server
     /// rejects it. Read <see cref="WireReadMode.Lenient"/>, as a client reads, it instead takes its
-    /// zero value (see <see cref="FillMissingMember"/>). A null a payload sent for a member never
-    /// sets it, so it counts as missing.
+    /// zero value, Smithy's client error correction: <c>false</c>, <c>0</c>, an empty string,
+    /// blob, list, or map, the epoch, a null document, an enum's unknown value, or a structure
+    /// completed the same way. A member with a modeled default keeps it, and a union, which has no
+    /// zero value, still throws. A null a payload sent for a member never sets it, so it counts as
+    /// missing.
     /// </summary>
     public void CompleteMembers(TBuilder builder, WireReadMode mode)
     {
-        if (required.Length == 0)
+        if (required.Count == 0)
         {
             return;
         }
 
         var presence = Presence(builder);
-        for (var ordinal = 0; ordinal < required.Length; ordinal++)
+        for (var ordinal = 0; ordinal < required.Count; ordinal++)
         {
             if (presence.IsSet(ordinal))
             {
                 continue;
             }
 
-            var index = required[ordinal];
-
+            var index = required.IndexOf(ordinal);
             if (mode == WireReadMode.Strict)
             {
                 throw new MissingRequiredMemberException(members[index].Name);
@@ -539,21 +514,14 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     /// <inheritdoc cref="IStructSchema{T}.BuildZeroValue"/>
     public T BuildZeroValue()
     {
-        var deserializer = new ZeroValueDeserializer(Id.Name);
-        return deserializer.ReadStruct(this);
+        var builder = CreateTypedBuilder();
+        CompleteMembers(builder, WireReadMode.Lenient);
+        return Build(builder);
     }
 
-    /// <summary>
-    /// Sets a member the payload left out to its target's zero value, unless it has a modeled
-    /// default, which the builder already holds. The zero value is <c>false</c>, <c>0</c>, an
-    /// empty string, blob, list, or map, the epoch, a null document, an enum's unknown value, or a
-    /// structure whose required members are filled the same way. This is Smithy's client error
-    /// correction for a required member a service failed to send. A union has no zero value and
-    /// throws <see cref="MissingRequiredMemberException"/>.
-    /// </summary>
-    public void FillMissingMember(TBuilder builder, int index)
+    // A member with a modeled default already holds it; any other takes its target's zero value.
+    private void FillMissingMember(TBuilder builder, int index)
     {
-        // A member with a modeled default already holds it.
         if (members[index].HasDefault)
         {
             return;

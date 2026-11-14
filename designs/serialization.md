@@ -227,9 +227,10 @@ value, Smithy's
 [client error correction](https://smithy.io/2.0/spec/aggregate-types.html#client-error-correction):
 `false`, `0`, an empty string, blob, list, or map, the epoch, a null document,
 an enum's unknown value, or a structure filled the same way. A member with a
-modeled default keeps it. `StructSchema.FillMissingMember` runs the member's own
+modeled default keeps it. `CompleteMembers` runs the member's own
 `DeserializeMember` against a deserializer that returns zero values, so no
-generated code knows about it. A union has no zero value and still fails.
+generated code knows about it, and `BuildZeroValue` completes a fresh builder
+the same way. A union has no zero value and still fails.
 
 Protocol Buffers is the exception: proto3 leaves a zero value off the wire, so
 presence says nothing about what the sender meant. Its codec records presence
