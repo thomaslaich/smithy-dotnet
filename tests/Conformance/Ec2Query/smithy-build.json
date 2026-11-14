@@ -19,6 +19,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "generateServer": false,
           "attachValidationException": true,
           "service": "aws.protocoltests.ec2#AwsEc2",
           "baseNamespace": ""

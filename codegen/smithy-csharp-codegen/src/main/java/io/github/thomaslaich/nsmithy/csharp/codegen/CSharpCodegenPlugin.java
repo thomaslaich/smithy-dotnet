@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ClientNullability;
 import io.github.thomaslaich.nsmithy.codegen.core.GeneratedCodeFormatter;
 import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeClosures;
@@ -70,7 +71,13 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
     runner.fileManifest(manifest);
     runner.model(model);
     runner.integrationClass(CSharpIntegration.class);
-    runner.integrationFinder(() -> integrations);
+    Set<ShapeId> owned = OwnedShapes.of(model, settings.ownedSources());
+    List<CSharpIntegration> withNullability = new ArrayList<>(integrations);
+    if (ClientNullability.applies(
+        model, owned, settings.generateClient(), settings.generateServer())) {
+      withNullability.add(new ClientNullabilityIntegration());
+    }
+    runner.integrationFinder(() -> withNullability);
     runner.createDedicatedInputsAndOutputs();
 
     Optional<ServiceShape> service =
@@ -79,7 +86,6 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
         service
             .map(shape -> additionalShapes(model, settings, shape, integrations))
             .orElseGet(TreeSet::new);
-    Set<ShapeId> owned = OwnedShapes.of(model, settings.ownedSources());
     settings.providedShapes().check(model, service, owned, settings.generateServer());
     if (settings.generatesOwnedShapes()) {
       if (!ShapeClosures.configureOwned(runner, service, owned, additionalShapes)) {

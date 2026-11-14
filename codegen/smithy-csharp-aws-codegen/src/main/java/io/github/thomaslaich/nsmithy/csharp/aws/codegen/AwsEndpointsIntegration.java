@@ -61,8 +61,8 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
   /**
    * S3's endpoint rules place the bucket in the host or, for path-style addressing, in the
    * endpoint's path. The modeled {@code /{Bucket}} path segment would repeat it, so it is removed
-   * from the operations' URIs. {@code Bucket} keeps its {@code @httpLabel} binding, so it stays
-   * required and out of the body.
+   * from the operations' URIs. {@code Bucket} keeps its {@code @httpLabel} binding, so it stays out
+   * of the body and a request without it fails.
    */
   @Override
   public Model preprocessModel(Model model, CSharpSettings settings) {

@@ -27,6 +27,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "generateServer": false,
           "attachValidationException": true,
           "service": "aws.protocoltests.restxml#RestXml",
           "baseNamespace": ""
@@ -46,6 +47,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "generateServer": false,
           "attachValidationException": true,
           "service": "com.amazonaws.s3#AmazonS3",
           "baseNamespace": ""
@@ -65,6 +67,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "generateServer": false,
           "attachValidationException": true,
           "service": "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
           "baseNamespace": ""
