@@ -1,11 +1,10 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
-import io.github.thomaslaich.nsmithy.codegen.core.ClientNullability;
+import io.github.thomaslaich.nsmithy.codegen.core.CodegenModel;
 import io.github.thomaslaich.nsmithy.codegen.core.GeneratedCodeFormatter;
 import io.github.thomaslaich.nsmithy.codegen.core.OwnedShapes;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeClosures;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
-import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.nio.file.Path;
@@ -23,7 +22,6 @@ import software.amazon.smithy.codegen.core.directed.CodegenDirector;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
-import software.amazon.smithy.model.transform.ModelTransformer;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -55,14 +53,15 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
       CSharpSettings settings,
       FileManifest manifest,
       List<CSharpIntegration> integrations) {
-    // Not performDefaultCodegenTransforms: it also copies a service's errors onto its operations,
-    // but operation schemas are service-agnostic. The service schema carries those errors.
     Model model =
-        ValidationErrors.apply(
-            ModelTransformer.create().flattenAndRemoveMixins(sourceModel),
+        CodegenModel.prepare(
+            sourceModel,
             settings.service(),
             settings.attachValidationException(),
-            settings.generateServer());
+            settings.generateClient(),
+            settings.generateServer(),
+            settings.ownedSources(),
+            settings.providedShapes());
     CodegenDirector<CSharpWriter, CSharpIntegration, GenerationContext, CSharpSettings> runner =
         new CodegenDirector<>();
 
@@ -71,14 +70,7 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
     runner.fileManifest(manifest);
     runner.model(model);
     runner.integrationClass(CSharpIntegration.class);
-    Set<ShapeId> owned = OwnedShapes.of(model, settings.ownedSources());
-    List<CSharpIntegration> withNullability = new ArrayList<>(integrations);
-    if (ClientNullability.applies(
-        model, owned, settings.generateClient(), settings.generateServer())) {
-      withNullability.add(new ClientNullabilityIntegration());
-    }
-    runner.integrationFinder(() -> withNullability);
-    runner.createDedicatedInputsAndOutputs();
+    runner.integrationFinder(() -> integrations);
 
     Optional<ServiceShape> service =
         settings.service().map(id -> model.expectShape(id, ServiceShape.class));
@@ -86,6 +78,7 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
         service
             .map(shape -> additionalShapes(model, settings, shape, integrations))
             .orElseGet(TreeSet::new);
+    Set<ShapeId> owned = OwnedShapes.of(model, settings.ownedSources());
     settings.providedShapes().check(model, service, owned, settings.generateServer());
     if (settings.generatesOwnedShapes()) {
       if (!ShapeClosures.configureOwned(runner, service, owned, additionalShapes)) {
