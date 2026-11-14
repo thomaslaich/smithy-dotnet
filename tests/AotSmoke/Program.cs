@@ -96,7 +96,7 @@ internal sealed record AotInput(
     string DisplayName
 );
 
-internal sealed class AotInputBuilder
+internal sealed class AotInputBuilder : StructBuilder
 {
     public string? UserId { get; set; }
 

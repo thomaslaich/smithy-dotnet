@@ -151,7 +151,7 @@ public class ProtoSerializationBenchmarks
 
     public sealed record ProtoValue(string Name, int Count);
 
-    public sealed class ProtoValueBuilder
+    public sealed class ProtoValueBuilder : StructBuilder
     {
         public string? Name { get; set; }
 

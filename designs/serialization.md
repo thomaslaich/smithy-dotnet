@@ -65,7 +65,7 @@ public sealed record class MenuItem(Food Food, float Price);
 namespace Example.Pizza.Schemas;
 public static partial class MenuItemSchema
 {
-    public sealed class Builder { /* ... */ }
+    public sealed class Builder : StructBuilder { /* ... */ }
 
     public static Schema<MenuItem> Schema { get; } = new GeneratedSchema();
 
@@ -133,7 +133,7 @@ references:
 // structure Rating { @required title: String, @range(min: 1, max: 5) score: Integer, author: User }
 public static partial class RatingSchema
 {
-    public sealed class Builder
+    public sealed class Builder : StructBuilder
     {
         public string? Title { get; set; }
         public int? Score { get; set; }
