@@ -10,8 +10,6 @@
  *     "baseNamespace": "MyOrg",                // optional; prepended to PascalCase(smithyNamespace)
  *     "generateClient": true,                  // optional; emit the service's client (default true)
  *     "generateServer": true,                  // optional; emit the service's server (default true)
- *     "attachValidationException": true,       // optional; declare smithy.framework#ValidationException
- *                                              // on operations with constrained input (default true)
  *     "defaultProtocol": "aws.protocols#restJson1" // optional; the client's default protocol
  *   }
  *
@@ -45,7 +43,6 @@ public final class FSharpSettings {
   private static final String BASE_NAMESPACE = "baseNamespace";
   private static final String GENERATE_CLIENT = "generateClient";
   private static final String GENERATE_SERVER = "generateServer";
-  private static final String ATTACH_VALIDATION_EXCEPTION = "attachValidationException";
   private static final String DEFAULT_PROTOCOL = "defaultProtocol";
 
   private final ShapeId service;
@@ -56,7 +53,6 @@ public final class FSharpSettings {
   private final String baseNamespace;
   private final boolean generateClient;
   private final boolean generateServer;
-  private final boolean attachValidationException;
   private final ShapeId defaultProtocol;
 
   private FSharpSettings(
@@ -67,7 +63,6 @@ public final class FSharpSettings {
       String baseNamespace,
       boolean generateClient,
       boolean generateServer,
-      boolean attachValidationException,
       ShapeId defaultProtocol) {
     this.service = service;
     this.closure = closure;
@@ -76,7 +71,6 @@ public final class FSharpSettings {
     this.baseNamespace = baseNamespace;
     this.generateClient = generateClient;
     this.generateServer = generateServer;
-    this.attachValidationException = attachValidationException;
     this.defaultProtocol = defaultProtocol;
   }
 
@@ -90,7 +84,6 @@ public final class FSharpSettings {
             BASE_NAMESPACE,
             GENERATE_CLIENT,
             GENERATE_SERVER,
-            ATTACH_VALIDATION_EXCEPTION,
             DEFAULT_PROTOCOL));
     ShapeId service = config.getStringMember(SERVICE).map(StringNode::expectShapeId).orElse(null);
     String closure = config.getStringMember(CLOSURE).map(StringNode::getValue).orElse(null);
@@ -106,7 +99,6 @@ public final class FSharpSettings {
         config.getStringMemberOrDefault(BASE_NAMESPACE, ""),
         config.getBooleanMemberOrDefault(GENERATE_CLIENT, true),
         config.getBooleanMemberOrDefault(GENERATE_SERVER, true),
-        config.getBooleanMemberOrDefault(ATTACH_VALIDATION_EXCEPTION, true),
         config.getStringMember(DEFAULT_PROTOCOL).map(StringNode::expectShapeId).orElse(null));
   }
 
@@ -162,15 +154,6 @@ public final class FSharpSettings {
   /** Whether to emit the service's server. Default true. */
   public boolean generateServer() {
     return generateServer;
-  }
-
-  /**
-   * Whether to declare {@code smithy.framework#ValidationException} on every operation whose input
-   * is constrained, as the server returns it for them. Default true; when false, a server's
-   * constrained operations must declare it in the model. See {@code ValidationErrors}.
-   */
-  public boolean attachValidationException() {
-    return attachValidationException;
   }
 
   /**

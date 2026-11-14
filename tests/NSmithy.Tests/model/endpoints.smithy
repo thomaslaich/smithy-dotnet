@@ -10,6 +10,7 @@ metadata suppressions = [
 namespace nsmithy.tests.endpoints
 
 use aws.protocols#restJson1
+use smithy.framework#ValidationException
 use smithy.rules#clientContextParams
 use smithy.rules#contextParam
 use smithy.rules#endpointRuleSet
@@ -89,6 +90,7 @@ service Storage {
         ListBuckets
         GetObject
     ]
+    errors: [ValidationException]
 }
 
 @readonly

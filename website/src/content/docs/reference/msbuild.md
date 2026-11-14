@@ -74,7 +74,6 @@ Set these in `smithy-build.json`, under `plugins` or a projection's `plugins`:
 | `generateDependencyInjection` | Generate the `Add{Service}Client` IHttpClientFactory extension. Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). |
 | `generateFakes` | Generate fake clients and handlers from modeled examples or deterministic placeholders. See [Fake handlers](/smithy-dotnet/servers/fake-handlers/). |
 | `generateSmokeTests` | Generate `{Service}SmokeTests` from the operations' `@smokeTests` cases. See [Smoke tests](/smithy-dotnet/guides/client-configuration/smoke-tests/). |
-| `attachValidationException` | Declare `smithy.framework#ValidationException` on every operation whose input is constrained, as the server returns it for them. Set to `false` to declare it in the model instead; a server then fails to generate a constrained operation that does not. Also an `fsharp-codegen` setting. Default: `true`. See [Validation](/smithy-dotnet/servers/validation/#declaring-the-error). |
 
 A project that generates from a contracts reference and has no
 `smithy-build.json` adds one with only these settings:

@@ -43,7 +43,7 @@ recurses through structures, lists, maps, and unions.
 A violation produces `smithy.framework#ValidationException` with HTTP 400.
 Every operation carries this error implicitly, so a generated client
 deserializes it as a modeled `ValidationException` whether or not the model
-declares it. The generators also declare it for you: see
+declares it. A server requires the model to declare it: see
 [Declaring the error](#declaring-the-error).
 
 ```json
@@ -150,37 +150,23 @@ nothing, and an operation with no modeled output has no media type to negotiate.
 ## Declaring the error
 
 The server returns `ValidationException` whether or not the model declares it,
-so the generators declare it on every operation whose input is constrained: a
-constraint trait from the table above, or an enum, is reachable from the input.
-The generated code then tells the truth about the operation. The operation's
-schema lists the error, an F# client returns it as the `ValidationException`
-case of the operation's `Result`, and smoke tests accept it as a modeled
-failure. An operation the server never
-validates, such as one with no input or with only unconstrained optional
-members, is left alone. An operation or service that declares the error itself
-keeps its own declaration, and the operation's error list is otherwise unchanged.
-
-Declaring the error does not change what goes over the wire, and the shapes of
-`smithy.framework` are never generated: the generated code binds to the
-runtime's `ValidationException` and `ValidationExceptionField`.
-
-To declare the error in the model yourself, the way smithy-rs's strict mode
-requires, set `attachValidationException` to `false` in the plugin settings of
-`smithy-build.json`:
+and the model is the contract for every client of the service, whichever
+toolchain generates it. So a server requires the model to say so: every
+operation whose input is constrained, that is, a constraint trait from the
+table above or an enum is reachable from the input, must list
+`smithy.framework#ValidationException` in its errors, or its service must. Code
+generation fails otherwise and names the operations to fix. The shape comes
+from the Maven dependency `software.amazon.smithy:smithy-validation-model`:
 
 ```json title="smithy-build.json"
 {
   "version": "1.0",
-  "plugins": {
-    "csharp-codegen": { "attachValidationException": false }
+  "sources": ["model"],
+  "maven": {
+    "dependencies": ["software.amazon.smithy:smithy-validation-model:1.74.1"]
   }
 }
 ```
-
-A server then refuses to generate an operation whose input is constrained but
-whose errors, or its service's, do not include `smithy.framework#ValidationException`,
-and names the operations to fix. The shape comes from the Maven dependency
-`software.amazon.smithy:smithy-validation-model`:
 
 ```smithy
 use smithy.framework#ValidationException
@@ -192,8 +178,37 @@ service Weather {
 }
 ```
 
-A client-only project with the setting off generates exactly the model's error
-lists; the runtime still deserializes the server's `ValidationException`.
+With the error declared, the generated code tells the truth about the
+operation: its schema lists the error, smoke tests accept it as a modeled
+failure, and an F# client returns it as the `ValidationException` case of the
+operation's `Result`. For F#, declare it on the operation rather than the
+service, since the errors a service declares sit behind the `Service` case.
+Declaring the error changes nothing on the wire, and the shapes of
+`smithy.framework` are never generated: the generated code binds to the
+runtime's `ValidationException` and `ValidationExceptionField`.
+
+A client follows the model. A client-only project generates exactly the
+model's error lists, and the runtime still deserializes a server's
+`ValidationException` that the model leaves out, as an exception. For a model
+you do not own, the `declareValidationException` build transform declares the
+error on every constrained operation in a projection:
+
+```json title="smithy-build.json"
+{
+  "version": "1.0",
+  "maven": {
+    "dependencies": ["software.amazon.smithy:smithy-validation-model:1.74.1"]
+  },
+  "projections": {
+    "server": {
+      "transforms": [{ "name": "declareValidationException" }],
+      "plugins": {
+        "csharp-codegen": { "service": "example.weather#Weather" }
+      }
+    }
+  }
+}
+```
 
 ## Clients do not validate
 

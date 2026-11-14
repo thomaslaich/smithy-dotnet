@@ -14,8 +14,9 @@ import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
 
 /**
- * {@code smithy.framework#ValidationException} on the operations whose input the server validates:
- * listed in their schemas, bound to the runtime's type, never generated.
+ * {@code smithy.framework#ValidationException}, which a model declares on the operations whose
+ * input the server validates: listed in their schemas, bound to the runtime's type, never
+ * generated.
  */
 class ValidationExceptionIntegrationTest {
 
@@ -23,6 +24,8 @@ class ValidationExceptionIntegrationTest {
       """
       $version: "2"
       namespace example.cafe
+
+      use smithy.framework#ValidationException
 
       service Cafe {
           version: "2024-01-01"
@@ -34,7 +37,7 @@ class ValidationExceptionIntegrationTest {
               @required
               dish: String
           }
-          errors: [SoldOut]
+          errors: [SoldOut, ValidationException]
       }
 
       operation Browse {
@@ -44,6 +47,12 @@ class ValidationExceptionIntegrationTest {
       @error("client")
       structure SoldOut {}
       """;
+
+  /** The same model without the declaration. */
+  private static final String UNDECLARED =
+      MODEL
+          .replace("use smithy.framework#ValidationException\n", "")
+          .replace("errors: [SoldOut, ValidationException]", "errors: [SoldOut]");
 
   @Test
   void aConstrainedOperationsSchemaListsTheRuntimesErrorSchema() {
@@ -71,22 +80,16 @@ class ValidationExceptionIntegrationTest {
   }
 
   @Test
-  void attachingCanBeTurnedOffForAClient() {
-    MockManifest manifest =
-        generate(
-            settings()
-                .withMember("attachValidationException", false)
-                .withMember("generateServer", false));
+  void aClientFollowsAModelThatDoesNotDeclareTheError() {
+    MockManifest manifest = generate(UNDECLARED, settings().withMember("generateServer", false));
 
     assertFalse(schema(manifest, "Order").contains("ValidationException"));
   }
 
   @Test
-  void aServerThatDoesNotAttachMustDeclareTheError() {
+  void aServerRequiresTheModelToDeclareTheError() {
     CodegenException error =
-        assertThrows(
-            CodegenException.class,
-            () -> generate(settings().withMember("attachValidationException", false)));
+        assertThrows(CodegenException.class, () -> generate(UNDECLARED, settings()));
 
     assertTrue(
         error.getMessage().startsWith("Operation example.cafe#Order takes input"),
@@ -104,7 +107,16 @@ class ValidationExceptionIntegrationTest {
   }
 
   private static MockManifest generate(ObjectNode.Builder settings) {
-    Model model = Model.assembler().addUnparsedModel("cafe.smithy", MODEL).assemble().unwrap();
+    return generate(MODEL, settings);
+  }
+
+  private static MockManifest generate(String source, ObjectNode.Builder settings) {
+    Model model =
+        Model.assembler()
+            .discoverModels() // the validation model's shapes
+            .addUnparsedModel("cafe.smithy", source)
+            .assemble()
+            .unwrap();
     MockManifest manifest = new MockManifest();
     CSharpCodegenPlugin.generate(
         model, CSharpSettings.fromNode(settings.build()), manifest, List.of());

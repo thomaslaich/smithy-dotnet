@@ -3,6 +3,7 @@
   "maven": {
     "repositories": [{ "url": "https://repo.maven.apache.org/maven2/" }],
     "dependencies": [
+      "software.amazon.smithy:smithy-validation-model:1.74.1",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "software.amazon.smithy:smithy-aws-traits:1.74.1",
       "software.amazon.smithy:smithy-aws-protocol-tests:1.74.1"
@@ -11,6 +12,7 @@
   "projections": {
     "awsquery": {
       "transforms": [
+        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": { "services": ["aws.protocoltests.query#AwsQuery"] }

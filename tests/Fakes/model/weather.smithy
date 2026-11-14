@@ -3,6 +3,7 @@ $version: "2"
 namespace example.weather
 
 use aws.protocols#restJson1
+use smithy.framework#ValidationException
 
 /// A trimmed copy of the examples' Weather service, used to exercise the
 /// generated fakes (fake client and fake handler) end to end.
@@ -10,6 +11,7 @@ use aws.protocols#restJson1
 service Weather {
     version: "2006-03-01"
     operations: [GetCity, GetCurrentTime, ListCities]
+    errors: [ValidationException]
 }
 
 /// Returns the name and coordinates of a city by ID.

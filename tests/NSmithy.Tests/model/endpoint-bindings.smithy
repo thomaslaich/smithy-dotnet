@@ -5,6 +5,7 @@ metadata suppressions = [{ id: "UnstableTrait", namespace: "nsmithy.tests.endpoi
 namespace nsmithy.tests.endpointbindings
 
 use aws.protocols#restJson1
+use smithy.framework#ValidationException
 use smithy.rules#clientContextParams
 use smithy.rules#contextParam
 use smithy.rules#endpointRuleSet
@@ -34,6 +35,7 @@ use smithy.rules#staticContextParams
 service Routing {
     version: "1"
     operations: [SelectRoute, StaticRoute]
+    errors: [ValidationException]
 }
 
 structure RouteDetails { route: String }

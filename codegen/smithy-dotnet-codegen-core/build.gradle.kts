@@ -1,7 +1,7 @@
 // Language-neutral codegen core shared by the .NET code generators (smithy-csharp-codegen and
 // smithy-fsharp-codegen): trait ids, shape predicates, naming, the traits carried into runtime
 // schemas, shape-closure selection, protocols, operation JSON Schemas, and prompts. It registers no
-// SmithyBuildPlugin of its own.
+// SmithyBuildPlugin of its own, only the declareValidationException build transform.
 
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
@@ -19,6 +19,7 @@ dependencies {
     api("software.amazon.smithy:smithy-utils:$smithyVersion")
     implementation("software.amazon.smithy:smithy-jsonschema:$smithyVersion")
 
+    testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")

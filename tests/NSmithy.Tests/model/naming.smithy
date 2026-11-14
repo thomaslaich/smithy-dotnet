@@ -3,6 +3,7 @@ $version: "2"
 namespace nsmithy.tests.naming
 
 use aws.protocols#restJson1
+use smithy.framework#ValidationException
 
 /// Shapes whose names collide with generated C# names. Each one must still compile, and the
 /// tests use the names the generator falls back to.
@@ -12,6 +13,7 @@ service Fixtures {
     operations: [
         UseNames
     ]
+    errors: [ValidationException]
 }
 
 @http(method: "POST", uri: "/names")

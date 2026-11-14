@@ -11,6 +11,7 @@
       }
     ],
     "dependencies": [
+      "software.amazon.smithy:smithy-validation-model:1.74.1",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "software.amazon.smithy:smithy-aws-traits:1.74.1",
       "software.amazon.smithy:smithy-aws-protocol-tests:1.74.1"
@@ -19,6 +20,7 @@
   "projections": {
     "restjson1": {
       "transforms": [
+        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -38,6 +40,7 @@
     },
     "restjson1-misc-accept": {
       "transforms": [
+        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -56,6 +59,7 @@
     },
     "restjson1-apigateway": {
       "transforms": [
+        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -74,6 +78,7 @@
     },
     "restjson1-glacier": {
       "transforms": [
+        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {

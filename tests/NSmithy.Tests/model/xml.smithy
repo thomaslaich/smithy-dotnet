@@ -2,10 +2,13 @@ $version: "2"
 
 namespace nsmithy.tests.xml
 
+use smithy.framework#ValidationException
+
 /// Shapes the xml tests exercise, generated so the tests use the same schemas a consumer would.
 service Fixtures {
     version: "1"
     operations: [UseShapes]
+    errors: [ValidationException]
 }
 
 operation UseShapes {

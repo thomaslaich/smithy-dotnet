@@ -2,6 +2,8 @@ $version: "2"
 
 namespace nsmithy.tests.rest
 
+use smithy.framework#ValidationException
+
 /// Shapes the rest tests exercise, generated so the tests use the same schemas a consumer would.
 service Fixtures {
     version: "1"
@@ -18,6 +20,7 @@ service Fixtures {
         ListItems
         ListCities
     ]
+    errors: [ValidationException]
 }
 
 @readonly

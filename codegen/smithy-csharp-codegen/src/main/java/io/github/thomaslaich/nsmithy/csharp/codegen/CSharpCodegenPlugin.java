@@ -56,12 +56,14 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
       List<CSharpIntegration> integrations) {
     // Not performDefaultCodegenTransforms: it also copies a service's errors onto its operations,
     // but operation schemas are service-agnostic. The service schema carries those errors.
-    Model model =
-        ValidationErrors.apply(
-            ModelTransformer.create().flattenAndRemoveMixins(sourceModel),
-            settings.service(),
-            settings.attachValidationException(),
-            settings.generateServer());
+    Model model = ModelTransformer.create().flattenAndRemoveMixins(sourceModel);
+    if (settings.generateServer()) {
+      // The server answers a constraint violation with ValidationException; the model must say so.
+      settings
+          .service()
+          .ifPresent(id ->
+              ValidationErrors.requireDeclared(model, model.expectShape(id, ServiceShape.class)));
+    }
     CodegenDirector<CSharpWriter, CSharpIntegration, GenerationContext, CSharpSettings> runner =
         new CodegenDirector<>();
 
