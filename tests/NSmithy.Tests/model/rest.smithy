@@ -20,6 +20,7 @@ service Fixtures {
         ListItems
         ListCities
         GetQuota
+        GetBadge
     ]
     errors: [ValidationException]
 }
@@ -242,4 +243,23 @@ operation ListItems {
 @http(method: "GET", uri: "/cities")
 operation ListCities {
     input: ListInput
+}
+
+/// A client fills the required members of an @httpPayload structure the same way.
+@readonly
+@http(method: "GET", uri: "/badge")
+operation GetBadge {
+    output := {
+        @required
+        @httpPayload
+        badge: Badge
+    }
+}
+
+structure Badge {
+    @required
+    label: String
+
+    @required
+    level: Integer
 }

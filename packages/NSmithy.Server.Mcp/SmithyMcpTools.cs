@@ -230,7 +230,7 @@ internal static class BoxedJsonCodec
 
     private sealed class JsonCodec<T>(Schema<T> schema) : IBoxedJsonCodec
     {
-        private readonly ICodec<T> codec = JsonCodecFactory.Strict.FromSchema(schema);
+        private readonly ICodec<T> codec = JsonCodecFactory.Default.FromSchema(schema);
 
         public object Deserialize(byte[] payload) => codec.Deserialize(payload)!;
 

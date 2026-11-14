@@ -24,19 +24,26 @@ internal sealed class JsonRestBodyCodecFactory(WireReadMode readMode) : IRestBod
 
     public string BlobContentType => "application/octet-stream";
 
-    private readonly JsonCodecFactory codecFactory = new(readMode);
-
     public ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null) =>
-        codecFactory.FromSchema(schema, options);
+        JsonCodecFactory.Default.FromSchema(schema, ReadingAs(options));
 
     public ICodec<T> FromMember<T>(
         Schema<T> target,
         IReadOnlyDictionary<ShapeId, Trait> memberTraits,
         CodecFactoryOptions? options = null
-    ) => codecFactory.FromMember(target, memberTraits, options);
+    ) => JsonCodecFactory.Default.FromMember(target, memberTraits, ReadingAs(options));
 
     public IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
         CodecFactoryOptions? options = null
-    ) => codecFactory.FromProjection(projection, options);
+    ) => JsonCodecFactory.Default.FromProjection(projection, ReadingAs(options));
+
+    // Codecs read by this side's rules unless the caller picked a mode.
+    private CodecFactoryOptions ReadingAs(CodecFactoryOptions? options) =>
+        options?.ReadMode is not null
+            ? options
+            : (options ?? CodecFactoryOptions.Default) with
+            {
+                ReadMode = readMode,
+            };
 }
