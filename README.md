@@ -9,7 +9,7 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Quick start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)** · **[Examples](examples/README.md)** · **[Design docs](designs/README.md)** · **[Changelog](CHANGELOG.md)**
 
-NSmithy generates clients, ASP.NET Core servers, and model types in C# and F# from [Smithy](https://smithy.io) models as part of `dotnet build`. Smithy is a language-neutral interface definition language from AWS ([why Smithy?](https://thomaslaich.github.io/smithy-dotnet/getting-started/introduction/#why-smithy)). There is no separate codegen step, and a client and server generated from the same model agree on routes, serialization, and errors.
+NSmithy generates clients, ASP.NET Core servers, and model types in C# and F# from [Smithy](https://smithy.io) models as part of `dotnet build`. There is no separate codegen step, and a client and server generated from the same model agree on routes, serialization, and errors.
 
 > **Preview:** expect some API changes before 1.0.
 
