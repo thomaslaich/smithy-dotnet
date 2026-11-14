@@ -41,10 +41,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   and loses its `readMode` constructor parameter and `JsonCodecFactory.Strict`. Code that reads a
   peer's payloads through `JsonCodecFactory.Default` rejects a `date-time` with a UTC offset and a
   missing required member; pass `ReadMode = WireReadMode.Lenient` to read as a client.
-- **awsJson, awsQuery, ec2Query, and rpcv2 servers reject a `date-time` with a UTC offset.** They
-  shared one codec factory with their clients and read requests leniently; they now read them
-  `Strict`, as restJson1 and restXml servers already did and Smithy's protocol tests require.
-  Clients still accept the offset.
+- **awsJson and rpcv2Json servers reject a `date-time` with a UTC offset.** They shared one codec
+  factory with their clients and read requests leniently; they now read them `Strict`, as restJson1
+  servers already did and Smithy's protocol tests require. Clients still accept the offset.
 
 ### Added
 
