@@ -65,7 +65,12 @@ public sealed class CodecErrorReader(
         where TError : Exception
     {
         ArgumentNullException.ThrowIfNull(schema);
-        var codec = codecs.FromSchema(schema.Schema);
+        // Only a client reads an error response, and it fills a required member the service left
+        // out rather than failing.
+        var codec = codecs.FromSchema(
+            schema.Schema,
+            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+        );
         return response => codec.Deserialize(payload(response));
     }
 }

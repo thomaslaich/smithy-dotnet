@@ -31,6 +31,8 @@ operation UseShapes {
         requiredPerson: RequiredPerson
         arbitraryPrecision: ArbitraryPrecision
         figure: Figure
+        corrected: Corrected
+        correctedChoice: CorrectedChoice
     }
 }
 
@@ -200,4 +202,47 @@ structure Circle {
 
 structure Square {
     side: Integer
+}
+
+/// One required member of each kind, for a client filling the ones a response leaves out.
+structure Corrected {
+    @required
+    text: String
+
+    @required
+    count: Integer
+
+    @required
+    flag: Boolean
+
+    @required
+    at: Timestamp
+
+    @required
+    data: Blob
+
+    @required
+    tags: Tags
+
+    @required
+    counts: Counts
+
+    @required
+    status: Status
+
+    @required
+    priority: Priority
+
+    @required
+    buyer: Customer
+
+    @required
+    kept: String = "kept"
+
+    note: String
+}
+
+structure CorrectedChoice {
+    @required
+    choice: Choice
 }

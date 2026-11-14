@@ -310,6 +310,16 @@ public sealed class MemberSchema
 
     public bool IsRequired { get; }
 
+    /// <summary>
+    /// Whether the member has a modeled default, which its builder starts with. A
+    /// <c>@default(null)</c> declares that it has none.
+    /// </summary>
+    internal bool HasDefault =>
+        MemberTraits.TryGetValue(DefaultTrait, out var trait)
+        && trait.Value.Kind != DocumentKind.Null;
+
+    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
+
     /// <summary>The effective trait: one on the member wins over the same trait on its target.</summary>
     public Trait? GetTrait(ShapeId id) =>
         MemberTraits.TryGetValue(id, out var trait) ? trait : Target.GetTrait(id);
@@ -348,6 +358,13 @@ public interface IStructSchema<T> : IStructSchema
     TResult Accept<TResult>(IStructSchemaVisitor<T, TResult> visitor);
 
     T BuildEmpty();
+
+    /// <summary>
+    /// Builds the structure a client reads from an empty payload: each required member at its zero
+    /// value (see <see cref="StructSchema{T, TBuilder}.FillMissingMember"/>), and each other member
+    /// at its modeled default or unset.
+    /// </summary>
+    T BuildZeroValue();
 
     /// <summary>Writes each member of <paramref name="value"/> under its index.</summary>
     void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
@@ -426,6 +443,33 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     public abstract T Build(TBuilder builder);
 
     public T BuildEmpty() => Build(CreateTypedBuilder());
+
+    /// <inheritdoc cref="IStructSchema{T}.BuildZeroValue"/>
+    public T BuildZeroValue()
+    {
+        var deserializer = new ZeroValueDeserializer(Id.Name);
+        return deserializer.ReadStruct(this);
+    }
+
+    /// <summary>
+    /// Sets a member the payload left out to its target's zero value, unless it has a modeled
+    /// default, which the builder already holds. The zero value is <c>false</c>, <c>0</c>, an
+    /// empty string, blob, list, or map, the epoch, a null document, an enum's unknown value, or a
+    /// structure whose required members are filled the same way. This is Smithy's client error
+    /// correction for a required member a service failed to send. A union has no zero value and
+    /// throws <see cref="MissingRequiredMemberException"/>.
+    /// </summary>
+    public void FillMissingMember(TBuilder builder, int index)
+    {
+        // A member with a modeled default already holds it.
+        if (members[index].HasDefault)
+        {
+            return;
+        }
+
+        var deserializer = new ZeroValueDeserializer(members[index].Name);
+        DeserializeMember(builder, index, ref deserializer);
+    }
 
     public void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer, allows ref struct =>

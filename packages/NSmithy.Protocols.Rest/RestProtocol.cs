@@ -313,6 +313,9 @@ public static class RestProtocol
         Func<byte[], byte[]>? prepareBody
     )
     {
+        // A client is not authoritative for @required: a member the service left out is read as
+        // its zero value (Smithy's client error correction) instead of failing the call. The body
+        // codec does the same for the members it reads.
         var builder = bound.Schema.CreateTypedBuilder();
         bound.ReadStatusCode(builder, (int)response.StatusCode);
         foreach (var header in bound.Headers)
@@ -324,17 +327,31 @@ public static class RestProtocol
             {
                 bound.ReadHeader(builder, header, value);
             }
+            else if (header.IsRequired)
+            {
+                bound.Schema.FillMissingMember(builder, header.Index);
+            }
         }
 
         bound.ReadPrefixHeaders(builder, response.Headers);
 
-        if (bound.Payload is not null)
+        if (bound.Payload is { } payload)
         {
-            bound.ReadPayload(
-                builder,
-                BodyBytesOrNull(response.Body),
-                BodyStreamOrNull(response.Body)
-            );
+            var content = BodyBytesOrNull(response.Body);
+            var stream = BodyStreamOrNull(response.Body);
+            if (
+                payload.IsRequired
+                && payload.PayloadKind != PayloadKind.EventStream
+                && stream is null
+                && content is null or { Length: 0 }
+            )
+            {
+                bound.Schema.FillMissingMember(builder, payload.Index);
+            }
+            else
+            {
+                bound.ReadPayload(builder, content, stream);
+            }
         }
         else if (bound.BodyCodec is { } codec && response.Content.Length > 0)
         {
@@ -342,6 +359,16 @@ public static class RestProtocol
                 prepareBody is null ? response.Content : prepareBody(response.Content),
                 builder
             );
+        }
+        else
+        {
+            foreach (var plan in bound.Plans)
+            {
+                if (plan.Binding == HttpBinding.Body && plan.IsRequired)
+                {
+                    bound.Schema.FillMissingMember(builder, plan.Index);
+                }
+            }
         }
 
         return bound.Schema.Build(builder);
@@ -395,7 +422,11 @@ public static class RestProtocol
             {
                 bound.BodyCodec = bound.CompileBodyCodec(
                     codecFactory,
-                    new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
+                    new CodecFactoryOptions
+                    {
+                        MaterializeTopLevelDefaults = true,
+                        FillMissingRequiredMembers = true,
+                    }
                 );
             }
 

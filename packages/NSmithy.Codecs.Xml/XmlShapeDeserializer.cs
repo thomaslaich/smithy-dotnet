@@ -10,12 +10,14 @@ namespace NSmithy.Codecs.Xml;
 /// <summary>
 /// Reads one XML value: the element (or attribute text) that holds it, described by the plan of
 /// the member it belongs to. A flattened list or map instead reads the repeated items of the
-/// enclosing element named <c>itemName</c>.
+/// enclosing element named <c>itemName</c>. With <c>fillMissing</c>, as a client reads, a required
+/// member left out is read as its zero value instead of failing.
 /// </summary>
 internal readonly struct XmlShapeDeserializer(
     XElement? element,
     string? text,
     XmlMemberPlan entry,
+    bool fillMissing,
     XElement? container = null,
     string? itemName = null
 ) : IShapeDeserializer
@@ -69,19 +71,21 @@ internal readonly struct XmlShapeDeserializer(
         }
 
         var builder = schema.CreateTypedBuilder();
-        ReadMembers(element, entry.Shape!, schema, builder);
+        ReadMembers(element, entry.Shape!, schema, builder, fillMissing);
         return schema.Build(builder);
     }
 
     /// <summary>
     /// Reads each member the plan includes from its attribute or child element. An absent member
-    /// is left unset, or rejected when it is required.
+    /// is left unset, or rejected when it is required (read as its zero value with
+    /// <paramref name="fillMissing"/>). A null <paramref name="element"/> is an empty payload.
     /// </summary>
     internal static void ReadMembers<T, TBuilder>(
-        XElement element,
+        XElement? element,
         XmlShapePlan plan,
         StructSchema<T, TBuilder> schema,
-        TBuilder builder
+        TBuilder builder,
+        bool fillMissing
     )
     {
         for (var index = 0; index < plan.Members.Length; index++)
@@ -92,17 +96,28 @@ internal readonly struct XmlShapeDeserializer(
             }
 
             var member = plan.Members[index];
+            if (element is null)
+            {
+                Missing(member, index);
+                continue;
+            }
+
             if (member.IsAttribute)
             {
                 var attribute = element.Attribute(AttributeName(element, member.ElementName));
                 if (attribute is not null)
                 {
-                    var nested = new XmlShapeDeserializer(null, attribute.Value, member);
+                    var nested = new XmlShapeDeserializer(
+                        null,
+                        attribute.Value,
+                        member,
+                        fillMissing
+                    );
                     schema.DeserializeMember(builder, index, ref nested);
                 }
-                else if (member.IsRequired)
+                else
                 {
-                    throw new MissingRequiredMemberException(member.Name);
+                    Missing(member, index);
                 }
 
                 continue;
@@ -118,6 +133,7 @@ internal readonly struct XmlShapeDeserializer(
                     null,
                     null,
                     member,
+                    fillMissing,
                     element,
                     member.ElementName
                 );
@@ -141,13 +157,28 @@ internal readonly struct XmlShapeDeserializer(
 
             if (child is not null)
             {
-                var nested = new XmlShapeDeserializer(child, null, member);
+                var nested = new XmlShapeDeserializer(child, null, member, fillMissing);
                 schema.DeserializeMember(builder, index, ref nested);
             }
-            else if (member.IsRequired)
+            else
+            {
+                Missing(member, index);
+            }
+        }
+
+        void Missing(XmlMemberPlan member, int index)
+        {
+            if (!member.IsRequired)
+            {
+                return;
+            }
+
+            if (!fillMissing)
             {
                 throw new MissingRequiredMemberException(member.Name);
             }
+
+            schema.FillMissingMember(builder, index);
         }
     }
 
@@ -164,7 +195,7 @@ internal readonly struct XmlShapeDeserializer(
             : [];
         foreach (var child in items)
         {
-            var nested = new XmlShapeDeserializer(child, null, item);
+            var nested = new XmlShapeDeserializer(child, null, item, fillMissing);
             schema.DeserializeElement(builder, ref nested);
         }
 
@@ -194,7 +225,8 @@ internal readonly struct XmlShapeDeserializer(
             var nested = new XmlShapeDeserializer(
                 ChildElement(mapEntry, value.ElementName),
                 null,
-                value
+                value,
+                fillMissing
             );
             schema.DeserializeEntry(builder, key, ref nested);
         }
@@ -214,7 +246,7 @@ internal readonly struct XmlShapeDeserializer(
             throw new InvalidOperationException($"Unknown union member '{child.Name.LocalName}'.");
         }
 
-        var nested = new XmlShapeDeserializer(child, null, plan.Members[index]);
+        var nested = new XmlShapeDeserializer(child, null, plan.Members[index], fillMissing);
         return schema.DeserializeCase(index, ref nested);
     }
 }

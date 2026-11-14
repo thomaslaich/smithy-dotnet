@@ -44,6 +44,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`smithy.framework` shapes in gRPC services.** `ValidationException` and its field shapes carry
   no `@protoIndex`, so the `.proto` generator numbers their fields by declaration order, as the
   proto codec does, instead of failing.
+- **Clients fill required members a response leaves out.** Clients no longer throw
+  `MissingRequiredMemberException` when an output or error omits a `@required` member, or sends it
+  as null: the member takes its zero value (`""`, `0`, `false`, an empty collection, the epoch, an
+  enum's unknown value), as Smithy's client error correction describes. Members with a modeled
+  default keep it, and a required union still fails. Servers still reject a request that omits a
+  required member. ([#349](https://github.com/thomaslaich/smithy-dotnet/issues/349))
 
 ## [0.19.0]
 

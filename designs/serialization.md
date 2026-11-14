@@ -208,6 +208,17 @@ code.
 where the codec can turn it into a modeled error. A defaulted member's builder
 property starts at its modeled default, so an absent member keeps it.
 
+A client is not authoritative for `@required`, so it reads outputs and errors
+with `CodecFactoryOptions.FillMissingRequiredMembers`. A required member the
+payload leaves out, or sends as null, then takes its zero value, Smithy's
+[client error correction](https://smithy.io/2.0/spec/aggregate-types.html#client-error-correction):
+`false`, `0`, an empty string, blob, list, or map, the epoch, a null document,
+an enum's unknown value, or a structure filled the same way. The codec fills it
+through `StructSchema.FillMissingMember`, which runs the member's own
+`DeserializeMember` against a deserializer that returns zero values, so no
+generated code knows about it. A union has no zero value and still fails. A
+server reads requests without the option and rejects the omission.
+
 For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
 that references the input and output schemas, the operation traits, and the
 modeled error descriptors. For each service, it emits a `ServiceSchema` with

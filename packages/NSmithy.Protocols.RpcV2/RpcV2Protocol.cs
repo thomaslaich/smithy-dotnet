@@ -252,7 +252,13 @@ public abstract class RpcV2Protocol : IProtocol
         // unit structure is its own CLR type and casting SmithyUnit to it would throw.
         var writesNoBody = IsUnit<TOutput>(outputSchema);
         var readsNoValue = typeof(TOutput) == typeof(SmithyUnit);
-        var codec = codecFactory.FromSchema(outputSchema);
+
+        // Only a client reads an output, and it fills a required member the service left out
+        // rather than failing.
+        var codec = codecFactory.FromSchema(
+            outputSchema,
+            new CodecFactoryOptions { FillMissingRequiredMembers = true }
+        );
 
         return new ResponseStrategy<TOutput>(
             (output, _) =>
@@ -280,7 +286,12 @@ public abstract class RpcV2Protocol : IProtocol
                     return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
                 }
 
-                return DeserializeSingleResponseAsync(response, codec, cancellationToken);
+                return DeserializeSingleResponseAsync(
+                    response,
+                    outputSchema,
+                    codec,
+                    cancellationToken
+                );
             },
             IsStreaming: false
         );
@@ -695,6 +706,7 @@ public abstract class RpcV2Protocol : IProtocol
 
     private static async ValueTask<T> DeserializeSingleResponseAsync<T>(
         SmithyHttpClientResponse response,
+        Schema<T> schema,
         ICodec<T> codec,
         CancellationToken cancellationToken
     )
@@ -705,7 +717,12 @@ public abstract class RpcV2Protocol : IProtocol
             using var stream = new MemoryStream();
             await body.CopyToAsync(stream, cancellationToken).ConfigureAwait(false);
             var content = stream.ToArray();
-            return content.Length == 0 ? default! : codec.Deserialize(content);
+            // An empty body is a structure with no members, whose required ones a client fills.
+            return content.Length == 0
+                ? schema.Resolved is IStructSchema<T> structure
+                    ? structure.BuildZeroValue()
+                    : default!
+                : codec.Deserialize(content);
         }
     }
 

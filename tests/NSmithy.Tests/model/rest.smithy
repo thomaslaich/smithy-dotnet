@@ -19,8 +19,26 @@ service Fixtures {
         Chat
         ListItems
         ListCities
+        GetQuota
     ]
     errors: [ValidationException]
+}
+
+/// A client fills the required members a response leaves out.
+@readonly
+@http(method: "GET", uri: "/quota")
+operation GetQuota {
+    output := {
+        @required
+        @httpHeader("X-Region")
+        region: String
+
+        @required
+        limit: Integer
+
+        @required
+        owners: StringMap
+    }
 }
 
 @readonly

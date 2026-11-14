@@ -130,7 +130,8 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
         // A modeled (non-Unit) structure output always serializes a body — at minimum `{}` — even
         // when every member is bound to a header/status, so build the codec regardless of member
         // count. Unit outputs and payload-bound outputs are handled separately. Responses
-        // materialize top-level defaults.
+        // materialize top-level defaults. Only a client reads an output, and it fills a required
+        // member the service left out rather than failing.
         if (output.PayloadMember is null && !outputIsUnit)
         {
             output.BodyCodec = output.CompileBodyCodec(
@@ -138,6 +139,7 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
                 new CodecFactoryOptions
                 {
                     MaterializeTopLevelDefaults = true,
+                    FillMissingRequiredMembers = true,
                     DefaultRootName = operation.Id.Name + "Response",
                 }
             );

@@ -9,6 +9,7 @@ namespace NSmithy.Codecs.Xml;
 internal sealed class CompiledXmlCodec<T>(
     Schema<T> schema,
     bool materializeTopLevelDefaults,
+    bool fillMissing,
     IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
     string? defaultNamespaceUri = null,
     string? defaultNamespacePrefix = null
@@ -47,7 +48,7 @@ internal sealed class CompiledXmlCodec<T>(
             Encoding.UTF8.GetString(payload),
             LoadOptions.PreserveWhitespace
         );
-        var deserializer = new XmlShapeDeserializer(element, null, root);
+        var deserializer = new XmlShapeDeserializer(element, null, root, fillMissing);
         return schema.Read(ref deserializer);
     }
 }
@@ -55,6 +56,7 @@ internal sealed class CompiledXmlCodec<T>(
 internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
     StructProjection<T, TBuilder> projection,
     bool materializeTopLevelDefaults,
+    bool fillMissing,
     string? defaultRootName,
     string? defaultNamespaceUri,
     string? defaultNamespacePrefix
@@ -94,15 +96,16 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
     {
         ArgumentNullException.ThrowIfNull(payload);
         ArgumentNullException.ThrowIfNull(builder);
-        if (payload.Length == 0)
+        // An empty body has no members; a client still fills the required ones.
+        var element =
+            payload.Length == 0
+                ? null
+                : XElement.Parse(Encoding.UTF8.GetString(payload), LoadOptions.PreserveWhitespace);
+        if (element is null && !fillMissing)
         {
             return;
         }
 
-        var element = XElement.Parse(
-            Encoding.UTF8.GetString(payload),
-            LoadOptions.PreserveWhitespace
-        );
-        XmlShapeDeserializer.ReadMembers(element, plan, projection.Source, builder);
+        XmlShapeDeserializer.ReadMembers(element, plan, projection.Source, builder, fillMissing);
     }
 }

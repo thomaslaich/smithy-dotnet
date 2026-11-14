@@ -24,6 +24,12 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
     // generic JSON documents continue to honor the trait through JsonCodecFactory.Default.
     private static readonly JsonCodecFactory CodecFactory = new(honorJsonNameTrait: false);
 
+    // A client fills a required member the service left out rather than failing the call.
+    private static readonly CodecFactoryOptions ClientRead = new()
+    {
+        FillMissingRequiredMembers = true,
+    };
+
     public IServiceProtocol ForService(ServiceSchema service)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -72,7 +78,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             outputIsUnit = outputIsSmithyUnit || Schemas.IsSyntheticUnit(operation.Output);
             outputSchema = operation.Output;
             requestCodec = CodecFactory.FromSchema(operation.Input);
-            responseCodec = CodecFactory.FromSchema(operation.Output);
+            responseCodec = CodecFactory.FromSchema(operation.Output, ClientRead);
             requestTransform = SmithyRequestModifiers.Compile(operation);
             HttpErrors = HttpOperationError.Compile(
                 service.ErrorsOf(operation),
@@ -151,7 +157,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
 
         private static TOutput CreateEmptyOutput(Schema<TOutput> schema) =>
             schema.Resolved is IStructSchema<TOutput> structSchema
-                ? structSchema.BuildEmpty()
+                ? structSchema.BuildZeroValue()
                 : default!;
     }
 
@@ -175,10 +181,10 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
                 ?? throw new InvalidOperationException(
                     $"Error schema '{schema.Schema.Id}' must be a structure schema."
                 );
-            var codec = CodecFactory.FromSchema(schema.Schema);
+            var codec = CodecFactory.FromSchema(schema.Schema, ClientRead);
             return response =>
                 response.Content.Length == 0
-                    ? structure.BuildEmpty()
+                    ? structure.BuildZeroValue()
                     : codec.Deserialize(response.Content);
         }
     }

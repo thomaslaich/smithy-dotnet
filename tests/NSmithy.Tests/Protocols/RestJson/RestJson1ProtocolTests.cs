@@ -48,6 +48,31 @@ public sealed class RestJson1ProtocolTests
         Assert.Equal("tenant", exception.MemberName);
     }
 
+    // A client is not authoritative for @required: a service ahead of or behind its model may
+    // leave a member out, and failing the call would help nobody.
+    [Theory]
+    [InlineData("")]
+    [InlineData("""{"limit":5}""")]
+    public void RestJson1ClientFillsRequiredMembersTheResponseLeavesOut(string body)
+    {
+        var response = new SmithyHttpClientResponse(
+            HttpStatusCode.OK,
+            null,
+            Encoding.UTF8.GetBytes(body),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Content-Type"] = ["application/json"],
+            }
+        );
+
+        var output = Protocol(GetQuotaSchema.Schema).DeserializeResponse(response);
+
+        Assert.Equal("", output.Region);
+        Assert.Equal(body.Length == 0 ? 0 : 5, output.Limit);
+        Assert.Empty(output.Owners);
+    }
+
     [Fact]
     public void RestJson1ProtocolAcceptsRequiredBoundMembersWhenPresent()
     {

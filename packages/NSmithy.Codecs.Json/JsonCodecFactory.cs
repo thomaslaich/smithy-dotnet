@@ -31,6 +31,7 @@ public sealed class JsonCodecFactory(
             schema,
             resolved.MaterializeTopLevelDefaults,
             readMode,
+            resolved.FillMissingRequiredMembers,
             CreatePlans(),
             discriminator: resolved.Discriminator
         );
@@ -48,6 +49,7 @@ public sealed class JsonCodecFactory(
             target,
             resolved.MaterializeTopLevelDefaults,
             readMode,
+            resolved.FillMissingRequiredMembers,
             CreatePlans(),
             memberTraits
         );
@@ -64,6 +66,7 @@ public sealed class JsonCodecFactory(
             projection,
             resolved.MaterializeTopLevelDefaults,
             readMode,
+            resolved.FillMissingRequiredMembers,
             CreatePlans()
         );
     }

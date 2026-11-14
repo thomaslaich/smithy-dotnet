@@ -34,6 +34,15 @@ public sealed record CodecFactoryOptions
     /// top-level structure. Ignored by formats that do not support it.
     /// </summary>
     public KeyValuePair<string, string>? Discriminator { get; init; }
+
+    /// <summary>
+    /// Whether a required member missing from the payload, or sent as null, is read as its zero
+    /// value (see <see cref="StructSchema{T, TBuilder}.FillMissingMember"/>) instead of failing.
+    /// Clients set it for responses and errors: Smithy treats a client as non-authoritative for
+    /// <c>@required</c>, and a service that is ahead of or behind the client's model may omit one.
+    /// A server leaves it off and rejects the request.
+    /// </summary>
+    public bool FillMissingRequiredMembers { get; init; }
 }
 
 /// <summary>Creates complete codecs from Smithy schemas.</summary>

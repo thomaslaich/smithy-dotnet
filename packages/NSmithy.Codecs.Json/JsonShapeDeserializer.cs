@@ -19,11 +19,20 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
     private JsonMemberPlan entry;
     private readonly WireReadMode mode;
 
-    private JsonShapeDeserializer(byte[] payload, JsonMemberPlan entry, WireReadMode mode)
+    // A client reads a required member its peer left out as its zero value; a server rejects it.
+    private readonly bool fillMissing;
+
+    private JsonShapeDeserializer(
+        byte[] payload,
+        JsonMemberPlan entry,
+        WireReadMode mode,
+        bool fillMissing
+    )
     {
         reader = new Utf8JsonReader(payload);
         this.entry = entry;
         this.mode = mode;
+        this.fillMissing = fillMissing;
     }
 
     /// <summary>Reads a whole payload, rejecting anything that is not one JSON value.</summary>
@@ -31,10 +40,11 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         byte[] payload,
         Schema<T> schema,
         JsonMemberPlan root,
-        WireReadMode mode
+        WireReadMode mode,
+        bool fillMissing
     )
     {
-        var deserializer = new JsonShapeDeserializer(payload, root, mode);
+        var deserializer = new JsonShapeDeserializer(payload, root, mode, fillMissing);
         try
         {
             Start(ref deserializer.reader);
@@ -54,10 +64,11 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         JsonShapePlan plan,
         StructSchema<T, TBuilder> schema,
         TBuilder builder,
-        WireReadMode mode
+        WireReadMode mode,
+        bool fillMissing
     )
     {
-        var deserializer = new JsonShapeDeserializer(payload, null!, mode);
+        var deserializer = new JsonShapeDeserializer(payload, null!, mode, fillMissing);
         try
         {
             Start(ref deserializer.reader);
@@ -365,7 +376,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
             var member = members[index];
             if (reader.TokenType == JsonTokenType.Null)
             {
-                if (projection && member.IsRequired)
+                if (projection && member.IsRequired && !fillMissing)
                 {
                     throw new MissingRequiredMemberException(member.Name);
                 }
@@ -400,7 +411,12 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
             // none.
             if (members[index].IsRequired)
             {
-                throw new MissingRequiredMemberException(members[index].Name);
+                if (!fillMissing)
+                {
+                    throw new MissingRequiredMemberException(members[index].Name);
+                }
+
+                schema.FillMissingMember(builder, index);
             }
         }
     }

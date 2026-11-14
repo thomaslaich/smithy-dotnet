@@ -6,7 +6,8 @@ namespace NSmithy.Codecs.Cbor;
 internal sealed class CompiledCborCodec<T>(
     Schema<T> schema,
     bool materializeTopLevelDefaults,
-    KeyValuePair<string, string>? discriminator
+    KeyValuePair<string, string>? discriminator,
+    bool fillMissing
 ) : ICodec<T>
 {
     private readonly CborMemberPlan root = new CborPlans().ForRoot(schema, discriminator);
@@ -35,7 +36,7 @@ internal sealed class CompiledCborCodec<T>(
         }
 
         var reader = new CborReader(payload, CborConformanceMode.Lax);
-        var deserializer = new CborShapeDeserializer(reader, root);
+        var deserializer = new CborShapeDeserializer(reader, root, fillMissing);
         return schema.Read(ref deserializer);
     }
 }
