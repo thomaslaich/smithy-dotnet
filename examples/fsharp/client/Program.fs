@@ -19,9 +19,9 @@ let run (endpoint: string) =
 
         let! added =
             client.AddBookAsync
-                { Title = "Dune"
-                  Author = "Frank Herbert"
-                  Genre = Genre.FICTION
+                { Title = Some "Dune"
+                  Author = Some "Frank Herbert"
+                  Genre = Some Genre.FICTION
                   Pages = Some 412 }
 
         let dune =
@@ -31,12 +31,16 @@ let run (endpoint: string) =
 
         let! _ =
             client.AddBookAsync
-                { Title = "A Brief History of Time"
-                  Author = "Stephen Hawking"
-                  Genre = Genre.SCIENCE
+                { Title = Some "A Brief History of Time"
+                  Author = Some "Stephen Hawking"
+                  Genre = Some Genre.SCIENCE
                   Pages = None }
 
-        match! client.LendBookAsync { Id = dune.Id; Reader = "Ada" } with
+        match!
+            client.LendBookAsync
+                { Id = Some dune.Id
+                  Reader = Some "Ada" }
+        with
         | Ok lent -> printfn "Lent: %s" (describe lent.Book)
         | Error error -> printfn "Could not lend Dune: %A" error
 
@@ -54,13 +58,17 @@ let run (endpoint: string) =
         | Error(ListBooksError.ValidationException error) -> printfn "Rejected: %s" error.Message
 
         // An operation returns the errors the model declares for it as a Result.
-        match! client.LendBookAsync { Id = dune.Id; Reader = "Grace" } with
+        match!
+            client.LendBookAsync
+                { Id = Some dune.Id
+                  Reader = Some "Grace" }
+        with
         | Ok lent -> printfn "Lent: %s" (describe lent.Book)
         | Error(LendBookError.AlreadyLent error) -> printfn "Cannot lend Dune again: %s has it" error.Reader
         | Error(LendBookError.NoSuchBook error) -> printfn "No book with id %s" error.Id
         | Error(LendBookError.ValidationException error) -> printfn "Rejected: %s" error.Message
 
-        match! client.GetBookAsync { Id = "missing" } with
+        match! client.GetBookAsync { Id = Some "missing" } with
         | Ok found -> printfn "Found: %s" (describe found.Book)
         | Error(GetBookError.NoSuchBook error) -> printfn "No book with id %s" error.Id
         | Error(GetBookError.ValidationException error) -> printfn "Rejected: %s" error.Message
@@ -68,9 +76,9 @@ let run (endpoint: string) =
         // The server validates input before the handler runs; the rejection is a case too.
         match!
             client.AddBookAsync
-                { Title = ""
-                  Author = "Nobody"
-                  Genre = Genre.HISTORY
+                { Title = Some ""
+                  Author = Some "Nobody"
+                  Genre = Some Genre.HISTORY
                   Pages = Some 0 }
         with
         | Ok added -> printfn "Added: %s" (describe added.Book)

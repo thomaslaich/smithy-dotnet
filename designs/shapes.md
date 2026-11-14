@@ -23,6 +23,16 @@ How Smithy shapes map to C# types in generated NSmithy code.
 Optional members (those without `@required`) are generated as their nullable
 counterpart (e.g. `string?`, `int?`).
 
+A project that generates a client, no server, and owns no operation follows
+Smithy's client rules for member optionality: every member of an `@input`
+structure and every `@clientOptional` member is optional, as if it were not
+`@required`. Every other project follows the server rules, so handlers get
+exact types. One set of types serves every side of a project, and shapes from
+references keep the types their owner generated. The rules are a model
+transform (`ClientNullability`) that removes `@required` from those members of
+the shapes the project generates, after the operations get dedicated `@input`
+structures.
+
 ## String Enums (`@enum` / `enum` shape)
 
 Smithy string enums are generated as a C# `readonly record struct` wrapping a

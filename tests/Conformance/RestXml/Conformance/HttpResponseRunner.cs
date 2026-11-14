@@ -209,13 +209,20 @@ internal static class HttpResponseRunner
         for (var i = 0; i < ps.Length; i++)
         {
             var p = ps[i];
-            if (p.HasDefaultValue)
+            // A client treats every input member as optional, but the request still needs its
+            // labels, so the input's simple members get values too.
+            if (p.HasDefaultValue && !(depth == 0 && IsSimple(p.ParameterType)))
                 args[i] = p.DefaultValue;
             else
-                args[i] = BuildDefault(p.ParameterType, depth + 1);
+                args[i] = BuildDefault(
+                    Nullable.GetUnderlyingType(p.ParameterType) ?? p.ParameterType,
+                    depth + 1
+                );
         }
         return ctor.Invoke(args);
     }
+
+    private static bool IsSimple(Type type) => type == typeof(string) || type.IsValueType;
 
     private static bool IsNullable(ParameterInfo p)
     {

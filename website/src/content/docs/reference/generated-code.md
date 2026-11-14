@@ -28,6 +28,29 @@ of the generated client methods. Each sample constructs the input, calls the
 method on a `client` variable, and shows the expected output, or for an error
 example a typed `try`/`catch` with the expected exception properties.
 
+## Member optionality
+
+A structure member is nullable unless it is `@required` or has a `@default`.
+A project that generates a client and neither a server nor any operation of
+its own follows Smithy's
+[client rules](https://smithy.io/2.0/spec/aggregate-types.html#structure-member-optionality)
+instead: every member of an operation input and every `@clientOptional` member
+is nullable, so a model that later drops `@required` from such a member still
+compiles against the client's code. An input member with a default stays
+nullable in C#, and the client sends the default when it is null.
+
+| `SmithyGenerateClient` | `SmithyGenerateServer` | Rules |
+| --- | --- | --- |
+| on | off | Client rules, unless the project owns an operation |
+| off | on | Server rules |
+| on | on | Server rules |
+| off | off | Server rules |
+
+Shapes from a referenced project or package keep the types their owner
+generated, so a client that shares types with a server gets the server rules.
+[Distributing contracts](/smithy-dotnet/guides/distributing-contracts/#nuget-distribution)
+describes how a client gets the client rules for a published contract.
+
 ## Schemas
 
 Each shape's schema is a class in the child `Schemas` namespace:

@@ -276,7 +276,8 @@ S3's rules place the bucket in the host or, for path-style addressing, in the
 endpoint's path. The modeled `/{Bucket}` path segment would repeat it, so the
 AWS integration removes that segment from the `@http` URIs of the S3 service's
 operations in `preprocessModel`, when the service has endpoint rules. `Bucket`
-keeps its `@httpLabel` binding: it stays required and out of the body, and
+keeps its `@httpLabel` binding: it stays out of the body, a request without it
+fails, and
 serializing it is a no-op because its label no longer appears in the URI.
 Generated clients, presigning, and custom resolvers all see the same paths. A
 custom S3 resolver adds the bucket to the endpoint itself.

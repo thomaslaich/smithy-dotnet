@@ -290,6 +290,13 @@ namespace or with another NSmithy version, is packed from a project with
 `SmithyGenerateCode` set to `false`. It contains the model only, and its
 consumers generate its shapes.
 
+Prefer a model-only package for a contract that other teams consume. Its
+clients are free to use their own NSmithy version and get Smithy's
+[client rules](/smithy-dotnet/reference/generated-code/#member-optionality)
+for member optionality, so a later version of the contract that drops
+`@required` from an input member does not break their code. A package with
+compiled types suits shapes shared within one release train.
+
 Keep the runtime packages required by the generated client or server. NSmithy
 merges the contract's build file into the effective `smithy-build.json` under
 `obj/`, invokes `smithy build`, and adds the generated `.g.cs` files to

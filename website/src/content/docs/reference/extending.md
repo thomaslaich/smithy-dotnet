@@ -183,8 +183,9 @@ public Set<ShapeId> additionalShapes(
 ```
 
 NSmithy generates each shape with the shapes it references, alongside the
-service and any configured `closure`. The hook receives the model as assembled,
-before codegen transforms. A shape the model does not contain fails code
+service and any configured `closure`. The hook receives the model with mixins
+flattened and a dedicated input and output for every operation, before any
+integration's `preprocessModel`. A shape the model does not contain fails code
 generation.
 
 ## Extending endpoint rules

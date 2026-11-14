@@ -27,6 +27,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "generateServer": false,
           "attachValidationException": true,
           "service": "aws.protocoltests.json#JsonProtocol",
           "baseNamespace": ""
@@ -46,6 +47,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "generateServer": false,
           "attachValidationException": true,
           "service": "com.amazonaws.machinelearning#AmazonML_20141212",
           "baseNamespace": "Auxiliary"

@@ -36,7 +36,9 @@ public interface CSharpIntegration
   /**
    * Shapes to generate with {@code service} that the service does not reach through its operations,
    * such as the events it publishes. Each shape is generated with the shapes it references. Called
-   * with the model as assembled, before codegen transforms, and only when a service is generated.
+   * with the prepared model, before any integration preprocesses it, and only when a service is
+   * generated. The prepared model has mixins flattened and a dedicated input and output for every
+   * operation.
    */
   default Set<ShapeId> additionalShapes(
       Model model, CSharpSettings settings, ServiceShape service) {

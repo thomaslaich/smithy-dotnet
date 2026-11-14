@@ -77,7 +77,13 @@ in `smithy-build.json`, Smithy invokes `CSharpCodegenPlugin.execute()`.
 
 ### Orchestration
 
-The plugin delegates to `DirectedCSharpCodegen`, which implements
+The plugin first prepares the model with `CodegenModel.prepare`: it flattens
+mixins, declares or checks `ValidationException`, gives every operation a
+dedicated input and output, and applies the client rules of member optionality
+where they apply. The owned shapes, the generated set, and code generation all
+use the prepared model.
+
+The plugin then delegates to `DirectedCSharpCodegen`, which implements
 `DirectedCodegen`. Smithy's `CodegenDirector` calls a method for each shape kind
 in the generated set:
 
@@ -262,6 +268,8 @@ way, whatever language they write. It registers no plugin of its own.
 
 | Class | What it decides |
 | --- | --- |
+| `CodegenModel` | The model a generator runs on, prepared from the assembled model |
+| `ClientNullability` | Whether a project follows Smithy's client rules for member optionality, and the model with them applied |
 | `ShapeSupport` | Shape predicates: required, nullable, defaults, HTTP bindings, streaming, error messages |
 | `SchemaSupport` | What a runtime schema carries: runtime traits, a member's effective traits, enum values, prelude schemas |
 | `Naming` | PascalCase and camelCase, and Smithy namespace to .NET namespace |
