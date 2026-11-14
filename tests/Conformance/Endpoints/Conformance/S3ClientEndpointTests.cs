@@ -42,7 +42,7 @@ public sealed class S3ClientEndpointTests
         );
 
         await client.HeadObjectAsync(
-            new HeadObjectInput("my-bucket", "dir/a b+%?.jpg", VersionId: "v+1")
+            new HeadObjectInput(Bucket: "my-bucket", Key: "dir/a b+%?.jpg", VersionId: "v+1")
         );
 
         Assert.Equal(expected, Assert.Single(handler.Requests).RequestUri!.AbsoluteUri);
@@ -60,7 +60,7 @@ public sealed class S3ClientEndpointTests
             new() { Region = "us-west-2", ForcePathStyle = pathStyle }
         );
 
-        await client.HeadBucketAsync(new HeadBucketInput("my-bucket"));
+        await client.HeadBucketAsync(new HeadBucketInput(Bucket: "my-bucket"));
 
         Assert.Equal(expected, Assert.Single(handler.Requests).RequestUri!.AbsoluteUri);
     }
@@ -73,7 +73,7 @@ public sealed class S3ClientEndpointTests
         );
         using var client = Client(handler, new() { Region = "us-west-2" });
 
-        await client.ListObjectsV2Async(new ListObjectsV2Input("my-bucket"));
+        await client.ListObjectsV2Async(new ListObjectsV2Input(Bucket: "my-bucket"));
 
         Assert.Equal(
             "https://my-bucket.s3.us-west-2.amazonaws.com/?list-type=2",
@@ -106,7 +106,7 @@ public sealed class S3ClientEndpointTests
             new() { EndpointResolver = new PathStyleResolver(new Uri("http://localhost:9000")) }
         );
 
-        await client.HeadObjectAsync(new HeadObjectInput("my-bucket", "photo.jpg"));
+        await client.HeadObjectAsync(new HeadObjectInput(Bucket: "my-bucket", Key: "photo.jpg"));
 
         Assert.Equal(
             "http://localhost:9000/my-bucket/photo.jpg",
@@ -127,7 +127,9 @@ public sealed class S3ClientEndpointTests
             }
         );
 
-        await client.HeadObjectAsync(new HeadObjectInput("my-bucket", "dir/photo.jpg"));
+        await client.HeadObjectAsync(
+            new HeadObjectInput(Bucket: "my-bucket", Key: "dir/photo.jpg")
+        );
 
         Assert.Equal(2, handler.Requests.Count);
         Assert.All(
@@ -152,7 +154,7 @@ public sealed class S3ClientEndpointTests
         config.EndpointResolver = resolver;
         using var client = Client(handler, config);
 
-        await client.HeadObjectAsync(new HeadObjectInput("my-bucket", "photo.jpg"));
+        await client.HeadObjectAsync(new HeadObjectInput(Bucket: "my-bucket", Key: "photo.jpg"));
 
         var request = Assert.Single(handler.Requests);
         Assert.Equal(
