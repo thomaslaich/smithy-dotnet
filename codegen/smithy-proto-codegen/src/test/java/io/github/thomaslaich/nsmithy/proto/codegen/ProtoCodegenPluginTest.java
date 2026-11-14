@@ -518,6 +518,79 @@ final class ProtoCodegenPluginTest {
   }
 
   @Test
+  void importsTheNamespacesAForeignInlinedOneofNames() throws Exception {
+    Model model =
+        Model.assembler()
+            .addUnparsedModel("alloy-proto-traits.smithy", ALLOY_PROTO_TRAITS)
+            .addUnparsedModel(
+                "choices.smithy",
+                """
+                $version: "2"
+                namespace example.choices
+                use alloy.proto#protoIndex
+                use alloy.proto#protoInlinedOneOf
+
+                @protoInlinedOneOf
+                union Choice {
+                    @protoIndex(2)
+                    thing: example.things#Thing
+                    @protoIndex(3)
+                    label: String
+                }
+                """)
+            .addUnparsedModel(
+                "things.smithy",
+                """
+                $version: "2"
+                namespace example.things
+                use alloy.proto#protoIndex
+
+                structure Thing {
+                    @protoIndex(1)
+                    name: String
+                }
+                """)
+            .addUnparsedModel(
+                "model.smithy",
+                """
+                $version: "2"
+                namespace example.picker
+                use alloy.proto#grpc
+                use alloy.proto#protoIndex
+
+                @grpc
+                service Picker {
+                    version: "1"
+                    operations: [Pick]
+                }
+
+                operation Pick {
+                    input := {
+                        @protoIndex(1)
+                        choice: example.choices#Choice
+                    }
+                }
+                """)
+            .assemble()
+            .unwrap();
+
+    new ProtoCodegenPlugin()
+        .execute(
+            PluginContext.builder()
+                .model(model)
+                .fileManifest(FileManifest.create(tempDir))
+                .settings(
+                    ObjectNode.builder()
+                        .withMember("service", Node.from("example.picker#Picker"))
+                        .build())
+                .build());
+
+    String service = Files.readString(tempDir.resolve("Example/Picker/Picker.proto"));
+    assertTrue(service.contains("example.things.Thing thing = 2;"), service);
+    assertTrue(service.contains("import \"Example/Things/types.proto\";"), service);
+  }
+
+  @Test
   void executeMapsWellKnownSmithyTypesToWellKnownProtoTypes() throws Exception {
     Model model =
         Model.assembler()
@@ -574,5 +647,74 @@ final class ProtoCodegenPluginTest {
                             .build()));
 
     assertTrue(ex.getMessage().contains("Duplicate @protoIndex 1 in example.invalid#BrokenInput"));
+  }
+
+  /** The validation error the server returns; its shapes come from smithy-validation-model. */
+  private static final String VALIDATION_MODEL =
+      """
+      $version: "2"
+
+      namespace example.validated
+
+      use alloy.proto#grpc
+      use alloy.proto#protoIndex
+      use smithy.framework#ValidationException
+
+      @grpc
+      service ValidatedService {
+          version: "1"
+          operations: [Register]
+          errors: [ValidationException]
+      }
+
+      operation Register {
+          input := {
+              @required
+              @protoIndex(1)
+              name: String
+          }
+      }
+      """;
+
+  @Test
+  void theFrameworkShapesNumberTheirFieldsByDeclarationOrder() throws Exception {
+    Model model =
+        Model.assembler()
+            .discoverModels() // the validation model's shapes
+            .addUnparsedModel("alloy-proto-traits.smithy", ALLOY_PROTO_TRAITS)
+            .addUnparsedModel("model.smithy", VALIDATION_MODEL)
+            .assemble()
+            .unwrap();
+    FileManifest manifest = FileManifest.create(tempDir);
+
+    new ProtoCodegenPlugin()
+        .execute(
+            PluginContext.builder()
+                .model(model)
+                .fileManifest(manifest)
+                .settings(
+                    ObjectNode.builder()
+                        .withMember("service", Node.from("example.validated#ValidatedService"))
+                        .build())
+                .build());
+
+    // The error is never named in a message, so the service file does not import its file.
+    String service = Files.readString(tempDir.resolve("Example/Validated/ValidatedService.proto"));
+    assertFalse(service.contains("Smithy/Framework/types.proto"), service);
+    String framework = Files.readString(tempDir.resolve("Smithy/Framework/types.proto"));
+    assertTrue(
+        framework.contains(
+            "message ValidationException {\n"
+                + "  string message = 1;\n"
+                + "  repeated ValidationExceptionField field_list = 2;\n"
+                + "}"),
+        framework);
+    assertTrue(
+        framework.contains(
+            "message ValidationExceptionField {\n"
+                + "  string path = 1;\n"
+                + "  string message = 2;\n"
+                + "}"),
+        framework);
   }
 }

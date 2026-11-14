@@ -34,6 +34,16 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   constrained operation whose errors, or its service's, leave out
   `smithy.framework#ValidationException`, and names the operations to fix.
 
+### Fixed
+
+- **gRPC `.proto` imports across namespaces.** A model whose shapes span Smithy namespaces generates
+  one `.proto` file per namespace, and the service's file imports the others. The MSBuild
+  integration now hands Grpc.Tools the generated files' root, so those imports resolve, and the
+  service's file imports only the namespaces it names, so protoc no longer warns about unused ones.
+- **`smithy.framework` shapes in gRPC services.** `ValidationException` and its field shapes carry
+  no `@protoIndex`, so the `.proto` generator numbers their fields by declaration order, as the
+  proto codec does, instead of failing.
+
 ## [0.19.0]
 
 Operations whose input members are all optional no longer need an input argument, and `@smokeTests`

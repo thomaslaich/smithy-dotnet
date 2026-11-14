@@ -71,6 +71,10 @@ public final class ProtoGenerator {
   // Alloy trait IDs
   private static final ShapeId GRPC = ShapeId.from("alloy.proto#grpc");
   private static final ShapeId PROTO_INDEX = ShapeId.from("alloy.proto#protoIndex");
+
+  /** The namespace of the shapes the runtime owns; see {@link #protoIndex}. */
+  private static final String FRAMEWORK_NAMESPACE = "smithy.framework";
+
   private static final ShapeId PROTO_NUM_TYPE = ShapeId.from("alloy.proto#protoNumType");
   private static final ShapeId PROTO_INLINED_ONE_OF = ShapeId.from("alloy.proto#protoInlinedOneOf");
 
@@ -157,8 +161,14 @@ public final class ProtoGenerator {
     String outputNamespace = outputNamespaceFor(serviceNs);
     String path = outputNamespace.replace('.', '/') + "/" + serviceName + ".proto";
 
-    // Determine required well-known imports.
-    Set<String> imports = new LinkedHashSet<>(nsToImportPath.values());
+    // Import the namespaces the file refers to. An error's shapes are generated for the peer but
+    // never named in a message, so a namespace only errors reach is left out: protoc warns about
+    // an unused import.
+    Set<String> referenced = referencedNamespaces(localShapes, operations);
+    Set<String> imports = new LinkedHashSet<>();
+    nsToImportPath.forEach((ns, importPath) -> {
+      if (referenced.contains(ns)) imports.add(importPath);
+    });
     boolean needsEmpty =
         operations.stream()
             .anyMatch(op -> isUnit(op.getInputShape()) || isUnit(op.getOutputShape()));
@@ -541,6 +551,45 @@ public final class ProtoGenerator {
     };
   }
 
+  /** The namespaces of the shapes a service file names: operation messages and member targets. */
+  private Set<String> referencedNamespaces(
+      List<ShapeId> localShapes, List<OperationShape> operations) {
+    Set<String> namespaces = new HashSet<>();
+    for (OperationShape op : operations) {
+      for (ShapeId io : List.of(op.getInputShape(), op.getOutputShape())) {
+        namespaces.add(streamingMemberTarget(io).orElse(io).getNamespace());
+      }
+    }
+    for (ShapeId id : localShapes) {
+      for (MemberShape m : model.expectShape(id).members()) {
+        addFieldNamespaces(m, namespaces);
+      }
+    }
+    return namespaces;
+  }
+
+  /**
+   * The namespaces a member's field names. A {@code @protoInlinedOneOf} union's members are written
+   * into the message that holds it, so their targets count as well.
+   */
+  private void addFieldNamespaces(MemberShape m, Set<String> namespaces) {
+    Shape target = model.expectShape(m.getTarget());
+    switch (target.getType()) {
+      case LIST, SET -> namespaces.add(((ListShape) target).getMember().getTarget().getNamespace());
+      case MAP -> {
+        namespaces.add(((MapShape) target).getKey().getTarget().getNamespace());
+        namespaces.add(((MapShape) target).getValue().getTarget().getNamespace());
+      }
+      case UNION -> {
+        namespaces.add(target.getId().getNamespace());
+        if (target.hasTrait(PROTO_INLINED_ONE_OF)) {
+          target.members().forEach(member -> addFieldNamespaces(member, namespaces));
+        }
+      }
+      default -> namespaces.add(target.getId().getNamespace());
+    }
+  }
+
   /** Proto reference for an operation's input/output shape (handles Unit). */
   private String messageRef(ShapeId id, String localNs) {
     if (isUnit(id)) return "google.protobuf.Empty";
@@ -742,12 +791,33 @@ public final class ProtoGenerator {
 
   // ---- proto index -------------------------------------------------------
 
+  /**
+   * A member's field number: its {@code @protoIndex}. The shapes of {@code smithy.framework} are
+   * the exception: the server runtime returns {@code ValidationException} from any operation, and
+   * those shapes carry no trait, so their numbers follow declaration order, as the proto codec's
+   * {@code FieldNumber} rules.
+   */
   private int protoIndex(MemberShape m) {
     return m.findTrait(PROTO_INDEX)
         .map(t -> ((Node) t.toNode()).expectNumberNode().getValue().intValue())
+        .or(() -> frameworkOrdinal(m))
         .orElseThrow(() ->
             new CodegenException(
                 "Member " + m.getId() + " is missing required @protoIndex trait."));
+  }
+
+  private Optional<Integer> frameworkOrdinal(MemberShape m) {
+    if (!FRAMEWORK_NAMESPACE.equals(m.getContainer().getNamespace())) {
+      return Optional.empty();
+    }
+    int ordinal = 1;
+    for (MemberShape member : model.expectShape(m.getContainer()).members()) {
+      if (member.getId().equals(m.getId())) {
+        return Optional.of(ordinal);
+      }
+      ordinal++;
+    }
+    return Optional.empty();
   }
 
   // ---- utilities ---------------------------------------------------------

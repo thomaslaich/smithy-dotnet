@@ -306,6 +306,9 @@
     <SmithyProtoPlugin Condition="'$(SmithyProtoPlugin)' == ''">proto-codegen</SmithyProtoPlugin>
     <SmithyAllProtosGlob Condition="'$(SmithyAllProtosGlob)' == ''"
       >$(SmithyBuildOutputPath)*/$(SmithyProtoPlugin)/**/*.proto</SmithyAllProtosGlob>
+    <!-- The root the generated .proto files import each other relative to: a model that spans
+         namespaces generates one file per namespace, imported as Namespace/types.proto. -->
+    <_SmithyProtoRoot>$(SmithyBuildOutputPath)$(SmithyProjection)/$(SmithyProtoPlugin)/</_SmithyProtoRoot>
     <SmithyGrpcServices Condition="'$(SmithyGrpcServices)' == ''">Both</SmithyGrpcServices>
     <SmithyExtraArgs Condition="'$(SmithyExtraArgs)' == ''"></SmithyExtraArgs>
     <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
@@ -336,7 +339,7 @@
     <Protobuf
       Include="$(SmithyAllProtosGlob)"
       GrpcServices="$(SmithyGrpcServices)"
-      ProtoRoot="$(SmithyBuildOutputPath)"
+      ProtoRoot="$(_SmithyProtoRoot)"
       Access="Public"
       Visible="$(SmithyEmitGeneratedFiles)"
     />
@@ -882,7 +885,7 @@
       <Protobuf
         Include="$(SmithyAllProtosGlob)"
         GrpcServices="$(SmithyGrpcServices)"
-        ProtoRoot="$(SmithyBuildOutputPath)"
+        ProtoRoot="$(_SmithyProtoRoot)"
         Access="Public"
         Visible="$(SmithyEmitGeneratedFiles)"
       />
