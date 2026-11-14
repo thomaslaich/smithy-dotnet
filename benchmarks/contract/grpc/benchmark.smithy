@@ -4,11 +4,13 @@ namespace nsmithy.bench.grpc
 
 use alloy.proto#grpc
 use alloy.proto#protoIndex
+use smithy.framework#ValidationException
 
 @grpc
 service GrpcBenchmarkService {
     version: "1.0"
     operations: [GetItem, ListItems]
+    errors: [ValidationException]
 }
 
 operation GetItem {

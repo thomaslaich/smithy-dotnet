@@ -3,6 +3,7 @@ $version: "2"
 namespace nsmithy.bench
 
 use aws.protocols#restJson1
+use smithy.framework#ValidationException
 
 /// The contract under benchmark.
 ///
@@ -32,6 +33,9 @@ service BenchmarkService {
         SearchItems
         ListItems
         CreateOrder
+    ]
+    errors: [
+        ValidationException
     ]
 }
 
