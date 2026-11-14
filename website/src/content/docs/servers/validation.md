@@ -189,9 +189,12 @@ runtime's `ValidationException` and `ValidationExceptionField`.
 
 A client follows the model. A client-only project generates exactly the
 model's error lists, and the runtime still deserializes a server's
-`ValidationException` that the model leaves out, as an exception. For a model
-you do not own, the `declareValidationException` build transform declares the
-error on every constrained operation in a projection:
+`ValidationException` that the model leaves out, as an exception.
+
+For a model you do not own, set `attachValidationException` to `true` in the
+plugin settings. The generator then declares the error on every constrained
+operation of the model it generates from. Other plugins in the build, such as
+`openapi`, see the model without it.
 
 ```json title="smithy-build.json"
 {
@@ -199,13 +202,8 @@ error on every constrained operation in a projection:
   "maven": {
     "dependencies": ["software.amazon.smithy:smithy-validation-model:1.74.1"]
   },
-  "projections": {
-    "server": {
-      "transforms": [{ "name": "declareValidationException" }],
-      "plugins": {
-        "csharp-codegen": { "service": "example.weather#Weather" }
-      }
-    }
+  "plugins": {
+    "csharp-codegen": { "attachValidationException": true }
   }
 }
 ```

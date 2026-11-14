@@ -16,7 +16,6 @@
   "projections": {
     "rpcv2cbor": {
       "transforms": [
-        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -28,6 +27,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
           "baseNamespace": ""
         }

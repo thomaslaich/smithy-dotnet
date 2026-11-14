@@ -16,7 +16,6 @@
   "projections": {
     "awsjson": {
       "transforms": [
-        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -28,6 +27,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "aws.protocoltests.json#JsonProtocol",
           "baseNamespace": ""
         }
@@ -35,7 +35,6 @@
     },
     "awsjson-machinelearning": {
       "transforms": [
-        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -47,6 +46,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "com.amazonaws.machinelearning#AmazonML_20141212",
           "baseNamespace": "Auxiliary"
         }

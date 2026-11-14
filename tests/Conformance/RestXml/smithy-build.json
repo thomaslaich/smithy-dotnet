@@ -16,7 +16,6 @@
   "projections": {
     "restxml": {
       "transforms": [
-        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -28,6 +27,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "aws.protocoltests.restxml#RestXml",
           "baseNamespace": ""
         }
@@ -35,7 +35,6 @@
     },
     "restxml-s3": {
       "transforms": [
-        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -47,6 +46,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "com.amazonaws.s3#AmazonS3",
           "baseNamespace": ""
         }
@@ -54,7 +54,6 @@
     },
     "restxml-namespace": {
       "transforms": [
-        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": {
@@ -66,6 +65,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
           "baseNamespace": ""
         }

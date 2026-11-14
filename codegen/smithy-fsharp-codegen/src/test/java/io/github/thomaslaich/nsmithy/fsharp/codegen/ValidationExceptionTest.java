@@ -178,6 +178,16 @@ class ValidationExceptionTest {
         error.getMessage());
   }
 
+  @Test
+  void attachingDeclaresTheErrorForAModelThatDoesNot() {
+    String client =
+        generate(UNDECLARED, settings().withMember("attachValidationException", true))
+            .expectFileString(CLIENT);
+
+    assertTrue(client.contains("type OrderError =\n    | SoldOut of"), client);
+    assertTrue(client.contains("| ValidationException of"), client);
+  }
+
   private static ObjectNode.Builder settings() {
     return Node.objectNodeBuilder().withMember("service", "example.cafe#Cafe");
   }

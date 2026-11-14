@@ -1,9 +1,13 @@
 package io.github.thomaslaich.nsmithy.codegen.core;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.model.Model;
@@ -120,7 +124,7 @@ final class ValidationErrorsTest {
         error.getMessage());
     assertTrue(error.getMessage().contains("errors: [ValidationException]"), error.getMessage());
     assertTrue(error.getMessage().contains("smithy-validation-model"), error.getMessage());
-    assertTrue(error.getMessage().contains("declareValidationException"), error.getMessage());
+    assertTrue(error.getMessage().contains("attachValidationException"), error.getMessage());
   }
 
   @Test
@@ -217,6 +221,100 @@ final class ValidationErrorsTest {
             """);
 
     ValidationErrors.requireDeclared(model, model.expectShape(WEATHER, ServiceShape.class));
+  }
+
+  @Test
+  void attachingDeclaresTheErrorOnConstrainedOperationsOnly() {
+    Model attached = ValidationErrors.attach(model(MODEL));
+
+    assertEquals(
+        List.of(ShapeId.from("example.weather#NoSuchCity"), ShapeSupport.VALIDATION_EXCEPTION),
+        operation(attached, "GetCity").getErrors().stream().sorted().toList());
+    assertEquals(
+        List.of(ShapeSupport.VALIDATION_EXCEPTION), operation(attached, "Describe").getErrors());
+    assertEquals(
+        List.of(ShapeSupport.VALIDATION_EXCEPTION), operation(attached, "Lookup").getErrors());
+    assertEquals(
+        List.of(ShapeSupport.VALIDATION_EXCEPTION), operation(attached, "Choose").getErrors());
+    assertEquals(List.of(), operation(attached, "ListCities").getErrors());
+    assertEquals(List.of(), operation(attached, "GetCurrentTime").getErrors());
+    ValidationErrors.requireDeclared(attached, attached.expectShape(WEATHER, ServiceShape.class));
+  }
+
+  @Test
+  void attachingLeavesAnOperationThatDeclaresTheErrorAlone() {
+    Model model =
+        model(
+            """
+            $version: "2"
+            namespace example.weather
+
+            use smithy.framework#ValidationException
+
+            service Weather {
+                version: "2024-01-01"
+                operations: [GetCity]
+            }
+
+            operation GetCity {
+                input := {
+                    @required
+                    cityId: String
+                }
+                errors: [ValidationException]
+            }
+            """);
+
+    assertSame(model, ValidationErrors.attach(model));
+  }
+
+  @Test
+  void attachingLeavesTheOperationsOfAServiceThatDeclaresTheErrorAlone() {
+    Model model =
+        model(
+            """
+            $version: "2"
+            namespace example.weather
+
+            use smithy.framework#ValidationException
+
+            service Weather {
+                version: "2024-01-01"
+                operations: [GetCity]
+                errors: [ValidationException]
+            }
+
+            operation GetCity {
+                input := {
+                    @required
+                    cityId: String
+                }
+            }
+            """);
+
+    assertSame(model, ValidationErrors.attach(model));
+  }
+
+  @Test
+  void attachingNeedsTheFrameworkShapesInTheModel() {
+    Model model = Model.assembler().addUnparsedModel("model.smithy", MODEL).assemble().unwrap();
+
+    CodegenException error =
+        assertThrows(CodegenException.class, () -> ValidationErrors.attach(model));
+
+    assertTrue(error.getMessage().contains("smithy-validation-model"), error.getMessage());
+  }
+
+  @Test
+  void applyChecksAServerByDefaultAndAttachesWhenAsked() {
+    Model model = model(MODEL);
+    Optional<ShapeId> service = Optional.of(WEATHER);
+
+    assertThrows(CodegenException.class, () -> ValidationErrors.apply(model, service, false, true));
+    assertSame(model, ValidationErrors.apply(model, service, false, false));
+    assertEquals(
+        List.of(ShapeSupport.VALIDATION_EXCEPTION),
+        operation(ValidationErrors.apply(model, service, true, true), "Lookup").getErrors());
   }
 
   @Test

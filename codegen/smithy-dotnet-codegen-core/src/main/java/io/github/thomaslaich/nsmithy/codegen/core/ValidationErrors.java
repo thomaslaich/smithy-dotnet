@@ -1,6 +1,9 @@
 package io.github.thomaslaich.nsmithy.codegen.core;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.CodegenException;
@@ -18,6 +21,7 @@ import software.amazon.smithy.model.traits.PatternTrait;
 import software.amazon.smithy.model.traits.RangeTrait;
 import software.amazon.smithy.model.traits.RequiredTrait;
 import software.amazon.smithy.model.traits.UniqueItemsTrait;
+import software.amazon.smithy.model.transform.ModelTransformer;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 /**
@@ -31,8 +35,8 @@ import software.amazon.smithy.utils.SmithyInternalApi;
  * software.amazon.smithy:smithy-validation-model} and are never generated: the generators bind them
  * to the runtime's {@code ValidationException} and {@code ValidationExceptionField}.
  *
- * <p>For a model the project does not own, the {@code declareValidationException} build transform
- * ({@link DeclareValidationException}) declares the error in a projection.
+ * <p>For a model the project does not own, the {@code attachValidationException} setting declares
+ * the error on every constrained operation of the model the generator runs on.
  */
 @SmithyInternalApi
 public final class ValidationErrors {
@@ -84,6 +88,56 @@ public final class ValidationErrors {
     return shape.getType() == ShapeType.ENUM || ENFORCED_TRAITS.stream().anyMatch(shape::hasTrait);
   }
 
+  /**
+   * The model a generator runs on: with the error declared on every constrained operation when
+   * {@code attach} is set, and otherwise checked, for a server, so that the service's constrained
+   * operations declare it.
+   */
+  public static Model apply(
+      Model model, Optional<ShapeId> service, boolean attach, boolean generateServer) {
+    if (attach) {
+      return attach(model);
+    }
+    if (generateServer) {
+      service.ifPresent(id -> requireDeclared(model, model.expectShape(id, ServiceShape.class)));
+    }
+    return model;
+  }
+
+  /**
+   * The model with {@code smithy.framework#ValidationException} declared on every operation whose
+   * input is constrained. An operation that declares it, or whose service declares it for every
+   * operation, is left alone, and so is one the server never validates. The model must define the
+   * framework's shapes.
+   */
+  public static Model attach(Model model) {
+    if (model.getShape(ShapeSupport.VALIDATION_EXCEPTION).isEmpty()) {
+      throw new CodegenException(
+          "attachValidationException needs smithy.framework#ValidationException in the model. Add"
+              + " the Maven dependency software.amazon.smithy:smithy-validation-model to"
+              + " smithy-build.json.");
+    }
+    Set<ShapeId> declaredByService = new HashSet<>();
+    TopDownIndex topDown = TopDownIndex.of(model);
+    for (ServiceShape service : model.getServiceShapes()) {
+      if (service.getErrors().contains(ShapeSupport.VALIDATION_EXCEPTION)) {
+        topDown
+            .getContainedOperations(service)
+            .forEach(operation -> declaredByService.add(operation.getId()));
+      }
+    }
+    List<Shape> attached = new ArrayList<>();
+    for (OperationShape operation : model.getOperationShapes()) {
+      if (operation.getErrors().contains(ShapeSupport.VALIDATION_EXCEPTION)
+          || declaredByService.contains(operation.getId())
+          || !isConstrained(model, operation)) {
+        continue;
+      }
+      attached.add(operation.toBuilder().addError(ShapeSupport.VALIDATION_EXCEPTION).build());
+    }
+    return attached.isEmpty() ? model : ModelTransformer.create().replaceShapes(model, attached);
+  }
+
   /** Whether the operation declares the error, itself or through the service. */
   public static boolean declares(OperationShape operation, ServiceShape service) {
     return operation.getErrors(service).contains(ShapeSupport.VALIDATION_EXCEPTION);
@@ -125,8 +179,9 @@ public final class ValidationErrors {
             + "        errors: [ValidationException]\n"
             + "    }\n\n"
             + "The shape comes from the Maven dependency"
-            + " software.amazon.smithy:smithy-validation-model. For a model you do not own, the"
-            + " declareValidationException build transform declares it in a projection. See"
+            + " software.amazon.smithy:smithy-validation-model. For a model you do not own, set"
+            + " attachValidationException to true in the plugin settings and the generator declares"
+            + " it. See"
             + " https://thomaslaich.github.io/smithy-dotnet/servers/validation/#declaring-the-error.");
   }
 }

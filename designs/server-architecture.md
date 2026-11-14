@@ -373,8 +373,8 @@ matches what the server does: schemas list the error, and an F# client's
 `Result` has a case for it. The framework's shapes come from
 `smithy-validation-model` and are never generated; they bind to the
 runtime's types. For a model the project does not own, the
-`declareValidationException` build transform declares the error in a
-projection.
+`attachValidationException` setting has the generator declare the error on
+every constrained operation of the model it generates from.
 
 A missing `@required` member is caught earlier, in the codec, which cannot
 build the shape without it. The codec throws `MissingRequiredMemberException`,

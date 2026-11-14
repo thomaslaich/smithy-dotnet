@@ -96,6 +96,15 @@ class ValidationExceptionIntegrationTest {
         error.getMessage());
   }
 
+  @Test
+  void attachingDeclaresTheErrorForAModelThatDoesNot() {
+    MockManifest manifest =
+        generate(UNDECLARED, settings().withMember("attachValidationException", true));
+
+    assertTrue(schema(manifest, "Order").contains("smithy.framework#ValidationException"));
+    assertFalse(schema(manifest, "Browse").contains("ValidationException"));
+  }
+
   private static String schema(MockManifest manifest, String operation) {
     return manifest
         .expectFileString(Path.of("Example/Cafe/" + operation + ".Schema.g.cs"))

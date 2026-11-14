@@ -23,16 +23,17 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   shapes are never generated: they bind to the runtime's `ValidationException` and
   `ValidationExceptionField`, so with the error declared the operation's schema lists it, smoke
   tests accept it, and an F# client returns it as the `ValidationException` case of the operation's
-  `Result` instead of raising it. Nothing on the wire changes. **F# callers** of an operation that declares the error get a `Result` where
-  they may have had a plain output, and a new case to match; `try ... with :? ValidationException`
-  around such a call no longer fires. See
+  `Result` instead of raising it. Nothing on the wire changes. **F# callers** of an operation that
+  declares the error get a `Result` where they may have had a plain output, and a new case to
+  match; `try ... with :? ValidationException` around such a call no longer fires. See
   [Validation](https://thomaslaich.github.io/smithy-dotnet/servers/validation/#declaring-the-error).
 
 ### Added
 
-- **`declareValidationException` build transform**, for a model the project does not own: declares
-  `smithy.framework#ValidationException` on every operation whose input is constrained, in a
-  projection, so a server can be generated from it.
+- **`attachValidationException` setting** of `csharp-codegen` and `fsharp-codegen`, default
+  `false`, for a model the project does not own: the generator declares
+  `smithy.framework#ValidationException` on every operation whose input is constrained, so a
+  server can be generated from it.
 
 ### Fixed
 

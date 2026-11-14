@@ -12,7 +12,6 @@
   "projections": {
     "awsquery": {
       "transforms": [
-        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": { "services": ["aws.protocoltests.query#AwsQuery"] }
@@ -20,6 +19,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "aws.protocoltests.query#AwsQuery",
           "baseNamespace": ""
         }

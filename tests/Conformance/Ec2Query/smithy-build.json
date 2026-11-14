@@ -12,7 +12,6 @@
   "projections": {
     "ec2query": {
       "transforms": [
-        { "name": "declareValidationException" },
         {
           "name": "includeServices",
           "args": { "services": ["aws.protocoltests.ec2#AwsEc2"] }
@@ -20,6 +19,7 @@
       ],
       "plugins": {
         "csharp-codegen": {
+          "attachValidationException": true,
           "service": "aws.protocoltests.ec2#AwsEc2",
           "baseNamespace": ""
         }
