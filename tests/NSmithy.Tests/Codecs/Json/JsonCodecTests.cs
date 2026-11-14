@@ -252,6 +252,24 @@ public sealed class JsonCodecTests
     }
 
     [Fact]
+    public void JsonCodecTracksRequiredMembersPastTheFirst64()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(WideSchema.Schema);
+        var allButOne = string.Join(
+            ",",
+            Enumerable.Range(0, 70).Where(i => i != 66).Select(i => $"\"m{i}\":{i}")
+        );
+
+        var missing = Assert.Throws<MissingRequiredMemberException>(() =>
+            codec.DeserializeText("{" + allButOne + "}")
+        );
+        var complete = codec.DeserializeText("{" + allButOne + ",\"m66\":66}");
+
+        Assert.Equal("m66", missing.MemberName);
+        Assert.Equal(69, complete.M69);
+    }
+
+    [Fact]
     public void JsonCodecReportsPathOfNestedMissingRequiredMember()
     {
         var codec = JsonCodecFactory.Default.FromSchema(OrderSchema.Schema);

@@ -389,8 +389,10 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     private readonly MemberSchema[] members;
     private readonly Dictionary<string, MemberSchema> membersByName;
 
-    // The indices of the required members, whose presence the builder records.
+    // The indices of the required members, whose presence the builder records, and each member's
+    // position among them (its presence bit), or -1 for a member that is not required.
     private readonly int[] required;
+    private readonly int[] ordinals;
 
     protected StructSchema(
         ShapeId id,
@@ -410,11 +412,22 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
         [
             .. Enumerable.Range(0, this.members.Length).Where(i => this.members[i].IsRequired),
         ];
-        if (required.Length > 0 && !typeof(StructBuilder).IsAssignableFrom(typeof(TBuilder)))
+        ordinals = new int[this.members.Length];
+        Array.Fill(ordinals, -1);
+        for (var ordinal = 0; ordinal < required.Length; ordinal++)
+        {
+            ordinals[required[ordinal]] = ordinal;
+        }
+
+        var builderBase =
+            required.Length > 64 ? typeof(LargeStructBuilder)
+            : required.Length > 0 ? typeof(StructBuilder)
+            : null;
+        if (builderBase is not null && !builderBase.IsAssignableFrom(typeof(TBuilder)))
         {
             throw new InvalidOperationException(
-                $"Structure schema '{id}' has required members, so its builder "
-                    + $"'{typeof(TBuilder).Name}' must derive from {nameof(StructBuilder)}."
+                $"Structure schema '{id}' has {required.Length} required members, so its builder "
+                    + $"'{typeof(TBuilder).Name}' must derive from {builderBase.Name}."
             );
         }
     }
@@ -470,9 +483,9 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     )
         where TDeserializer : struct, IShapeDeserializer, allows ref struct
     {
-        if (required.Length > 0)
+        if (ordinals[index] >= 0)
         {
-            Presence(builder).MarkSet(index);
+            Presence(builder).MarkSet(ordinals[index]);
         }
 
         DeserializeMember(builder, index, ref deserializer);
@@ -484,9 +497,9 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
     /// </summary>
     public void MarkMemberSet(TBuilder builder, int index)
     {
-        if (required.Length > 0)
+        if (ordinals[index] >= 0)
         {
-            Presence(builder).MarkSet(index);
+            Presence(builder).MarkSet(ordinals[index]);
         }
     }
 
@@ -505,12 +518,14 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
         }
 
         var presence = Presence(builder);
-        foreach (var index in required)
+        for (var ordinal = 0; ordinal < required.Length; ordinal++)
         {
-            if (presence.IsSet(index))
+            if (presence.IsSet(ordinal))
             {
                 continue;
             }
+
+            var index = required[ordinal];
 
             if (!fillMissing)
             {

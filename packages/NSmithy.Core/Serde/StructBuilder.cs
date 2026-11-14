@@ -1,42 +1,59 @@
 namespace NSmithy.Core.Serde;
 
 /// <summary>
-/// The base of every structure builder: it records which members a reader has set, so
+/// The base of every structure builder: it records which required members a reader has set, so
 /// <see cref="StructSchema{T, TBuilder}.CompleteMembers"/> can tell a required member the payload
 /// left out from one it sent, whatever the format. A member's builder property cannot tell: it
-/// starts at the member's modeled default, and a value-type member at zero.
+/// starts at the member's modeled default, and a value-type member at zero. One bit per required
+/// member, numbered in declaration order; a structure with more than 64 derives from
+/// <see cref="LargeStructBuilder"/>.
 /// </summary>
 public abstract class StructBuilder
 {
-    // Members 0-63; a structure with more keeps the rest in one bit array.
-    private ulong low;
-    private ulong[]? high;
+    private ulong present;
 
-    internal void MarkSet(int index)
+    internal void MarkSet(int ordinal)
     {
-        if (index < 64)
+        if (ordinal < 64)
         {
-            low |= 1UL << index;
-            return;
+            present |= 1UL << ordinal;
         }
-
-        var word = (index >> 6) - 1;
-        if (high is null || high.Length <= word)
+        else
         {
-            Array.Resize(ref high, word + 1);
+            ((LargeStructBuilder)this).MarkSetPast64(ordinal);
         }
-
-        high[word] |= 1UL << (index & 63);
     }
 
-    internal bool IsSet(int index)
+    internal bool IsSet(int ordinal) =>
+        ordinal < 64
+            ? (present & (1UL << ordinal)) != 0
+            : ((LargeStructBuilder)this).IsSetPast64(ordinal);
+}
+
+/// <summary>
+/// The builder base of a structure with more than 64 required members, which keeps the bits past
+/// the first 64 in an array.
+/// </summary>
+public abstract class LargeStructBuilder : StructBuilder
+{
+    private ulong[]? more;
+
+    internal void MarkSetPast64(int ordinal)
     {
-        if (index < 64)
+        var word = (ordinal >> 6) - 1;
+        if (more is null || more.Length <= word)
         {
-            return (low & (1UL << index)) != 0;
+            Array.Resize(ref more, word + 1);
         }
 
-        var word = (index >> 6) - 1;
-        return high is not null && word < high.Length && (high[word] & (1UL << (index & 63))) != 0;
+        more[word] |= 1UL << (ordinal & 63);
+    }
+
+    internal bool IsSetPast64(int ordinal)
+    {
+        var word = (ordinal >> 6) - 1;
+        return more is not null
+            && word < more.Length
+            && (more[word] & (1UL << (ordinal & 63))) != 0;
     }
 }
