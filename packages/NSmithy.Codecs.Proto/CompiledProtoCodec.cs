@@ -26,8 +26,7 @@ internal sealed class CompiledProtoCodec<T> : ICodec<T>
         var writer = ProtoWriterCache.Rent(sizeHint);
         try
         {
-            var serializer = new ProtoShapeSerializer(writer, root);
-            schema.Write(MemberIndex.Root, value, ref serializer);
+            Write(writer, value);
             var result = writer.ToArray();
             sizeHint = result.Length;
             return result;
@@ -49,8 +48,7 @@ internal sealed class CompiledProtoCodec<T> : ICodec<T>
         var writer = ProtoWriterCache.Rent(sizeHint);
         try
         {
-            var serializer = new ProtoShapeSerializer(writer, root);
-            schema.Write(MemberIndex.Root, value, ref serializer);
+            Write(writer, value);
             sizeHint = writer.Length;
             destination.Write(writer.WrittenSpan);
         }
@@ -58,6 +56,12 @@ internal sealed class CompiledProtoCodec<T> : ICodec<T>
         {
             ProtoWriterCache.Return(writer);
         }
+    }
+
+    private void Write(ProtoWriter writer, T value)
+    {
+        var serializer = new ProtoShapeSerializer(writer, root);
+        schema.Write(MemberIndex.Root, value, ref serializer);
     }
 
     public T Deserialize(byte[] payload)
