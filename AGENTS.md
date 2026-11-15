@@ -96,3 +96,4 @@ stale or missing staged JAR produces confusing codegen errors.
 - Branch off `main`; releases use `release/<x.y.z>` branches.
 - Commit messages follow Conventional Commits (`feat:`, `fix:`, `chore:`,
   `docs:`, `refactor:`). PRs are squash-merged with a `(#NN)` suffix.
+- Keep code comments and git commit messages extremely concise. Use American English consistently. This repository is public: never put agent session links (e.g. a Claude-Session: trailer or claude.ai/code/session_… URL) in commit messages or PR descriptions.
