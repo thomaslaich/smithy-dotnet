@@ -11,6 +11,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.20.1]
+
+Clients of IAM, Route53, and other global AWS services now sign their requests.
+
 ### Fixed
 
 - **SigV4 signs requests to global AWS services.** Calls to IAM and Route53 failed before sending
@@ -1051,7 +1055,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.1...HEAD
+[0.20.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.2...v0.19.0
 [0.18.2]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.1...v0.18.2
