@@ -11,8 +11,23 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.20.0]
+
+Servers require the model to declare `ValidationException`, clients fill required members a
+response leaves out, and client-only projects follow Smithy's client rules for member optionality.
+
 ### Changed
 
+- **Client-only projects follow Smithy's client nullability rules.** A project that generates a
+  client, no server, and owns no operation makes every member of an operation's input, and every
+  `@clientOptional` member, optional, as Smithy requires of clients. A model that later drops
+  `@required` from such a member then no longer breaks client code. Input members keep their
+  defaults, which the client still sends. Every other project, and shapes from references, keep
+  the server rules, so handlers still get exact types. **BREAKING** for client-only projects: those
+  members become nullable in C# and `option` in F#, and the parameters of an input's constructor
+  are all optional and ordered by name, so pass them by name. See
+  [Member optionality](https://thomaslaich.github.io/smithy-dotnet/reference/generated-code/#member-optionality).
+  ([#354](https://github.com/thomaslaich/smithy-dotnet/issues/354))
 - **Servers serialize response bodies into pooled memory.** The REST, RPCv2 and gRPC servers write
   a unary response body into pooled memory the response owns rather than a new array, and gRPC
   frames it in place, which cuts what a large response allocates by up to a third.
@@ -75,6 +90,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   enum's unknown value), as Smithy's client error correction describes. Members with a modeled
   default keep it, and a required union still fails. Servers still reject a request that omits a
   required member. ([#349](https://github.com/thomaslaich/smithy-dotnet/issues/349))
+
+### Security
+
+- **`NSmithy.Codecs.Cbor` depends on `System.Formats.Cbor` 10.0.15**, which fixes CVE-2026-118747.
 
 ## [0.19.0]
 
@@ -1023,7 +1042,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.2...v0.19.0
 [0.18.2]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.0...v0.18.1
