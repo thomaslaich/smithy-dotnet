@@ -92,6 +92,52 @@ public sealed record SmithyEndpointAuthScheme(
         && value.Kind == DocumentKind.Boolean
             ? value.AsBoolean()
             : null;
+
+    /// <summary>
+    /// <paramref name="schemes"/> with each property a scheme leaves out taken from the scheme of
+    /// <paramref name="defaults"/> with the same id. Endpoint rules may set only some properties of
+    /// a modeled scheme, such as the signing region of a global service; the rest keep the modeled
+    /// values, such as the service's SigV4 signing name.
+    /// </summary>
+    public static IReadOnlyList<SmithyEndpointAuthScheme> WithDefaults(
+        IReadOnlyList<SmithyEndpointAuthScheme> schemes,
+        IReadOnlyList<SmithyEndpointAuthScheme> defaults
+    )
+    {
+        ArgumentNullException.ThrowIfNull(schemes);
+        ArgumentNullException.ThrowIfNull(defaults);
+        var merged = new SmithyEndpointAuthScheme[schemes.Count];
+        for (var i = 0; i < schemes.Count; i++)
+        {
+            merged[i] = schemes[i].WithDefaults(defaults);
+        }
+        return merged;
+    }
+
+    private SmithyEndpointAuthScheme WithDefaults(IReadOnlyList<SmithyEndpointAuthScheme> defaults)
+    {
+        var fallback = defaults.FirstOrDefault(scheme =>
+            string.Equals(scheme.SchemeId, SchemeId, StringComparison.Ordinal)
+        );
+        if (fallback?.Properties is not { Count: > 0 } fallbackProperties)
+        {
+            return this;
+        }
+        if (Properties is null)
+        {
+            return this with { Properties = fallbackProperties };
+        }
+        Dictionary<string, Document>? properties = null;
+        foreach (var (name, value) in fallbackProperties)
+        {
+            if (!Properties.ContainsKey(name))
+            {
+                properties ??= new Dictionary<string, Document>(Properties, StringComparer.Ordinal);
+                properties[name] = value;
+            }
+        }
+        return properties is null ? this : this with { Properties = properties };
+    }
 }
 
 /// <summary>

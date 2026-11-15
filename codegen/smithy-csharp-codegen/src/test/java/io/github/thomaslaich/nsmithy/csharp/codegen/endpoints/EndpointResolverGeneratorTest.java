@@ -243,6 +243,55 @@ class EndpointResolverGeneratorTest {
         generated);
   }
 
+  @Test
+  void anEndpointsAuthSchemeTakesTheModeledDefaultsForWhatItLeavesOut() throws Exception {
+    // Like IAM's rules, which set the signing region of a global service but no signing name.
+    String source =
+        """
+        $version: "2"
+        metadata suppressions = [{ id: "UnstableTrait", namespace: "example.weather" }]
+        namespace example.weather
+
+        use smithy.rules#endpointRuleSet
+
+        @httpBearerAuth
+        @endpointRuleSet({
+            version: "1.0"
+            parameters: {}
+            rules: [
+                {
+                    conditions: []
+                    type: "endpoint"
+                    endpoint: {
+                        url: "https://example.com"
+                        properties: {
+                            authSchemes: [{ name: "smithy.api#httpBearerAuth", region: "us-east-1" }]
+                        }
+                    }
+                }
+            ]
+        })
+        service Weather { version: "2024-01-01" }
+        """;
+    CSharpIntegration integration =
+        new CSharpIntegration() {
+          @Override
+          public List<EndpointDefaultAuthScheme> endpointDefaultAuthSchemes(ServiceShape service) {
+            return List.of(
+                new EndpointDefaultAuthScheme(
+                    "smithy.api#httpBearerAuth", Map.of("realm", "weather"), Map.of()));
+          }
+        };
+
+    String generated = render(source, List.of(integration));
+
+    assertTrue(
+        generated.contains("AuthSchemes: SmithyEndpointAuthScheme.WithDefaults("), generated);
+    assertTrue(generated.contains("[\"region\"] = Document.From(\"us-east-1\")"), generated);
+    assertTrue(generated.contains(", DefaultAuthSchemes()))"), generated);
+    assertTrue(generated.contains("[\"realm\"] = Document.From(\"weather\")"), generated);
+  }
+
   private String render(String source) throws Exception {
     return render(source, List.of());
   }
