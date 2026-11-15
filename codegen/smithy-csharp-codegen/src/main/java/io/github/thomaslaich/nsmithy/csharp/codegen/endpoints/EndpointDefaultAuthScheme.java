@@ -1,5 +1,5 @@
 /*
- * Auth scheme properties a resolved endpoint carries when its rules set no auth schemes.
+ * Auth scheme properties a resolved endpoint carries when its rules leave them out.
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.endpoints;
 
@@ -8,7 +8,8 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
 
 /**
  * The properties of a modeled auth scheme on endpoints whose rules set no {@code authSchemes}, such
- * as the SigV4 signing name and region.
+ * as the SigV4 signing name and region, and the properties an endpoint's auth scheme for the same
+ * scheme leaves out.
  *
  * @param schemeId the auth trait shape id, such as {@code aws.auth#sigv4}.
  * @param properties properties with a fixed string value.

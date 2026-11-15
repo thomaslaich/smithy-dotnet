@@ -11,6 +11,15 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **SigV4 signs requests to global AWS services.** Calls to IAM and Route53 failed before sending
+  with "AWS SigV4 needs a signing name": their endpoint rules return a SigV4 auth scheme that sets
+  the signing region but no signing name, and the generated endpoint resolver used it as is. An
+  endpoint's auth scheme now takes the properties it leaves out from the service's modeled scheme,
+  such as the signing name of its `@aws.auth#sigv4` trait.
+  ([#365](https://github.com/thomaslaich/smithy-dotnet/issues/365))
+
 ## [0.20.0]
 
 Servers require the model to declare `ValidationException`, clients fill required members a

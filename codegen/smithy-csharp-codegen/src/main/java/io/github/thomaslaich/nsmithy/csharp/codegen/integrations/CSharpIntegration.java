@@ -75,7 +75,7 @@ public interface CSharpIntegration
 
   /**
    * Properties of the service's modeled auth schemes on endpoints whose rules set no {@code
-   * authSchemes}.
+   * authSchemes}, and for the properties an endpoint's auth scheme of the same id leaves out.
    */
   default List<EndpointDefaultAuthScheme> endpointDefaultAuthSchemes(ServiceShape service) {
     return List.of();

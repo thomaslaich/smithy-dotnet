@@ -497,8 +497,8 @@ public final class EndpointResolverGenerator implements Runnable {
   }
 
   /**
-   * The modeled auth schemes, with integration-supplied properties, for endpoints whose rules set
-   * no {@code authSchemes}.
+   * The modeled auth schemes, with integration-supplied properties: the auth schemes of endpoints
+   * whose rules set none, and the properties an endpoint's auth scheme leaves out.
    */
   private void writeDefaultAuthSchemes() {
     writer.pushState();
@@ -593,7 +593,16 @@ public final class EndpointResolverGenerator implements Runnable {
     }
     Map<Identifier, Literal> properties = new LinkedHashMap<>(endpoint.getProperties());
     Literal authSchemes = properties.remove(Identifier.of("authSchemes"));
-    if (authSchemes != null) {
+    if (authSchemes != null && !rules.defaultAuthSchemes().isEmpty()) {
+      // The rules may set only some properties of a modeled scheme, such as the signing region of a
+      // global service; the modeled defaults fill the rest, such as the SigV4 signing name.
+      usesDefaultAuthSchemes = true;
+      sb.append(", AuthSchemes: ")
+          .append(writer.typeName(RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME))
+          .append(".WithDefaults(")
+          .append(authSchemes(renderer, authSchemes))
+          .append(", DefaultAuthSchemes())");
+    } else if (authSchemes != null) {
       sb.append(", AuthSchemes: ").append(authSchemes(renderer, authSchemes));
     } else if (!rules.defaultAuthSchemes().isEmpty()) {
       usesDefaultAuthSchemes = true;
