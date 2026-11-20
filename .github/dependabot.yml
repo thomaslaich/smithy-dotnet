@@ -25,6 +25,13 @@ updates:
       # Pinned to the MSBuild of the oldest supported SDK; newer versions target newer .NET.
       - dependency-name: Microsoft.Build.*
         update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      # Majors move with the target framework (net10.0), not on their own.
+      - dependency-name: FSharp.Core
+        update-types: ['version-update:semver-major']
+      - dependency-name: Microsoft.AspNetCore.*
+        update-types: ['version-update:semver-major']
+      - dependency-name: Microsoft.Extensions.*
+        update-types: ['version-update:semver-major']
       # Dependencies of the published packages: their version is every consumer's minimum, so it
       # rises by hand, for a feature, a fix or a security advisory.
       - dependency-name: ModelContextProtocol

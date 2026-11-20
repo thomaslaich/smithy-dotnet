@@ -31,6 +31,17 @@ else
   echo "smoke-test: working directory $WORK"
 fi
 
+# Pin the SDK: the repo's by default, or SMOKE_SDK (a global.json version) to build the templates
+# the way a consumer on a newer SDK does.
+if [[ -n "${SMOKE_SDK:-}" ]]; then
+  printf '{ "sdk": { "version": "%s", "rollForward": "latestFeature", "allowPrerelease": true } }\n' \
+    "$SMOKE_SDK" > "$WORK/global.json"
+else
+  cp "$REPO/global.json" "$WORK/global.json"
+fi
+cd "$WORK"
+echo "smoke-test: .NET SDK $(dotnet --version)"
+
 # Keep the template store out of the developer's real one: `dotnet new install` is global state,
 # and this installs a SNAPSHOT build that would shadow whatever they have installed.
 export DOTNET_CLI_HOME="$WORK/cli-home"

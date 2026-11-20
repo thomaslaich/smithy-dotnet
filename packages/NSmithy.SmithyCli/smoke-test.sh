@@ -31,6 +31,8 @@ if [[ -z "${SMOKE_KEEP:-}" ]]; then
 else
   echo "smoke-test: working directory $WORK"
 fi
+# Steps that cd into $WORK still use the repo's SDK.
+cp "$REPO/global.json" "$WORK/global.json"
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
 
