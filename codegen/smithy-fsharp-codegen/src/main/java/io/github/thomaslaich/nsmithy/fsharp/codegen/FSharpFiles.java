@@ -72,6 +72,14 @@ public final class FSharpFiles {
     return section(operation).handlers;
   }
 
+  /**
+   * The section an error's exception schema is declared in: the child Exceptions.Schemas namespace,
+   * in Schemas.g.fs.
+   */
+  public FSharpWriter exceptionSchemas(Shape error) {
+    return section(error).exceptionSchemas;
+  }
+
   /** The section a service's client is declared in. */
   public FSharpWriter client(Shape service) {
     return section(service).client;
@@ -126,6 +134,18 @@ public final class FSharpFiles {
             .append(FSharpSymbolProvider.SCHEMAS_NAMESPACE)
             .append("\n\n");
         schemaFile.append(schemaCode.replaceAll("\n{3,}", "\n\n")).append('\n');
+      }
+      String exceptionSchemaCode = section.exceptionSchemas.toString().strip();
+      if (!exceptionSchemaCode.isEmpty()) {
+        schemaFile
+            .append("\nnamespace rec ")
+            .append(fsharpNamespace)
+            .append('.')
+            .append(FSharpSymbolProvider.EXCEPTIONS_NAMESPACE)
+            .append('.')
+            .append(FSharpSymbolProvider.SCHEMAS_NAMESPACE)
+            .append("\n\n");
+        schemaFile.append(exceptionSchemaCode.replaceAll("\n{3,}", "\n\n")).append('\n');
       }
       String operationSchemas = section.operationSchemas.toString().strip();
       if (!operationSchemas.isEmpty()) {
@@ -231,6 +251,7 @@ public final class FSharpFiles {
     private final FSharpWriter operationSchemas = new FSharpWriter();
     private final FSharpWriter handlers = new FSharpWriter();
     private final FSharpWriter exceptions = new FSharpWriter();
+    private final FSharpWriter exceptionSchemas = new FSharpWriter();
     private final FSharpWriter client = new FSharpWriter();
     private final FSharpWriter server = new FSharpWriter();
   }

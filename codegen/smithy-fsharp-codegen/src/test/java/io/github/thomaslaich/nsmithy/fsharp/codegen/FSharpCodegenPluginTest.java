@@ -172,12 +172,21 @@ class FSharpCodegenPluginTest {
                 + "    inherit global.System.Exception(global.Microsoft.FSharp.Core.Option.toObj"
                 + " error.Message)"),
         types);
-    // The runtime reads and writes the exception.
+    // The record's schema serves members that target the error; the exception's, in a child
+    // namespace and through the record's builder, serves the runtime.
+    String schemas = manifest.expectFileString(SCHEMAS);
     assertTrue(
-        manifest
-            .expectFileString(SCHEMAS)
-            .contains("(fun (value: global.A.Kitchen.Exceptions.OutOfStock) -> value.Error.Item)"),
-        manifest.expectFileString(SCHEMAS));
+        schemas.contains("(fun (value: global.A.Kitchen.OutOfStock) -> value.Item)"), schemas);
+    assertTrue(schemas.contains("namespace rec A.Kitchen.Exceptions.Schemas\n"), schemas);
+    assertTrue(
+        schemas.contains(
+            "AccessorStructSchema<global.A.Kitchen.Exceptions.OutOfStock,"
+                + " global.A.Kitchen.Schemas.OutOfStockBuilder>"),
+        schemas);
+    assertTrue(
+        schemas.contains(
+            "(fun (value: global.A.Kitchen.Exceptions.OutOfStock) -> value.Error.Item)"),
+        schemas);
   }
 
   @Test

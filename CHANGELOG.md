@@ -36,8 +36,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   union. An `@error` structure is a record with `[<RequireQualifiedAccess>]`, so it compares by
   value and its labels never capture an input record's inference; a same-named class in the child
   `Exceptions` namespace carries it through the runtime. When a module project owns operations of
-  a service another project generates, those operations declare the service's errors (other than
-  `ValidationException`) themselves, or the service's project fails generation. **BREAKING** for
+  a service another project generates, those operations declare the service's errors
+  themselves, or the service's project fails generation. **BREAKING** for
   F#: handlers of operations with errors return `Ok output` or `Error(...)` instead of raising;
   errors are built as records, such as `{ Reader = reader }` instead of `AlreadyLent(reader)`,
   and an error's message member is `Message`, not `ErrorMessage`.

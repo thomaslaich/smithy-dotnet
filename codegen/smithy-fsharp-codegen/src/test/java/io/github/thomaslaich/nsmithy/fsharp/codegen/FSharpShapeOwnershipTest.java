@@ -198,6 +198,33 @@ class FSharpShapeOwnershipTest {
   }
 
   @Test
+  void aServiceRequiresItsValidationExceptionInTheUnionsToo() throws IOException {
+    // Its clients would otherwise throw the error their callers expect in the Result.
+    Path orders = writeManifest("orders.json", generate(owned("orders.smithy")));
+    String api =
+        API.replace(
+                "use aws.protocols#restJson1",
+                "use aws.protocols#restJson1\nuse smithy.framework#ValidationException")
+            .replace(
+                "operations: [PlaceOrder]",
+                "operations: [PlaceOrder]\n    errors: [ValidationException]");
+
+    CodegenException error =
+        assertThrows(
+            CodegenException.class,
+            () ->
+                generate(
+                    owned("api.smithy")
+                        .withMember("service", "acme.shop#Shop")
+                        .withMember(
+                            "providedShapes", ArrayNode.fromStrings(List.of(orders.toString()))),
+                    api));
+
+    assertTrue(
+        error.getMessage().contains("smithy.framework#ValidationException"), error.getMessage());
+  }
+
+  @Test
   void aProjectThatOwnsTheServiceAddsItsErrorsToTheUnion() {
     String api =
         API.replace("operations: [PlaceOrder]", "operations: [PlaceOrder]\n    errors: [Busy]")
@@ -289,6 +316,7 @@ class FSharpShapeOwnershipTest {
   private static MockManifest generate(ObjectNode.Builder settings, String api) {
     Model model =
         Model.assembler()
+            .discoverModels() // the validation model's shapes
             .addUnparsedModel("protocols.smithy", PROTOCOLS)
             .addUnparsedModel("orders.smithy", ORDERS)
             .addUnparsedModel("common.smithy", COMMON)

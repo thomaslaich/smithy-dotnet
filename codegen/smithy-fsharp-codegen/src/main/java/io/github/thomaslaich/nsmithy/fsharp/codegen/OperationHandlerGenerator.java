@@ -221,8 +221,8 @@ final class OperationHandlerGenerator {
   /**
    * Fails when an operation of {@code service} that another project generated has a union without
    * every error the service declares, because that project did not generate the service. Its
-   * handler could then only raise them. ValidationException is exempt: the runtime returns it
-   * before a handler runs.
+   * handler could then only raise them, and its clients would throw them instead of returning them
+   * in the Result.
    */
   static void checkServiceErrors(FSharpContext context, ServiceShape service) {
     for (OperationShape operation :
@@ -232,11 +232,7 @@ final class OperationHandlerGenerator {
       }
       List<ShapeId> covered = context.settings().providedShapes().errorShapes(operation.getId());
       List<ShapeId> missing =
-          service.getErrors().stream()
-              .filter(error -> !ShapeSupport.isValidationException(error))
-              .filter(error -> !covered.contains(error))
-              .sorted()
-              .toList();
+          service.getErrors().stream().filter(error -> !covered.contains(error)).sorted().toList();
       if (!missing.isEmpty()) {
         throw new CodegenException(
             "Operation "

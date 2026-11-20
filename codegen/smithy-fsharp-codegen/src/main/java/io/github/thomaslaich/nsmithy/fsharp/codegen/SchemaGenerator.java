@@ -98,16 +98,40 @@ final class SchemaGenerator {
   }
 
   /**
-   * A structure or an error. An error's schema reads and writes the exception class that carries
-   * its record, since the runtime reports modeled errors as exceptions.
+   * A structure or an error: the schema of its record, which members that target it use. An error
+   * also gets the schema of the exception class that carries its record, which operation and
+   * service schemas list, since the runtime reports modeled errors as exceptions; it builds through
+   * the record schema's builder.
    */
   void structure(StructureShape shape) {
-    FSharpWriter writer = context.files().schemas(shape);
-    String name = FSharpNaming.typeName(shape.getId().getName());
-    boolean isError = shape.hasTrait(ErrorTrait.class);
     String record = symbols.typeOf(shape);
-    String type = isError ? FSharpSymbolProvider.render(symbols.exceptionSymbol(shape)) : record;
-    String builder = name + "Builder";
+    String builder = FSharpNaming.typeName(shape.getId().getName()) + "Builder";
+    structSchema(context.files().schemas(shape), shape, record, record, builder, true);
+    if (shape.hasTrait(ErrorTrait.class)) {
+      structSchema(
+          context.files().exceptionSchemas(shape),
+          shape,
+          FSharpSymbolProvider.render(symbols.exceptionSymbol(shape)),
+          record,
+          "global." + symbols.schemaSymbol(shape).getNamespace() + "." + builder,
+          false);
+    }
+  }
+
+  /**
+   * A struct schema of {@code type}: the record itself, or, when it differs, the exception class
+   * that carries the record, whose members it reads through {@code Error}. {@code declareBuilder}
+   * declares the builder, which an exception schema shares with the record's.
+   */
+  private void structSchema(
+      FSharpWriter writer,
+      StructureShape shape,
+      String type,
+      String record,
+      String builder,
+      boolean declareBuilder) {
+    boolean isError = !type.equals(record);
+    String name = FSharpNaming.typeName(shape.getId().getName());
     String impl = name + "SchemaImpl";
     List<MemberShape> members = List.copyOf(shape.members());
 
@@ -155,6 +179,7 @@ final class SchemaGenerator {
     }
     Map<String, Object> templateContext = new HashMap<>();
     templateContext.put("builder", builder);
+    templateContext.put("declareBuilder", declareBuilder);
     // One presence bit per required member: an int64 holds 64, and the rare larger structure
     // derives from a builder that keeps the rest.
     templateContext.put(
@@ -173,6 +198,7 @@ final class SchemaGenerator {
     templateContext.put("build", build(type, record, members, isError));
     writer.writeTemplate(
         """
+        ${?declareBuilder}
         ${^properties}
         type ${builder:L}() =
             inherit global.NSmithy.Core.Serde.${builderBase:L}()
@@ -184,6 +210,7 @@ final class SchemaGenerator {
             member val ${key:L}: ${value:L} voption = ValueNone with get, set
             ${/properties}
         ${/properties}
+        ${/declareBuilder}
 
         type internal ${impl:L}() =
             inherit global.NSmithy.Core.Serde.AccessorStructSchema<${type:L}, ${builder:L}>(
@@ -462,7 +489,7 @@ final class SchemaGenerator {
               + ">("
               + FSharpLiterals.shapeId(errorId)
               + ", "
-              + lazy(error)
+              + exceptionSchema(error)
               + ", "
               + SchemaSupport.errorStatusCode(error)
               + ") :> "
@@ -631,15 +658,34 @@ final class SchemaGenerator {
         || ShapeSupport.isValidationException(shape.getId())) {
       return schema(shape);
     }
-    String type =
-        shape.hasTrait(ErrorTrait.class)
-            ? FSharpSymbolProvider.render(symbols.exceptionSymbol(shape.asStructureShape().get()))
-            : symbols.typeOf(shape);
+    String type = symbols.typeOf(shape);
     return SCHEMAS
         + ".Lazy<"
         + type
         + ">(fun () -> "
         + schema(shape)
+        + " :> "
+        + SERDE
+        + "Schema<"
+        + type
+        + ">)";
+  }
+
+  /**
+   * The schema of the exception class that carries an error, lazily: the runtime's for
+   * ValidationException.
+   */
+  private String exceptionSchema(StructureShape error) {
+    String holder = FSharpSymbolProvider.render(symbols.exceptionSchemaSymbol(error)) + ".Schema";
+    if (ShapeSupport.isValidationException(error.getId())) {
+      return holder;
+    }
+    String type = FSharpSymbolProvider.render(symbols.exceptionSymbol(error));
+    return SCHEMAS
+        + ".Lazy<"
+        + type
+        + ">(fun () -> "
+        + holder
         + " :> "
         + SERDE
         + "Schema<"

@@ -334,6 +334,22 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
         .build();
   }
 
+  /**
+   * The schema of the exception class that carries an error's record, which operation and service
+   * schemas list: in the child Schemas namespace of the exception's namespace, or the runtime's
+   * ValidationExceptionSchema.
+   */
+  public Symbol exceptionSchemaSymbol(StructureShape error) {
+    if (ShapeSupport.isValidationException(error.getId())) {
+      return schemaSymbol(error);
+    }
+    Symbol exception = exceptionSymbol(error);
+    return Symbol.builder()
+        .name(exception.getName() + "Schema")
+        .namespace(exception.getNamespace() + "." + SCHEMAS_NAMESPACE, ".")
+        .build();
+  }
+
   /** The F# namespace of a Smithy namespace's schemas. */
   public String schemaNamespace(String smithyNamespace) {
     return settings.fsharpNamespace(smithyNamespace) + "." + SCHEMAS_NAMESPACE;

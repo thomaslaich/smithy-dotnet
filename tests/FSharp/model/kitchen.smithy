@@ -60,7 +60,11 @@ operation Order {
 
 @readonly
 @http(method: "GET", uri: "/ping")
-operation Ping {}
+operation Ping {
+    output := {
+        report: StockReport
+    }
+}
 
 /// Closes a table; only staff with an API key may.
 @auth([httpApiKeyAuth])
@@ -183,4 +187,9 @@ structure OutOfStock {
 structure Throttled {
     @required
     message: String
+}
+
+/// Refers to an error as a plain structure.
+structure StockReport {
+    shortage: OutOfStock
 }

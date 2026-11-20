@@ -313,8 +313,11 @@ The runtime reports modeled errors as exceptions: the client throws them, the
 server writes them, and retries recognize `ISmithyRetryableError` on them. An
 error's record therefore travels in an exception class of the same name in the
 child `Exceptions` namespace, which implements `ISmithyRetryableError` for a
-`@retryable` error. Its schema reads and writes that class, building the record
-inside it. Users meet only the record: error unions hold records, and their
+`@retryable` error. The error has two schemas: the record's, like any
+structure's, which a member that targets the error uses, and the exception's,
+in the child `Exceptions.Schemas` namespace, which operation and service schemas
+list. The exception's schema shares the record schema's builder and builds the
+record inside the exception. Users meet only the record: error unions hold records, and their
 `ToException` and `FromException` wrap and unwrap them at the runtime boundary.
 
 F# compiles files, and the declarations in a file, in order, and a declaration
@@ -349,8 +352,7 @@ interface in `Operations.g.fs` and recorded in the shape manifest with the
 errors it holds, so the project that owns the operation declares it for every
 client and server built on it. A project that does not generate the service
 cannot add its errors, so the service's project fails generation when a provided
-union lacks one, other than `ValidationException`, which the runtime returns
-before a handler runs; the operation then declares the error itself. A client
+union lacks one; the operation then declares the error itself. A client
 operation returns `Task<Result<Output, {Operation}Error>>`. The client catches
 the error exceptions the runtime raises and maps them to cases through the
 union's `FromException`, so a client of an operation another project owns uses
