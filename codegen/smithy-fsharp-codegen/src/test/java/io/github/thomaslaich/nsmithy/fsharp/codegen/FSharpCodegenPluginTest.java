@@ -152,11 +152,41 @@ class FSharpCodegenPluginTest {
     assertTrue(
         types.contains("| Unknown of tag: string * value: global.NSmithy.Core.Document"), types);
     assertTrue(types.contains("| VALUE\n"), types);
+  }
+
+  @Test
+  void anErrorIsARecordThatAnExceptionOfTheSameNameCarries() {
+    MockManifest manifest = generate(settings("a.kitchen#Kitchen", null), KITCHEN, SHARED);
+
+    // A record has no exception members to avoid, so data and message keep their names.
+    String types = manifest.expectFileString(TYPES);
     assertTrue(
         types.contains(
-            "type OutOfStock(item: global.A.Kitchen.Ingredient, ?errorMessage: string, ?dataValue:"
-                + " string) ="),
+            "[<RequireQualifiedAccess>]\ntype OutOfStock =\n    {\n        Message: string option\n"
+                + "        Item: global.A.Kitchen.Ingredient\n        Data: string option\n    }"),
         types);
+    assertTrue(types.contains("namespace rec A.Kitchen.Exceptions\n"), types);
+    assertTrue(
+        types.contains(
+            "type OutOfStock(error: global.A.Kitchen.OutOfStock) =\n"
+                + "    inherit global.System.Exception(global.Microsoft.FSharp.Core.Option.toObj"
+                + " error.Message)"),
+        types);
+    // The record's schema serves members that target the error; the exception's, in a child
+    // namespace and through the record's builder, serves the runtime.
+    String schemas = manifest.expectFileString(SCHEMAS);
+    assertTrue(
+        schemas.contains("(fun (value: global.A.Kitchen.OutOfStock) -> value.Item)"), schemas);
+    assertTrue(schemas.contains("namespace rec A.Kitchen.Exceptions.Schemas\n"), schemas);
+    assertTrue(
+        schemas.contains(
+            "AccessorStructSchema<global.A.Kitchen.Exceptions.OutOfStock,"
+                + " global.A.Kitchen.Schemas.OutOfStockBuilder>"),
+        schemas);
+    assertTrue(
+        schemas.contains(
+            "(fun (value: global.A.Kitchen.Exceptions.OutOfStock) -> value.Error.Item)"),
+        schemas);
   }
 
   @Test

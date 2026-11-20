@@ -22,7 +22,7 @@ type private Kitchen() =
         member _.OrderAsync(_, _) =
             Task.FromResult(Ok { Receipt = Receipt.Pending "soon" })
 
-        member _.PingAsync(_, _) = Task.FromResult(PingOutput())
+        member _.PingAsync(_, _) = Task.FromResult(Ok({ Report = None }))
 
         member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
 

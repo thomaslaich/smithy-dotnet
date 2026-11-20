@@ -10,4 +10,4 @@ type CapturePaymentHandler() =
             if input.OrderId.StartsWith "order-" then
                 Task.FromResult(Ok { PaymentId = $"payment-for-{input.OrderId}" })
             else
-                Task.FromResult(Error(CapturePaymentError.OrderNotFound(OrderNotFound($"No order {input.OrderId}."))))
+                Task.FromResult(Error(CapturePaymentError.OrderNotFound { Message = $"No order {input.OrderId}." }))

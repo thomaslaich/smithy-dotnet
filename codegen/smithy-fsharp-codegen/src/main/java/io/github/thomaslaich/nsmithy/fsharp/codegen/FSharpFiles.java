@@ -43,6 +43,11 @@ public final class FSharpFiles {
     return section(shape).types;
   }
 
+  /** The section an error's exception class is declared in: the child Exceptions namespace. */
+  public FSharpWriter exceptions(Shape error) {
+    return section(error).exceptions;
+  }
+
   /**
    * The section a string or int enum's schema is declared in. Enum schemas come before the other
    * schemas of their namespace: they are referenced directly, not lazily, so they must be
@@ -65,6 +70,14 @@ public final class FSharpFiles {
   /** The section an operation's handler interface is declared in. */
   public FSharpWriter handlers(Shape operation) {
     return section(operation).handlers;
+  }
+
+  /**
+   * The section an error's exception schema is declared in: the child Exceptions.Schemas namespace,
+   * in Schemas.g.fs.
+   */
+  public FSharpWriter exceptionSchemas(Shape error) {
+    return section(error).exceptionSchemas;
   }
 
   /** The section a service's client is declared in. */
@@ -100,6 +113,16 @@ public final class FSharpFiles {
         types.append("\nnamespace rec ").append(fsharpNamespace).append("\n\n");
         types.append(typeCode).append('\n');
       }
+      String exceptionCode = section.exceptions.toString().strip();
+      if (!exceptionCode.isEmpty()) {
+        types
+            .append("\nnamespace rec ")
+            .append(fsharpNamespace)
+            .append('.')
+            .append(FSharpSymbolProvider.EXCEPTIONS_NAMESPACE)
+            .append("\n\n");
+        types.append(exceptionCode.replaceAll("\n{3,}", "\n\n")).append('\n');
+      }
       String schemaCode =
           (section.enumSchemas.toString().strip() + "\n\n" + section.schemas.toString().strip())
               .strip();
@@ -111,6 +134,18 @@ public final class FSharpFiles {
             .append(FSharpSymbolProvider.SCHEMAS_NAMESPACE)
             .append("\n\n");
         schemaFile.append(schemaCode.replaceAll("\n{3,}", "\n\n")).append('\n');
+      }
+      String exceptionSchemaCode = section.exceptionSchemas.toString().strip();
+      if (!exceptionSchemaCode.isEmpty()) {
+        schemaFile
+            .append("\nnamespace rec ")
+            .append(fsharpNamespace)
+            .append('.')
+            .append(FSharpSymbolProvider.EXCEPTIONS_NAMESPACE)
+            .append('.')
+            .append(FSharpSymbolProvider.SCHEMAS_NAMESPACE)
+            .append("\n\n");
+        schemaFile.append(exceptionSchemaCode.replaceAll("\n{3,}", "\n\n")).append('\n');
       }
       String operationSchemas = section.operationSchemas.toString().strip();
       if (!operationSchemas.isEmpty()) {
@@ -215,6 +250,8 @@ public final class FSharpFiles {
     private final FSharpWriter schemas = new FSharpWriter();
     private final FSharpWriter operationSchemas = new FSharpWriter();
     private final FSharpWriter handlers = new FSharpWriter();
+    private final FSharpWriter exceptions = new FSharpWriter();
+    private final FSharpWriter exceptionSchemas = new FSharpWriter();
     private final FSharpWriter client = new FSharpWriter();
     private final FSharpWriter server = new FSharpWriter();
   }

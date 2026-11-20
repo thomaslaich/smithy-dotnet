@@ -108,21 +108,6 @@ public final class FSharpNaming {
   private static final Set<String> INHERITED_MEMBERS =
       Set.of("Equals", "GetHashCode", "ToString", "GetType", "MemberwiseClone", "Finalize");
 
-  /** Members an exception inherits, which a generated error's property cannot reuse. */
-  private static final Set<String> EXCEPTION_MEMBERS =
-      Set.of(
-          "Message",
-          "Data",
-          "Source",
-          "StackTrace",
-          "InnerException",
-          "HelpLink",
-          "HResult",
-          "TargetSite",
-          "GetBaseException",
-          "GetObjectData",
-          "ErrorMessage");
-
   /**
    * Names a generated union or enum declares besides its cases ({@code Unknown}, and an enum's
    * {@code Value} and {@code FromValue}), plus the {@code Tag} property F# compiles into every
@@ -133,9 +118,6 @@ public final class FSharpNaming {
   private static final String COLLISION_SUFFIX = "Value";
   private static final String CASE_COLLISION_SUFFIX = "Case";
 
-  /** The property that holds an error's modeled message. */
-  public static final String ERROR_MESSAGE = "ErrorMessage";
-
   private FSharpNaming() {}
 
   public static String typeName(String shapeName) {
@@ -143,20 +125,9 @@ public final class FSharpNaming {
     return INHERITED_MEMBERS.contains(name) ? name + COLLISION_SUFFIX : name;
   }
 
-  /** A record field, builder property, or error property. */
+  /** A record field or builder property. */
   public static String fieldName(MemberShape member) {
     return escape(avoid(Naming.pascal(member.getMemberName()), INHERITED_MEMBERS));
-  }
-
-  /** An error's property, which also avoids the members an exception inherits. */
-  public static String errorPropertyName(MemberShape member) {
-    String name = avoid(Naming.pascal(member.getMemberName()), INHERITED_MEMBERS);
-    return escape(EXCEPTION_MEMBERS.contains(name) ? name + COLLISION_SUFFIX : name);
-  }
-
-  /** An error constructor parameter. */
-  public static String parameterName(String propertyName) {
-    return escape(Naming.camel(unescape(propertyName)));
   }
 
   /** A union case or string enum case. */
@@ -217,9 +188,5 @@ public final class FSharpNaming {
 
   private static String escape(String name) {
     return KEYWORDS.contains(name) ? "``" + name + "``" : name;
-  }
-
-  private static String unescape(String name) {
-    return name.startsWith("``") ? name.substring(2, name.length() - 2) : name;
   }
 }

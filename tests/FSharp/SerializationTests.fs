@@ -77,12 +77,34 @@ let ``Every union case round-trips, including a Unit case`` (factory: ICodecFact
 [<Theory>]
 [<MemberData(nameof factories)>]
 let ``Errors round-trip`` (factory: ICodecFactory) =
-    let error =
-        roundtrip factory OutOfStockSchema.Schema (OutOfStock(Ingredient.CHEESE, errorMessage = "gone"))
+    let error: OutOfStock =
+        { Message = Some "gone"
+          Item = Ingredient.CHEESE
+          RestockDays = 5
+          Data = None }
 
-    Assert.Equal(Ingredient.CHEESE, error.Item)
-    Assert.Equal(Some "gone", error.ErrorMessage)
-    Assert.Equal(5, error.RestockDays)
+    // The record's schema, which a member that targets the error uses.
+    Assert.Equal(error, roundtrip factory OutOfStockSchema.Schema error)
+
+    // The exception's schema, which the runtime uses for the error itself.
+    let read =
+        roundtrip factory Exceptions.Schemas.OutOfStockSchema.Schema (Exceptions.OutOfStock error)
+
+    Assert.Equal(error, read.Error)
+    Assert.Equal("gone", read.Message)
+
+[<Theory>]
+[<MemberData(nameof factories)>]
+let ``A member that targets an error round-trips its record`` (factory: ICodecFactory) =
+    let report =
+        { Shortage =
+            Some
+                { Message = None
+                  Item = Ingredient.BACON
+                  RestockDays = 2
+                  Data = None } }
+
+    Assert.Equal(report, roundtrip factory StockReportSchema.Schema report)
 
 [<Fact>]
 let ``Timestamp formats reach the wire`` () =

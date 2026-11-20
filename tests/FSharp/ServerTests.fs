@@ -14,14 +14,22 @@ open NSmithy.Protocols.RpcV2Json
 open Xunit
 
 /// Serves orders, is out of stock of any dish named "sold out", and closed for one named "closed".
+/// The kitchen being closed is an error the service declares for every operation.
 type private Kitchen() =
     interface IKitchenServiceHandler with
         member _.OrderAsync(input, _) =
             task {
                 match input.Dish.Name with
                 | "sold out" ->
-                    return Error(OrderError.OutOfStock(OutOfStock(Ingredient.CHEESE, errorMessage = "gone")))
-                | "closed" -> return raise (Example.Staff.KitchenClosed(errorMessage = "closed"))
+                    return
+                        Error(
+                            OrderError.OutOfStock
+                                { Message = Some "gone"
+                                  Item = Ingredient.CHEESE
+                                  RestockDays = 5
+                                  Data = None }
+                        )
+                | "closed" -> return Error(OrderError.KitchenClosed { Message = Some "closed" })
                 | _ ->
                     return
                         Ok
@@ -31,7 +39,7 @@ type private Kitchen() =
                                       Currency = "CHF" } }
             }
 
-        member _.PingAsync(_, _) = Task.FromResult(PingOutput())
+        member _.PingAsync(_, _) = Task.FromResult(Ok({ Report = None }))
 
         member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
 
@@ -106,15 +114,15 @@ let ``A modeled error a handler returns reaches the client``
         let! result = client.OrderAsync(order "sold out")
 
         match result with
-        | Error(KitchenCallError.Operation(OrderError.OutOfStock error)) ->
+        | Error(OrderError.OutOfStock error) ->
             Assert.Equal(Ingredient.CHEESE, error.Item)
-            Assert.Equal(Some "gone", error.ErrorMessage)
+            Assert.Equal(Some "gone", error.Message)
         | other -> failwith $"Unexpected result: {other}"
     }
 
 [<Theory>]
 [<MemberData(nameof protocols)>]
-let ``A service error a handler raises reaches the client``
+let ``A service error a handler returns reaches the client``
     (served: KitchenServiceProtocols, protocol: IProtocol)
     : Task =
     task {
@@ -124,8 +132,7 @@ let ``A service error a handler raises reaches the client``
         let! result = client.OrderAsync(order "closed")
 
         match result with
-        | Error(KitchenCallError.Service(KitchenError.KitchenClosed error)) ->
-            Assert.Equal(Some "closed", error.ErrorMessage)
+        | Error(OrderError.KitchenClosed error) -> Assert.Equal(Some "closed", error.Message)
         | other -> failwith $"Unexpected result: {other}"
     }
 
@@ -142,7 +149,7 @@ let ``The server validates input before the handler runs`` () : Task =
         let! result = client.OrderAsync { order "pizza" with Dish = unknownKey }
 
         match result with
-        | Error(KitchenCallError.Operation(OrderError.ValidationException error)) ->
+        | Error(OrderError.ValidationException error) ->
             Assert.Contains("/dish/tags", error.Message)
             Assert.Equal("/dish/tags", (Seq.exactlyOne error.FieldList).Path)
         | other -> failwith $"Unexpected result: {other}"
@@ -154,7 +161,7 @@ let private paidHandler () =
         member _.OrderAsync(_, _) =
             Task.FromResult(Ok { Receipt = Receipt.Paid { Amount = 1M; Currency = "CHF" } })
 
-        member _.PingAsync(_, _) = Task.FromResult(PingOutput())
+        member _.PingAsync(_, _) = Task.FromResult(Ok({ Report = None }))
         member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput())) }
 
 /// Serves the kitchen over RestJson1 with the handler `register` adds, and orders twice.

@@ -298,7 +298,7 @@ and writes F# values unchanged.
 | Shape | F# type |
 | --- | --- |
 | structure | Record. A structure with no members is a class with value equality. |
-| `@error` structure | Class deriving from `Exception`, taking optional members as optional constructor arguments |
+| `@error` structure | Record with `[<RequireQualifiedAccess>]`, so its labels never capture another record's inference; the same-named class in the child `Exceptions` namespace carries it through the runtime |
 | union | Discriminated union with an `Unknown of tag * value` case; a `Unit` member is a case without data |
 | enum | Discriminated union with an `Unknown of string` case, implementing `IStringEnumValue` |
 | intEnum | F# enum |
@@ -308,6 +308,17 @@ and writes F# values unchanged.
 A member is an `option` when it may be absent: not `@required` and without a
 default a client can rely on. A member with such a default is a plain value,
 which reading fills in when the input leaves it out.
+
+The runtime reports modeled errors as exceptions: the client throws them, the
+server writes them, and retries recognize `ISmithyRetryableError` on them. An
+error's record therefore travels in an exception class of the same name in the
+child `Exceptions` namespace, which implements `ISmithyRetryableError` for a
+`@retryable` error. The error has two schemas: the record's, like any
+structure's, which a member that targets the error uses, and the exception's,
+in the child `Exceptions.Schemas` namespace, which operation and service schemas
+list. The exception's schema shares the record schema's builder and builds the
+record inside the exception. Users meet only the record: error unions hold records, and their
+`ToException` and `FromException` wrap and unwrap them at the runtime boundary.
 
 F# compiles files, and the declarations in a file, in order, and a declaration
 can only refer to one before it. The plugin therefore writes five files,
@@ -333,21 +344,21 @@ over as a pair of functions. A sparse collection's `option` elements go through
 
 The client is `I{Service}Client`, `{Service}ClientConfig`, and `{Service}Client`,
 as in C#. Each operation is a method that takes the input record and an optional
-`CancellationToken` and returns a `Task`. An operation whose model declares
-errors has a `{Operation}Error` union, one case per error, declared next to its
-handler interface in `Operations.g.fs` and recorded in the shape manifest, so
-the project that owns the operation declares it for every client and server
-built on it. The service's errors are `{Service}Error`, one union for the whole
-service, so a caller handles them once. A client operation returns
-`Task<Result<Output, E>>`, where `E` is the operation's union, the service's
-when the operation declares none, or `{Service}CallError<{Operation}Error>`,
-with an `Operation` and a `Service` case, when both declare errors. The client
-catches the error exceptions the runtime raises and returns them as those
-cases. It maps an exception to the operation's case through the union's
-`FromException`, so a client of an operation another project owns uses that
-project's cases even when its own model declares others. Every other failure
-stays an exception, including a modeled error the
-operation does not declare. The client binds each operation to the service's default
+`CancellationToken` and returns a `Task`. An operation that can return modeled
+errors has a `{Operation}Error` union, one case per error: those it declares,
+and those of the service the generating project generates, so neither a handler
+nor a caller deals with a second union. It is declared next to the handler
+interface in `Operations.g.fs` and recorded in the shape manifest with the
+errors it holds, so the project that owns the operation declares it for every
+client and server built on it. A project that does not generate the service
+cannot add its errors, so the service's project fails generation when a provided
+union lacks one; the operation then declares the error itself. A client
+operation returns `Task<Result<Output, {Operation}Error>>`. The client catches
+the error exceptions the runtime raises and maps them to cases through the
+union's `FromException`, so a client of an operation another project owns uses
+that project's cases even when its own model declares others. Every other
+failure stays an exception, including a modeled error the operation does not
+declare. The client binds each operation to the service's default
 protocol when it is constructed and calls `SmithyClientRuntime`, so transport,
 retries, auth, and serialization are the C# client's. It fills in a missing
 `@idempotencyToken` member and expands `@endpoint` host prefixes. It has no
@@ -363,8 +374,7 @@ record and a `CancellationToken` and returns a `Task`, of a
 `SmithyServerRuntime` reads requests, validates input, calls it, and writes the
 response or modeled error. The definition turns an `Error` case into a faulted
 task through the union's `ToException`, which the runtime reads off the task
-without throwing, as it does for an error a handler raises. Errors the service
-declares are not in the operation's union, so a handler raises them. Fake handlers and MCP prompts beyond the definition's `Prompts` are not
+without throwing. A handler never raises a modeled error. Fake handlers and MCP prompts beyond the definition's `Prompts` are not
 generated.
 
 ## MSBuild Integration

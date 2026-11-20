@@ -10,10 +10,10 @@ open Example.Bookshelf
 let create () =
     let books = ConcurrentDictionary<string, Book>()
 
-    let find id =
+    let find id : Result<Book, NoSuchBook> =
         match books.TryGetValue id with
         | true, book -> Ok book
-        | false, _ -> Error(NoSuchBook(id))
+        | false, _ -> Error { Id = id }
 
     { new IBookshelfServiceHandler with
         member _.AddBookAsync(input, _) =
@@ -46,7 +46,7 @@ let create () =
         member _.LendBookAsync(input, _) =
             let lend book =
                 match book.Status with
-                | Status.LentTo reader -> Error(LendBookError.AlreadyLent(AlreadyLent(reader)))
+                | Status.LentTo reader -> Error(LendBookError.AlreadyLent { Reader = reader })
                 | _ ->
                     let lent =
                         { book with
