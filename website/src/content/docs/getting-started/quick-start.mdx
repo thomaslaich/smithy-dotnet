@@ -299,11 +299,16 @@ the build breaks until you handle it.
   </TabItem>
   <TabItem label="F#">
     ```fsharp title="HelloWorld.Client/Program.fs"
-    use client = new HelloServiceClient(Uri "http://localhost:5000")
+    let run () =
+        task {
+            use client = new HelloServiceClient(Uri "http://localhost:5000")
 
-    match client.SayHelloAsync({ Name = "world" }).GetAwaiter().GetResult() with
-    | Ok response -> printfn "%s" response.Message
-    | Error(SayHelloError.ValidationException error) -> eprintfn "Rejected: %s" error.Message
+            match! client.SayHelloAsync({ Name = "world" }) with
+            | Ok response -> printfn "%s" response.Message
+            | Error(SayHelloError.ValidationException error) -> eprintfn "Rejected: %s" error.Message
+        }
+
+    run().Wait()
     ```
   </TabItem>
 </Tabs>
