@@ -3,6 +3,10 @@ title: Dependency injection
 description: Register a generated NSmithy client with IHttpClientFactory and the .NET service container.
 ---
 
+:::note[C# only]
+F# projects do not generate the `Add{Service}Client` helper. See [F#](/smithy-dotnet/guides/fsharp/).
+:::
+
 NSmithy can generate an `Add{Service}Client` extension that registers the
 client as a typed [`IHttpClientFactory`](https://learn.microsoft.com/aspnet/core/fundamentals/http-requests)
 client. This is the recommended way to use a client with the .NET service

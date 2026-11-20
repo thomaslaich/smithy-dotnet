@@ -3,6 +3,10 @@ title: Fake handlers
 description: Boot a working server from a contract with no handler implementation. Canned responses from @examples, placeholders everywhere else.
 ---
 
+:::note[C# only]
+F# projects do not generate fake handlers. See [F#](/smithy-dotnet/guides/fsharp/).
+:::
+
 With `generateFakes` set on the `csharp-codegen` plugin, codegen emits a
 `Fake{Service}Handler` implementing the full service handler interface. Set it
 in the server project's `smithy-build.json`, next to its `.csproj`:

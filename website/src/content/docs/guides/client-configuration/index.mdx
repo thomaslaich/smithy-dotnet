@@ -9,7 +9,7 @@ prev: false
 next: false
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, TabItem, Tabs } from '@astrojs/starlight/components';
 
 Every service generates a concrete `{Service}Client` and an `I{Service}Client`
 interface. You can construct the client directly or register it with the .NET
@@ -19,24 +19,51 @@ service container.
 
 For the common case, pass the endpoint directly:
 
-```csharp
-var client = new WeatherClient(new Uri("https://api.example.com"));
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    var client = new WeatherClient(new Uri("https://api.example.com"));
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    let client = new WeatherClient(Uri "https://api.example.com")
+    ```
+  </TabItem>
+</Tabs>
 
 Add a `{Service}ClientConfig` when you need NSmithy-level options such as
 protocol selection, auth, retry, interceptors, or idempotency tokens:
 
-```csharp
-using NSmithy.Protocols.Grpc;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    using NSmithy.Protocols.Grpc;
 
-var client = new WeatherClient(
-    new Uri("https://api.example.com"),
-    new()
-    {
-        Protocol = new GrpcProtocol(),
-        IdempotencyTokenProvider = () => Guid.NewGuid().ToString(),
-    });
-```
+    var client = new WeatherClient(
+        new Uri("https://api.example.com"),
+        new()
+        {
+            Protocol = new GrpcProtocol(),
+            IdempotencyTokenProvider = () => Guid.NewGuid().ToString(),
+        });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    open NSmithy.Protocols.Grpc
+
+    let client =
+        new WeatherClient(
+            Uri "https://api.example.com",
+            WeatherClientConfig(
+                Protocol = GrpcProtocol(),
+                IdempotencyTokenProvider = (fun () -> Guid.NewGuid().ToString())
+            )
+        )
+    ```
+  </TabItem>
+</Tabs>
 
 The endpoint argument wins over `config.Endpoint` when both are supplied.
 
@@ -45,10 +72,20 @@ every member of the input is optional and none is a stream, the interface also
 has an overload without the input, as an extension method, so a call that needs
 nothing passes nothing:
 
-```csharp
-var cities = await client.ListCitiesAsync();
-var page = await client.ListCitiesAsync(new() { PageSize = 10 });
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    var cities = await client.ListCitiesAsync();
+    var page = await client.ListCitiesAsync(new() { PageSize = 10 });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    let! cities = client.ListCitiesAsync()
+    let! page = client.ListCitiesAsync { PageSize = Some 10 }
+    ```
+  </TabItem>
+</Tabs>
 
 ## Configuration object
 
@@ -78,13 +115,25 @@ parameter, such as `Region`. See [Endpoint rules](/smithy-dotnet/guides/client-c
 
 For direct construction, dispose the client when its lifetime ends:
 
-```csharp
-using var client = new WeatherClient(new Uri("https://api.example.com"));
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    using var client = new WeatherClient(new Uri("https://api.example.com"));
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    use client = new WeatherClient(Uri "https://api.example.com")
+    ```
+  </TabItem>
+</Tabs>
 
 For application services, use [dependency injection](/smithy-dotnet/guides/client-configuration/dependency-injection/).
 See [Transport](/smithy-dotnet/guides/client-configuration/transport/) for constructor
 variants, endpoint precedence, and ownership of supplied transports.
+
+An F# client takes the same `{Service}ClientConfig`, so the topics below apply
+to it as written, except those marked C# only.
 
 ## Topics
 

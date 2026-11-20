@@ -6,6 +6,8 @@ head:
     content: Smithy gRPC for C# and .NET | NSmithy
 ---
 
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
 `alloy.proto#grpc` generates native gRPC clients and ASP.NET Core servers from a
 Smithy model. NSmithy provides its own protobuf codec and gRPC transport, so an
 NSmithy service does not need `protoc`, `Grpc.Tools`, `Google.Protobuf`, or
@@ -33,13 +35,14 @@ See [Protocol Status](../status/) for maturity and test coverage.
 Apply `@grpc` to the service and give each protobuf field a stable
 `@protoIndex`:
 
-```smithy title="model/weather.smithy" {8,17,22}
+```smithy title="model/weather.smithy" {9,18,23}
 $version: "2"
 
 namespace example.weather
 
 use alloy.proto#grpc
 use alloy.proto#protoIndex
+use smithy.framework#ValidationException
 
 @grpc
 service Weather {
@@ -58,11 +61,14 @@ operation GetCity {
         @protoIndex(1)
         name: String
     }
+    errors: [ValidationException]
 }
 ```
 
 `@protoIndex` is the protobuf field number and is part of the stable wire
-contract. Omitting it from an input or output member is a model error. The
+contract. A server rejects input that violates the model's constraints, such as
+`@required`, with `ValidationException`, so an operation with constrained input
+declares it; see [Validation](/smithy-dotnet/servers/validation/#declaring-the-error). Omitting it from an input or output member is a model error. The
 exception is the shapes of `smithy.framework`, such as `ValidationException`,
 which come from `smithy-validation-model` without `@protoIndex`: their fields
 are numbered by declaration order, in the codec and in the generated `.proto`
@@ -74,22 +80,50 @@ alike. `@protoNumType` selects integer encodings such as `sint32`, `uint64`, or
 gRPC requires HTTP/2. Configure a dedicated cleartext HTTP/2 port for local
 development, then map the generated service:
 
-```csharp title="Program.cs"
-using Example.Weather;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="Program.cs"
+    using Example.Weather;
+    using Microsoft.AspNetCore.Server.Kestrel.Core;
 
-var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenLocalhost(5001, listener =>
-        listener.Protocols = HttpProtocols.Http2);
-});
-builder.Services.AddWeatherServiceHandler<WeatherHandler>();
+    var builder = WebApplication.CreateBuilder(args);
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenLocalhost(5001, listener =>
+            listener.Protocols = HttpProtocols.Http2);
+    });
+    builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
-var app = builder.Build();
-app.MapWeatherService();
-app.Run();
-```
+    var app = builder.Build();
+    app.MapWeatherService();
+    app.Run();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="Program.fs"
+    open Example.Weather
+    open Microsoft.AspNetCore.Builder
+    open Microsoft.AspNetCore.Hosting
+    open Microsoft.AspNetCore.Server.Kestrel.Core
+    open Microsoft.Extensions.DependencyInjection
+
+    [<EntryPoint>]
+    let main args =
+        let builder = WebApplication.CreateBuilder(args)
+
+        builder.WebHost.ConfigureKestrel(fun options ->
+            options.ListenLocalhost(5001, fun listener -> listener.Protocols <- HttpProtocols.Http2))
+        |> ignore
+
+        builder.Services.AddWeatherServiceHandler<WeatherHandler>() |> ignore
+
+        let app = builder.Build()
+        app.MapWeatherService() |> ignore
+        app.Run()
+        0
+    ```
+  </TabItem>
+</Tabs>
 
 There is no `AddGrpc()` call. The generated mapping registers the gRPC method
 routes directly. Cleartext REST and gRPC should use separate ports unless TLS
@@ -100,16 +134,33 @@ and ALPN negotiate the HTTP version.
 The generated client uses an HTTP/2 `HttpClient`. Select `GrpcProtocol` in the
 client configuration:
 
-```csharp
-using Example.Weather;
-using NSmithy.Protocols.Grpc;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    using Example.Weather;
+    using NSmithy.Protocols.Grpc;
 
-var client = new WeatherClient(
-    new Uri("http://localhost:5001"),
-    new() { Protocol = new GrpcProtocol() });
+    var client = new WeatherClient(
+        new Uri("http://localhost:5001"),
+        new() { Protocol = new GrpcProtocol() });
 
-var city = await client.GetCityAsync(new GetCityInput("SEA"));
-```
+    var city = await client.GetCityAsync(new GetCityInput("SEA"));
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    open Example.Weather
+    open NSmithy.Protocols.Grpc
+
+    let client =
+        new WeatherClient(Uri "http://localhost:5001", WeatherClientConfig(Protocol = GrpcProtocol()))
+
+    match! client.GetCityAsync { CityId = "SEA" } with
+    | Ok city -> printfn "%s" city.Name
+    | Error(GetCityError.ValidationException error) -> printfn "Rejected: %s" error.Message
+    ```
+  </TabItem>
+</Tabs>
 
 The endpoint constructor and generated dependency injection helper request exact
 HTTP/2 automatically. A caller-owned `HttpClient` must set
@@ -160,10 +211,11 @@ The supported protobuf surface includes scalars, `@protoNumType`, lists, maps,
 
 ## Dependencies
 
-Add the Alloy model package to `smithy-build.json`:
+Add the Alloy and validation model packages to `smithy-build.json`:
 
 ```json title="smithy-build.json"
-"com.disneystreaming.alloy:alloy-core:0.3.40"
+"com.disneystreaming.alloy:alloy-core:0.3.40",
+"software.amazon.smithy:smithy-validation-model:1.74.1"
 ```
 
 | Surface | Packages |

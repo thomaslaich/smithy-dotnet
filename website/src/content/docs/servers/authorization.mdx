@@ -3,6 +3,8 @@ title: Authorization
 description: Require authorization for the operations whose model requires authentication.
 ---
 
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
 Smithy models auth per operation. A service applies auth scheme traits such as
 `@httpBearerAuth`, and each operation can narrow them with `@auth`, drop them
 with `@auth([])`, or make them optional with `@optionalAuth`:
@@ -28,16 +30,32 @@ authentication handler (JWT bearer, an API key handler, ...) as usual.
 and explicitly exempts public operations, including from enclosing and fallback
 policies:
 
-```csharp title="Program.cs"
-builder.Services.AddAuthentication().AddJwtBearer();
-builder.Services.AddAuthorization();
-builder.Services.AddPetServiceHandler<PetHandler>();
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="Program.cs"
+    builder.Services.AddAuthentication().AddJwtBearer();
+    builder.Services.AddAuthorization();
+    builder.Services.AddPetServiceHandler<PetHandler>();
 
-var app = builder.Build();
-app.UseAuthentication();
-app.UseAuthorization();
-app.MapPetService().WithModeledAuthorization();
-```
+    var app = builder.Build();
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapPetService().WithModeledAuthorization();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="Program.fs"
+    builder.Services.AddAuthentication().AddJwtBearer() |> ignore
+    builder.Services.AddAuthorization() |> ignore
+    builder.Services.AddPetServiceHandler<PetHandler>() |> ignore
+
+    let app = builder.Build()
+    app.UseAuthentication() |> ignore
+    app.UseAuthorization() |> ignore
+    app.MapPetService().WithModeledAuthorization() |> ignore
+    ```
+  </TabItem>
+</Tabs>
 
 The helper decides **which operations require authorization**, not **which
 credentials they accept**. It does not map Smithy auth scheme IDs to ASP.NET Core
@@ -58,10 +76,20 @@ invalid credentials make the caller anonymous instead of failing the call.
 For example, an enclosing policy still protects `AdoptPet`, but does not protect
 `GetHealth` or `ListPets`:
 
-```csharp
-var internalApi = app.MapGroup("/internal").RequireAuthorization("Employees");
-internalApi.MapPetService().WithModeledAuthorization();
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    var internalApi = app.MapGroup("/internal").RequireAuthorization("Employees");
+    internalApi.MapPetService().WithModeledAuthorization();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    let internalApi = app.MapGroup("/internal").RequireAuthorization("Employees")
+    internalApi.MapPetService().WithModeledAuthorization() |> ignore
+    ```
+  </TabItem>
+</Tabs>
 
 `AdoptPet` must satisfy both the `Employees` policy and the default policy.
 The two public operations remain anonymously accessible under `/internal`.
@@ -69,9 +97,18 @@ The two public operations remain anonymously accessible under `/internal`.
 Pass policy names to authorize protected operations with them instead of the
 default policy:
 
-```csharp
-app.MapPetService().WithModeledAuthorization("PetOwners");
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    app.MapPetService().WithModeledAuthorization("PetOwners");
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    app.MapPetService().WithModeledAuthorization("PetOwners") |> ignore
+    ```
+  </TabItem>
+</Tabs>
 
 Without `WithModeledAuthorization()`, the model's auth has no effect on the
 server and the application protects endpoints as it would any other.
@@ -94,9 +131,18 @@ just as for an endpoint serving a single protected operation.
 so ASP.NET Core's endpoint conventions apply to every operation of the
 service:
 
-```csharp
-app.MapPetService().RequireRateLimiting("pets");
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    app.MapPetService().RequireRateLimiting("pets");
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    app.MapPetService().RequireRateLimiting("pets") |> ignore
+    ```
+  </TabItem>
+</Tabs>
 
 Each endpoint carries `SmithyEndpointMetadata` with the operations it serves.
 Each operation's `AuthSchemes` lists its effective scheme IDs in priority
@@ -104,15 +150,31 @@ order, so a convention can pick authentication schemes per operation. Group
 conventions run before an endpoint's own metadata is added, so a convention
 that reads `SmithyEndpointMetadata` uses `Finally`:
 
-```csharp
-var bearerAuth = ShapeId.Parse("smithy.api#httpBearerAuth");
-IEndpointConventionBuilder service = app.MapPetService();
-service.Finally(endpoint =>
-{
-    var smithy = endpoint.Metadata.OfType<SmithyEndpointMetadata>().Single();
-    if (smithy.Operations.Any(o => o.AuthSchemes.Contains(bearerAuth)))
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    var bearerAuth = ShapeId.Parse("smithy.api#httpBearerAuth");
+    IEndpointConventionBuilder service = app.MapPetService();
+    service.Finally(endpoint =>
     {
-        endpoint.Metadata.Add(new AuthorizeAttribute { AuthenticationSchemes = "Bearer" });
-    }
-});
-```
+        var smithy = endpoint.Metadata.OfType<SmithyEndpointMetadata>().Single();
+        if (smithy.Operations.Any(o => o.AuthSchemes.Contains(bearerAuth)))
+        {
+            endpoint.Metadata.Add(new AuthorizeAttribute { AuthenticationSchemes = "Bearer" });
+        }
+    });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    let bearerAuth = ShapeId.Parse("smithy.api#httpBearerAuth")
+    let service = app.MapPetService() :> IEndpointConventionBuilder
+
+    service.Finally(fun endpoint ->
+        let smithy = endpoint.Metadata.OfType<SmithyEndpointMetadata>() |> Seq.exactlyOne
+
+        if smithy.Operations |> Seq.exists (fun o -> o.AuthSchemes |> Seq.contains bearerAuth) then
+            endpoint.Metadata.Add(AuthorizeAttribute(AuthenticationSchemes = "Bearer")))
+    ```
+  </TabItem>
+</Tabs>

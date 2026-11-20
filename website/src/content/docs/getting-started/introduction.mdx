@@ -43,8 +43,8 @@ clients and server interfaces for the protocols the service declares.
 Serialization, error behavior, authentication, and validation are encoded in the
 contract as traits.
 
-NSmithy brings Smithy to .NET, generating C# clients, data types, and ASP.NET Core
-server interfaces from Smithy models as part of `dotnet build`. It is listed in
+NSmithy brings Smithy to .NET, generating C# or F# clients, data types, and ASP.NET
+Core server interfaces from Smithy models as part of `dotnet build`. It is listed in
 [awesome-smithy](https://github.com/smithy-lang/awesome-smithy) as the community
 C# client and server generator.
 
@@ -170,6 +170,11 @@ it generates the parts enabled for each project:
 - **Server handler interfaces and ASP.NET Core routing** for implementing them.
 - **Optional fake clients and handlers** for trying the contract before the service
   implementation is ready, using modeled examples or generated placeholder values.
+
+A C# project gets C#, and an F# project gets F#: records, discriminated unions,
+and clients that return modeled errors as a `Result`. F# support is
+experimental, and some features, such as fakes, are C# only; see
+[F#](/smithy-dotnet/guides/fsharp/).
 
 You write the handler behavior; NSmithy handles request and response serialization.
 Clients and servers can live in separate projects and share the model as a

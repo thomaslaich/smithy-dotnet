@@ -69,15 +69,30 @@ for alloy-based services and use only `SmithyGenerateDocs`.
 
 Map the generated documentation endpoints in `Program.cs`:
 
-```csharp title="Program.cs" ins={1,4-5}
-using NSmithy.Server.AspNetCore.Docs;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="Program.cs" ins={1,4-5}
+    using NSmithy.Server.AspNetCore.Docs;
 
-var app = builder.Build();
-app.MapSmithyOpenApi(); // mounts Scalar at /openapi (requires SmithyOpenApiProtocol)
-app.MapSmithyDocs();    // serves Sphinx HTML at /docs (requires SmithyGenerateDocs)
-app.MapMyService();
-app.Run();
-```
+    var app = builder.Build();
+    app.MapSmithyOpenApi(); // mounts Scalar at /openapi (requires SmithyOpenApiProtocol)
+    app.MapSmithyDocs();    // serves Sphinx HTML at /docs (requires SmithyGenerateDocs)
+    app.MapMyService();
+    app.Run();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="Program.fs" ins={1,4-5}
+    open NSmithy.Server.AspNetCore.Docs
+
+    let app = builder.Build()
+    app.MapSmithyOpenApi() |> ignore // mounts Scalar at /openapi (requires SmithyOpenApiProtocol)
+    app.MapSmithyDocs() |> ignore // serves Sphinx HTML at /docs (requires SmithyGenerateDocs)
+    app.MapMyService() |> ignore
+    app.Run()
+    ```
+  </TabItem>
+</Tabs>
 
 `MapSmithyOpenApi()` enables static file serving and mounts Scalar at
 `/openapi`. The UI reads `/openapi.json`, which is generated from the model and

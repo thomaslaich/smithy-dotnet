@@ -190,6 +190,10 @@ generation.
 
 ## Extending endpoint rules
 
+:::note[C# only]
+F# projects do not generate endpoint resolvers, so endpoint rule extensions apply to C# only.
+:::
+
 Generated [endpoint resolvers](/smithy-dotnet/guides/client-configuration/endpoint-rules/)
 implement the rules engine's standard library. Rules that use other functions or
 built-ins need an integration that maps them to C#:

@@ -3,18 +3,36 @@ title: Observability
 description: OpenTelemetry tracing and metrics for generated clients.
 ---
 
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
 The client runtime emits OpenTelemetry-friendly telemetry through the standard
 .NET primitives — no NSmithy-specific setup, no extra packages. Subscribe with
 your tracer/meter provider:
 
-```csharp title="Program.cs"
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="Program.cs"
+    using OpenTelemetry.Metrics;
+    using OpenTelemetry.Trace;
 
-builder.Services.AddOpenTelemetry()
-    .WithTracing(tracing => tracing.AddSource("NSmithy.Client"))
-    .WithMetrics(metrics => metrics.AddMeter("NSmithy.Client"));
-```
+    builder.Services.AddOpenTelemetry()
+        .WithTracing(tracing => tracing.AddSource("NSmithy.Client"))
+        .WithMetrics(metrics => metrics.AddMeter("NSmithy.Client"));
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="Program.fs"
+    open OpenTelemetry.Metrics
+    open OpenTelemetry.Trace
+
+    builder.Services
+        .AddOpenTelemetry()
+        .WithTracing(fun tracing -> tracing.AddSource("NSmithy.Client") |> ignore)
+        .WithMetrics(fun metrics -> metrics.AddMeter("NSmithy.Client") |> ignore)
+    |> ignore
+    ```
+  </TabItem>
+</Tabs>
 
 The source and meter names are also available as constants:
 `SmithyClientTelemetry.ActivitySourceName` and
