@@ -24,7 +24,7 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **Missing handlers fail at startup.** `Map{Service}` throws if an operation has neither its own
   handler nor the service handler registered, and names the operations, instead of failing on the
   operation's first call. `IServerOperation.HandlerTypes` lists the services that can serve an
-  operation. The Servers page now recommends one handler per operation for production services.
+  operation.
 
 ### Changed
 

@@ -33,10 +33,12 @@ protocol package explicitly, using the same NSmithy version as the host.
 
 ## Implement an operation
 
-:::tip[Recommended]
-For production services, implement one handler per operation, as described in
-[Separate operation handlers](#separate-operation-handlers). A single service
-handler, shown here, suits small services and prototypes.
+:::tip[Choosing a handler shape]
+Use a single service handler, shown here, when the operations share their
+dependencies and lifetime: the compiler then checks that every operation is
+implemented. Use [separate operation handlers](#separate-operation-handlers)
+when operations need different dependencies or lifetimes; `Map{Service}` then
+checks at startup that each one is registered.
 :::
 
 For a `Library` service with a `GetBook` operation, modeled as in
@@ -134,9 +136,6 @@ request then shares one handler, which the container disposes once:
 </Tabs>
 
 ## Separate operation handlers
-
-A handler per operation stays small, takes only the dependencies its operation
-needs, and can have its own lifetime.
 
 The service interface inherits one interface per operation:
 

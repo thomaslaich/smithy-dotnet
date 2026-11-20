@@ -19,6 +19,11 @@ Two NuGet packages provide what generation needs:
 - `NSmithy.SmithyCli` contains the Smithy CLI with its Java runtime. It is
   optional; see [Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
 
+Generated code calls the runtime packages of the NSmithy version that generated
+it. Keep `NSmithy.MSBuild` and every other NSmithy package at the same version,
+and rebuild after upgrading. Before 1.0, an assembly containing generated code
+is not guaranteed to run against a different runtime version.
+
 MSBuild points the CLI at the bundled repository and an isolated Maven cache,
 so NSmithy's plugins resolve from local files. Model dependencies a project
 declares resolve separately; see
