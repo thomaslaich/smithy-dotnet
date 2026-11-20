@@ -9,7 +9,7 @@
   "devDependencies": {
     "@typespec/compiler": "1.18.0",
     "@typespec/http": "1.18.0",
-    "@typespec/http-server-csharp": "0.58.0-alpha.33",
+    "@typespec/http-server-csharp": "0.58.0-alpha.34",
     "@typespec/json-schema": "1.18.0",
     "@typespec/openapi3": "1.18.0",
     "@typespec/rest": "0.88.0",
