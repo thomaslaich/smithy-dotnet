@@ -156,10 +156,10 @@ let ``An object expression registered as the handler serves requests`` () : Task
         builder.Services.AddKitchenServiceHandler
             { new IKitchenServiceHandler with
                 member _.OrderAsync(_, _) =
-                    Task.FromResult { Receipt = Receipt.Paid { Amount = 1M; Currency = "CHF" } }
+                    Task.FromResult(Ok { Receipt = Receipt.Paid { Amount = 1M; Currency = "CHF" } })
 
                 member _.PingAsync(_, _) = Task.FromResult(PingOutput())
-                member _.CloseTableAsync(_, _) = Task.FromResult(CloseTableOutput()) }
+                member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput())) }
         |> ignore
 
         use app = builder.Build()
