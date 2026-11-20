@@ -102,7 +102,8 @@ C# and F# projects do not share generated types.
 | Enums | Discriminated unions with an `Unknown of string` case. `FromValue` and `.Value` convert to and from the wire value. |
 | Int enums | F# enums. |
 | Lists and maps | `'T list` and `Map<string, 'T>`, with `option` elements when `@sparse`. |
-| The service, when `SmithyGenerateClient` is on | `IWeatherClient`, `WeatherClient`, and `WeatherClientConfig`, plus a union such as `GetCityError` for each operation that declares errors and `WeatherError` for the errors the service declares. |
+| Operations | A union such as `GetCityError` of the errors each operation declares, which its handler and clients return. |
+| The service, when `SmithyGenerateClient` is on | `IWeatherClient`, `WeatherClient`, and `WeatherClientConfig`, plus `WeatherError` for the errors the service declares. |
 | The service, when `SmithyGenerateServer` is on | A handler interface `IWeatherServiceHandler` composed of one interface per operation, plus `AddWeatherServiceHandler` and `MapWeatherService` extensions for ASP.NET Core. |
 | Every shape | A runtime schema in the child `Schemas` namespace, such as `Example.Weather.Schemas.GetCityOutputSchema`. |
 
@@ -110,8 +111,19 @@ C# and F# projects do not share generated types.
 
 Implement the handler interface and register it with `AddWeatherServiceHandler`
 and `MapWeatherService`; the [Servers](/smithy-dotnet/servers/) pages show each
-step in C# and F#. A handler raises a modeled error, such as
-`raise (NoSuchResource("City"))`, and the runtime writes it as that error.
+step in C# and F#. The handler of an operation that declares errors returns a
+`Result` with the operation's error union, and the runtime writes the `Error`
+case as that error:
+
+```fsharp
+member _.GetCityAsync(input, _) =
+    match cities.TryFind input.CityId with
+    | Some city -> Task.FromResult(Ok city)
+    | None -> Task.FromResult(Error(GetCityError.NoSuchResource(NoSuchResource("City"))))
+```
+
+Errors the service declares for every operation are not in that union; a
+handler raises them, such as `raise (Unavailable())`.
 
 ## Call the service
 
@@ -139,8 +151,11 @@ let run () =
 (run ()).GetAwaiter().GetResult()
 ```
 
-Errors the service declares for every operation are a `Service` case holding
-one union for the whole service, so one function handles them for every call:
+Errors the service declares for every operation are one union for the whole
+service, `WeatherError`. An operation without errors of its own returns it
+directly. One that has both returns a `WeatherCallError`, with the operation's
+union in its `Operation` case and the service's in its `Service` case, so one
+function handles the service's errors for every call:
 
 ```fsharp
 let handleServiceError =
@@ -149,8 +164,8 @@ let handleServiceError =
 
 match! client.GetCityAsync { CityId = "SEA" } with
 | Ok city -> printfn "%s" city.Name
-| Error(GetCityError.NoSuchResource error) -> printfn "No such %s" error.ResourceType
-| Error(GetCityError.Service error) -> handleServiceError error
+| Error(WeatherCallError.Operation(GetCityError.NoSuchResource error)) -> printfn "No such %s" error.ResourceType
+| Error(WeatherCallError.Service error) -> handleServiceError error
 ```
 
 An operation that declares `smithy.framework#ValidationException` has a
@@ -159,7 +174,7 @@ model's constraint traits with that error, and a server requires the model to
 declare it on every operation whose input is constrained (see
 [Validation](/smithy-dotnet/servers/validation/#declaring-the-error)). Declare
 it on the operation rather than the service, so that it is a case of the
-operation's own union and not of the `Service` case. The case holds the
+operation's own union. The case holds the
 runtime's `ValidationException`, whose `FieldList` names each member and the
 constraint it failed:
 
@@ -173,8 +188,7 @@ match! client.GetCityAsync { CityId = "SEA!" } with
 ```
 
 Other failures are exceptions: transport failures, cancellation, and error
-responses the model does not declare for the operation. Server handlers raise
-modeled errors, as in C#.
+responses the model does not declare for the operation.
 
 The client is configured through `WeatherClientConfig` as in C#; see
 [Client configuration](/smithy-dotnet/guides/client-configuration/). For code

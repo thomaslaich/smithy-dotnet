@@ -20,11 +20,11 @@ open Xunit
 type private Kitchen() =
     interface IKitchenServiceHandler with
         member _.OrderAsync(_, _) =
-            Task.FromResult { Receipt = Receipt.Pending "soon" }
+            Task.FromResult(Ok { Receipt = Receipt.Pending "soon" })
 
         member _.PingAsync(_, _) = Task.FromResult(PingOutput())
 
-        member _.CloseTableAsync(_, _) = Task.FromResult(CloseTableOutput())
+        member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
 
 /// Authenticates any request that carries an X-Api-Key header.
 type private ApiKeyHandler

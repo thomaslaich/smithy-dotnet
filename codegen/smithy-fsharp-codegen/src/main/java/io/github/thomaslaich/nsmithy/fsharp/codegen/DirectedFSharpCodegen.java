@@ -58,7 +58,8 @@ final class DirectedFSharpCodegen
             directive.symbolProvider(),
             (file, namespace) -> new FSharpWriter()),
         directive.integrations().stream().toList(),
-        new FSharpFiles());
+        new FSharpFiles(),
+        new GeneratedNames());
   }
 
   @Override
@@ -83,8 +84,14 @@ final class DirectedFSharpCodegen
     }
     new SchemaGenerator(context).operation(operation);
     recordSchema(context, operation);
+    OperationHandlerGenerator handlers = new OperationHandlerGenerator(context);
+    handlers.errors(operation);
+    context
+        .symbolProvider()
+        .errorsSymbol(operation)
+        .ifPresent(symbol -> shapeManifest.add(operation.getId(), ShapeManifest.ERRORS, symbol));
     if (generatesHandler(context, operation)) {
-      new OperationHandlerGenerator(context).run(operation);
+      handlers.run(operation);
       shapeManifest.add(
           operation.getId(),
           ShapeManifest.HANDLER,
@@ -195,6 +202,7 @@ final class DirectedFSharpCodegen
   @Override
   public void customizeAfterIntegrations(CustomizeDirective<FSharpContext, FSharpSettings> d) {
     FSharpContext context = d.context();
+    context.generatedNames().check(shapeManifest, context.settings().providedShapes());
     context.files().write(context.fileManifest(), context.settings());
     shapeManifest.write(context.fileManifest(), context.settings().providedShapes());
   }

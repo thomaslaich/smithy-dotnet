@@ -2,8 +2,8 @@
  * Declares a service's client in Client.g.fs:
  *
  *   {Service}Error         one case per error the service declares, when it declares any
- *   {Operation}Error       one case per error the operation declares, and a Service case holding
- *                          a {Service}Error, when the service declares errors
+ *   {Service}CallError     an operation's own errors or the service's, when the service declares
+ *                          errors and an operation declares its own too
  *   I{Service}Client       one Task-returning method per operation, and IDisposable
  *   {Service}ClientConfig  the runtime's SmithyClientConfig
  *   {Service}Client        binds each operation to the service's default protocol once, when it
@@ -11,8 +11,9 @@
  *
  * The runtime does the work (serialization, transport, retries, auth); the client only passes it
  * the operation's binding, schema, and input. An operation whose model declares errors, on the
- * operation or on the service, returns a Result with those errors in the Error case; every other
- * failure stays an exception.
+ * operation or on the service, returns a Result with those errors in the Error case: the
+ * operation's error union (see OperationHandlerGenerator), the service's, or a {Service}CallError
+ * of both. Every other failure stays an exception.
  */
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
@@ -28,7 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import software.amazon.smithy.codegen.core.CodegenException;
+import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
@@ -64,6 +65,16 @@ final class ClientGenerator {
     this.schemas = new SchemaGenerator(context);
   }
 
+  /** Reserves the names of types the service's generated code declares in its namespace. */
+  static void reserve(FSharpContext context, ServiceShape service, List<String> names) {
+    String namespace = context.settings().fsharpNamespace(service.getId().getNamespace());
+    for (String name : names) {
+      context
+          .generatedNames()
+          .reserve(namespace, name, "the generated code for " + service.getId() + " declares");
+    }
+  }
+
   /** The protocols a client can use: the built-in ones, then each integration's. */
   static List<ProtocolInfo> registeredProtocols(FSharpContext context) {
     List<ProtocolInfo> protocols = new ArrayList<>(Protocols.BUILT_IN);
@@ -87,14 +98,17 @@ final class ClientGenerator {
     if (!serviceErrors().isEmpty()) {
       generatedNames.add(serviceErrorTypeName());
     }
-    operations.stream()
-        .filter(this::returnsResult)
-        .forEach(operation -> generatedNames.add(errorTypeName(operation)));
-    GeneratedNames.check(model, service, generatedNames.toArray(String[]::new));
+    boolean callErrors = operations.stream().anyMatch(this::returnsCallError);
+    if (callErrors) {
+      generatedNames.add(callErrorTypeName());
+    }
+    reserve(context, service, generatedNames);
 
     FSharpWriter writer = context.files().client(service);
     writeServiceErrorType(writer);
-    operations.forEach(operation -> writeErrorType(writer, operation));
+    if (callErrors) {
+      writeCallErrorType(writer);
+    }
     writeInterface(writer, clientInterface, operations);
     writeInterfaceOverloads(writer, clientInterface, operations);
 
@@ -142,46 +156,28 @@ final class ClientGenerator {
   }
 
   /**
-   * The union of an operation's errors: its own, and the service's behind one Service case. Its
-   * cases are qualified, so they do not hide the error types they are named after, and operations
-   * can share an error.
+   * The errors of a call to an operation that declares its own errors, when the service declares
+   * errors too: the operation's union, or the service's.
    */
-  private void writeErrorType(FSharpWriter writer, OperationShape operation) {
-    if (!returnsResult(operation)) {
-      return;
-    }
-    List<String> cases = new ArrayList<>();
-    for (StructureShape error : ownErrors(operation)) {
-      if (errorCaseName(error).equals(SERVICE_CASE)) {
-        throw new CodegenException(
-            "Error "
-                + error.getId()
-                + " of operation "
-                + operation.getId()
-                + " would be the case "
-                + SERVICE_CASE
-                + " of "
-                + errorTypeName(operation)
-                + ", which holds the errors of "
-                + service.getId()
-                + ". Rename the error, for example with the renameShapes build transform.");
-      }
-      cases.add("| " + errorCaseName(error) + " of " + symbols.typeOf(error));
-    }
-    if (!serviceErrors().isEmpty()) {
-      cases.add("| " + SERVICE_CASE + " of " + serviceErrorTypeName());
-    }
+  private void writeCallErrorType(FSharpWriter writer) {
     writer.writeTemplate(
         """
-        /// <summary>The errors the model declares for <c>${method:L}</c>.</summary>
+        /// <summary>The errors of a <c>${service:L}</c> operation that declares its own: the operation's, or those the service declares for every operation.</summary>
         [<RequireQualifiedAccess>]
-        type ${type:L} =
-            ${#cases}
-            ${value:L}
-            ${/cases}
+        type ${type:L}<'Operation> =
+            | Operation of 'Operation
+            | ${serviceCase:L} of ${serviceType:L}
 
         """,
-        Map.of("method", methodName(operation), "type", errorTypeName(operation), "cases", cases));
+        Map.of(
+            "service",
+            FSharpNaming.typeName(service.getId().getName()),
+            "type",
+            callErrorTypeName(),
+            "serviceCase",
+            SERVICE_CASE,
+            "serviceType",
+            serviceErrorTypeName()));
   }
 
   private void writeInterface(
@@ -610,21 +606,41 @@ final class ClientGenerator {
   }
 
   /**
-   * The match clauses that turn a caught error into the operation's Error case: the operation's own
-   * errors as their cases, then the service's behind the Service case. An error declared on both is
-   * the operation's.
+   * The match clauses that turn a caught error into the operation's Error case: the cases of the
+   * operation's union, which it maps itself, so a client of an operation another project generated
+   * uses that project's cases; then the service's errors as cases of the service's union. Each is
+   * inside a {Service}CallError when the operation has both. An error declared on both is the
+   * operation's.
    */
   private List<String> errorClauses(OperationShape operation) {
     List<String> clauses = new ArrayList<>();
-    List<StructureShape> own = ownErrors(operation);
-    String type = errorTypeName(operation);
-    for (StructureShape error : own) {
-      clauses.add(errorClause(error, type + "." + errorCaseName(error) + " error"));
+    boolean both = returnsCallError(operation);
+    Optional<Symbol> errors = symbols.errorsSymbol(operation);
+    if (errors.isPresent()) {
+      String from =
+          "("
+              + FSharpSymbolProvider.render(errors.get())
+              + "."
+              + OperationHandlerGenerator.fromExceptionMethod()
+              + " error)";
+      String value = from + ".Value";
+      clauses.add(
+          "| error when "
+              + from
+              + ".IsSome -> return "
+              + RESULT
+              + ".Error("
+              + (both ? callErrorTypeName() + ".Operation(" + value + ")" : value)
+              + ")");
     }
+    List<ShapeId> own = operation.getErrors();
     for (StructureShape error : serviceErrors()) {
-      if (!own.contains(error)) {
-        String serviceCase = serviceErrorTypeName() + "." + errorCaseName(error) + " error";
-        clauses.add(errorClause(error, type + "." + SERVICE_CASE + "(" + serviceCase + ")"));
+      if (!own.contains(error.getId())) {
+        String value = serviceErrorTypeName() + "." + errorCaseName(error) + " error";
+        clauses.add(
+            errorClause(
+                error,
+                both ? callErrorTypeName() + "." + SERVICE_CASE + "(" + value + ")" : value));
       }
     }
     return clauses;
@@ -645,7 +661,7 @@ final class ClientGenerator {
     String output = schemas.operationType(operation.getOutputShape());
     if (returnsResult(operation)) {
       String value = ShapeSupport.isUnit(operation.getOutputShape()) ? "unit" : output;
-      return TASKS + "Task<" + RESULT + "<" + value + ", " + errorTypeName(operation) + ">>";
+      return TASKS + "Task<" + RESULT + "<" + value + ", " + errorType(operation) + ">>";
     }
     return ShapeSupport.isUnit(operation.getOutputShape())
         ? TASKS + "Task"
@@ -654,12 +670,24 @@ final class ClientGenerator {
 
   /** Whether the operation returns a Result: its model declares errors for it or its service. */
   private boolean returnsResult(OperationShape operation) {
-    return !ownErrors(operation).isEmpty() || !serviceErrors().isEmpty();
+    return symbols.errorsSymbol(operation).isPresent() || !serviceErrors().isEmpty();
   }
 
-  /** The errors the operation itself declares, in a stable order. */
-  private List<StructureShape> ownErrors(OperationShape operation) {
-    return errorShapes(operation.getErrors());
+  /**
+   * Whether the operation's Result holds a {Service}CallError: it and its service declare errors.
+   */
+  private boolean returnsCallError(OperationShape operation) {
+    return symbols.errorsSymbol(operation).isPresent() && !serviceErrors().isEmpty();
+  }
+
+  /** The Error type of an operation's Result. */
+  private String errorType(OperationShape operation) {
+    Optional<Symbol> errors = symbols.errorsSymbol(operation);
+    if (errors.isEmpty()) {
+      return serviceErrorTypeName();
+    }
+    String own = FSharpSymbolProvider.render(errors.get());
+    return serviceErrors().isEmpty() ? own : callErrorTypeName() + "<" + own + ">";
   }
 
   /** The errors the service declares for every operation, in a stable order. */
@@ -674,12 +702,12 @@ final class ClientGenerator {
         .toList();
   }
 
-  private String errorTypeName(OperationShape operation) {
-    return FSharpNaming.typeName(operation.getId().getName()) + "Error";
-  }
-
   private String serviceErrorTypeName() {
     return FSharpNaming.typeName(service.getId().getName()) + "Error";
+  }
+
+  private String callErrorTypeName() {
+    return FSharpNaming.typeName(service.getId().getName()) + "CallError";
   }
 
   private String errorCaseName(StructureShape error) {

@@ -7,7 +7,7 @@ open Example.Shop
 type CapturePaymentHandler() =
     interface ICapturePaymentHandler with
         member _.CapturePaymentAsync(input, _) =
-            if not (input.OrderId.StartsWith "order-") then
-                raise (OrderNotFound($"No order {input.OrderId}."))
-
-            Task.FromResult { PaymentId = $"payment-for-{input.OrderId}" }
+            if input.OrderId.StartsWith "order-" then
+                Task.FromResult(Ok { PaymentId = $"payment-for-{input.OrderId}" })
+            else
+                Task.FromResult(Error(CapturePaymentError.OrderNotFound(OrderNotFound($"No order {input.OrderId}."))))

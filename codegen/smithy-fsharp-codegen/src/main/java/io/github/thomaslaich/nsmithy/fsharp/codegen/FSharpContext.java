@@ -19,5 +19,6 @@ public record FSharpContext(
     FileManifest fileManifest,
     WriterDelegator<FSharpWriter> writerDelegator,
     List<FSharpIntegration> integrations,
-    FSharpFiles files)
+    FSharpFiles files,
+    GeneratedNames generatedNames)
     implements CodegenContext<FSharpSettings, FSharpWriter, FSharpIntegration> {}

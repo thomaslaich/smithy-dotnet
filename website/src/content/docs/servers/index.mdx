@@ -58,15 +58,16 @@ service interface:
     type LibraryHandler() =
         interface ILibraryServiceHandler with
             member _.GetBookAsync(input, _) =
-                if input.Id <> "1" then
-                    raise (BookNotFound("Book not found."))
-
-                Task.FromResult { Id = input.Id; Title = "The Odyssey" }
+                if input.Id = "1" then
+                    Task.FromResult(Ok { Id = input.Id; Title = "The Odyssey" })
+                else
+                    Task.FromResult(Error(GetBookError.BookNotFound(BookNotFound("Book not found."))))
     ```
   </TabItem>
 </Tabs>
 
-Return an output for success; throw a generated error for a modeled failure.
+Return an output for success. For a modeled failure, throw a generated error in
+C#; in F#, return it as the `Error` case of the operation's error union.
 The selected protocol determines the response encoding and status.
 
 ## Register and map

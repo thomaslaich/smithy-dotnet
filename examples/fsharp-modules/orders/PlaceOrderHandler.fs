@@ -7,4 +7,4 @@ open Example.Shop
 type PlaceOrderHandler() =
     interface IPlaceOrderHandler with
         member _.PlaceOrderAsync(input, _) =
-            Task.FromResult { OrderId = $"order-{input.Total.Amount}-{input.Total.Currency}" }
+            Task.FromResult(Ok { OrderId = $"order-{input.Total.Amount}-{input.Total.Currency}" })

@@ -13,7 +13,7 @@ open NSmithy.Server.AspNetCore.Docs
 type HelloHandler() =
     interface IHelloServiceHandler with
         member _.SayHelloAsync(input, _) =
-            Task.FromResult { Message = $"Hello, {input.Name}!" }
+            Task.FromResult(Ok { Message = $"Hello, {input.Name}!" })
 
 [<EntryPoint>]
 let main args =

@@ -277,7 +277,7 @@ not a file regenerated during the build:
     type HelloHandler() =
         interface IHelloServiceHandler with
             member _.SayHelloAsync(input, _) =
-                Task.FromResult { Message = $"Hello, {input.Name}!" }
+                Task.FromResult(Ok { Message = $"Hello, {input.Name}!" })
     ```
   </TabItem>
 </Tabs>

@@ -16,15 +16,17 @@ open Xunit
 type private Kitchen() =
     interface IKitchenServiceHandler with
         member _.OrderAsync(input, _) =
-            Task.FromResult
-                { Receipt =
-                    Receipt.Paid
-                        { Amount = decimal input.Dish.Price * decimal input.Guests
-                          Currency = "CHF" } }
+            Task.FromResult(
+                Ok
+                    { Receipt =
+                        Receipt.Paid
+                            { Amount = decimal input.Dish.Price * decimal input.Guests
+                              Currency = "CHF" } }
+            )
 
         member _.PingAsync(_, _) = Task.FromResult(PingOutput())
 
-        member _.CloseTableAsync(_, _) = Task.FromResult(CloseTableOutput())
+        member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
 
 /// The MCP tools and prompts an F# service definition registers.
 let private mcp () =
