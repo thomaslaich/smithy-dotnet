@@ -214,6 +214,30 @@ let ``A scoped handler factory runs once per request`` () : Task =
     }
 
 [<Fact>]
+let ``A scoped handler factory's handler is disposed once per request`` () : Task =
+    task {
+        let disposed = ref 0
+
+        do!
+            orderTwice (fun services ->
+                services.AddKitchenServiceHandler(
+                    (fun _ ->
+                        let handler = paidHandler ()
+
+                        { new IKitchenServiceHandler with
+                            member _.OrderAsync(input, ct) = handler.OrderAsync(input, ct)
+                            member _.PingAsync(input, ct) = handler.PingAsync(input, ct)
+                            member _.CloseTableAsync(input, ct) = handler.CloseTableAsync(input, ct)
+                          interface IDisposable with
+                              member _.Dispose() = disposed.Value <- disposed.Value + 1 }),
+                    ServiceLifetime.Scoped
+                )
+                |> ignore)
+
+        Assert.Equal(2, disposed.Value)
+    }
+
+[<Fact>]
 let ``A scoped handler is shared within a request only`` () =
     let services = ServiceCollection()
     services.AddKitchenServiceHandler<Kitchen>(ServiceLifetime.Scoped) |> ignore
