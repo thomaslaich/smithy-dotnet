@@ -146,3 +146,30 @@ let ``The server validates input before the handler runs`` () : Task =
             Assert.Equal("/dish/tags", (Seq.exactlyOne error.FieldList).Path)
         | other -> failwith $"Unexpected result: {other}"
     }
+
+[<Fact>]
+let ``An object expression registered as the handler serves requests`` () : Task =
+    task {
+        let builder = WebApplication.CreateBuilder()
+        builder.WebHost.UseTestServer() |> ignore
+
+        builder.Services.AddKitchenServiceHandler
+            { new IKitchenServiceHandler with
+                member _.OrderAsync(_, _) =
+                    Task.FromResult { Receipt = Receipt.Paid { Amount = 1M; Currency = "CHF" } }
+
+                member _.PingAsync(_, _) = Task.FromResult(PingOutput())
+                member _.CloseTableAsync(_, _) = Task.FromResult(CloseTableOutput()) }
+        |> ignore
+
+        use app = builder.Build()
+        app.MapKitchenService(KitchenServiceProtocols.RestJson1) |> ignore
+        do! app.StartAsync()
+        use client = client app (RestJson1Protocol())
+
+        let! result = client.OrderAsync(order "pizza")
+
+        match result with
+        | Ok output -> Assert.Equal(Receipt.Paid { Amount = 1M; Currency = "CHF" }, output.Receipt)
+        | Error error -> failwith $"Unexpected error: {error}"
+    }

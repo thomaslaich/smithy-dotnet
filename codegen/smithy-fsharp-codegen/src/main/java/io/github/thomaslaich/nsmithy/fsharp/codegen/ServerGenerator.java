@@ -363,6 +363,21 @@ final class ServerGenerator {
                 global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<${value:L}>(services, global.System.Func<global.System.IServiceProvider, ${value:L}>(fun provider -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<'THandler>(provider) :> ${value:L})) |> ignore
                 ${/handlers}
                 services
+
+            /// <summary>Registers <c>handler</c>, such as an object expression, as the handler of every operation, and the service.</summary>
+            [<global.System.Runtime.CompilerServices.Extension>]
+            static member Add${contract:L}Handler(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, handler: I${contract:L}Handler) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+                global.System.ArgumentNullException.ThrowIfNull(services)
+                global.System.ArgumentNullException.ThrowIfNull(handler)
+                ${?protocols}
+                global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
+                ${/protocols}
+                ${contract:L}ServerExtensions.Add${contract:L}(services) |> ignore
+                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<I${contract:L}Handler>(services, handler) |> ignore
+                ${#operationHandlers}
+                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<${value:L}>(services, handler :> ${value:L}) |> ignore
+                ${/operationHandlers}
+                services
             ${?protocols}
 
             /// <summary>Maps the service's operations over <c>protocols</c>, by default its first protocol, into a route group, and returns the group.</summary>
@@ -383,6 +398,7 @@ final class ServerGenerator {
         Map.of(
             "contract", contract,
             "handlers", handlers,
+            "operationHandlers", handlers.subList(1, handlers.size()),
             "protocols", runtimeTypes,
             "defaultProtocol", protocols.isEmpty() ? "" : protocols.get(0).name()));
   }

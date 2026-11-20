@@ -11,6 +11,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **F# handlers register as an instance.** `Add{Service}Handler` has an overload that takes a
+  handler, such as an object expression, and registers it as every operation's handler.
+
 ### Changed
 
 - **F# handlers return modeled errors as a `Result`.** An operation that declares errors gets a

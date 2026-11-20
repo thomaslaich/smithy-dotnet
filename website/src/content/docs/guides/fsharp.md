@@ -125,6 +125,18 @@ member _.GetCityAsync(input, _) =
 Errors the service declares for every operation are not in that union; a
 handler raises them, such as `raise (Unavailable())`.
 
+`AddWeatherServiceHandler` also takes a handler instance, such as an object
+expression:
+
+```fsharp
+builder.Services.AddWeatherServiceHandler
+    { new IWeatherServiceHandler with
+        member _.GetCityAsync(input, _) = getCity input
+        // one member per operation
+    }
+|> ignore
+```
+
 ## Call the service
 
 Each operation is a method that takes the input record and an optional
