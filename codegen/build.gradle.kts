@@ -117,7 +117,7 @@ dependencies {
     codegenBundle("software.amazon.smithy:smithy-protocol-traits:$smithyVer")
     codegenBundle("software.amazon.smithy:smithy-docgen:$smithyVer")
     codegenBundle("software.amazon.smithy:smithy-openapi:$smithyVer")
-    codegenBundle("com.disneystreaming.alloy:alloy-core:0.3.40")
+    codegenBundle("com.disneystreaming.alloy:alloy-core:0.3.41")
 }
 
 tasks.register("bundleMavenRepo") {
