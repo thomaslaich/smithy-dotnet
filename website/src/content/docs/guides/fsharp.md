@@ -125,6 +125,30 @@ member _.GetCityAsync(input, _) =
 Errors the service declares for every operation are not in that union; a
 handler raises them, such as `raise (Unavailable())`.
 
+`AddWeatherServiceHandler` also takes a handler instance, such as an object
+expression:
+
+```fsharp
+builder.Services.AddWeatherServiceHandler
+    { new IWeatherServiceHandler with
+        member _.GetCityAsync(input, _) = getCity input
+        // one member per operation
+    }
+|> ignore
+```
+
+A handler that needs services from the container takes a factory instead. It
+runs once by default, or once per request with `ServiceLifetime.Scoped`, which
+a handler using a `DbContext` needs:
+
+```fsharp
+builder.Services.AddWeatherServiceHandler(
+    (fun services -> Weather.create (services.GetRequiredService<WeatherDb>())),
+    ServiceLifetime.Scoped
+)
+|> ignore
+```
+
 ## Call the service
 
 Each operation is a method that takes the input record and an optional

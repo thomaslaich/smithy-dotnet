@@ -363,6 +363,36 @@ final class ServerGenerator {
                 global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<${value:L}>(services, global.System.Func<global.System.IServiceProvider, ${value:L}>(fun provider -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<'THandler>(provider) :> ${value:L})) |> ignore
                 ${/handlers}
                 services
+
+            /// <summary>Registers <c>handler</c>, such as an object expression, as the handler of every operation, and the service.</summary>
+            [<global.System.Runtime.CompilerServices.Extension>]
+            static member Add${contract:L}Handler(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, handler: I${contract:L}Handler) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+                global.System.ArgumentNullException.ThrowIfNull(services)
+                global.System.ArgumentNullException.ThrowIfNull(handler)
+                ${?protocols}
+                global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
+                ${/protocols}
+                ${contract:L}ServerExtensions.Add${contract:L}(services) |> ignore
+                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<I${contract:L}Handler>(services, handler) |> ignore
+                ${#operationHandlers}
+                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<${value:L}>(services, handler :> ${value:L}) |> ignore
+                ${/operationHandlers}
+                services
+
+            /// <summary>Registers the handler <c>factory</c> creates from the container, once per <c>lifetime</c> (by default a singleton), as the handler of every operation, and the service.</summary>
+            [<global.System.Runtime.CompilerServices.Extension>]
+            static member Add${contract:L}Handler(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, factory: global.System.IServiceProvider -> I${contract:L}Handler, ?lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+                global.System.ArgumentNullException.ThrowIfNull(services)
+                let lifetime = global.Microsoft.FSharp.Core.Operators.defaultArg lifetime global.Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton
+                ${?protocols}
+                global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
+                ${/protocols}
+                ${contract:L}ServerExtensions.Add${contract:L}(services) |> ignore
+                services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<I${contract:L}Handler>, global.System.Func<global.System.IServiceProvider, obj>(fun provider -> factory provider :> obj), lifetime))
+                ${#operationHandlers}
+                services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<${value:L}>, global.System.Func<global.System.IServiceProvider, obj>(fun provider -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<I${contract:L}Handler>(provider) :> obj), lifetime))
+                ${/operationHandlers}
+                services
             ${?protocols}
 
             /// <summary>Maps the service's operations over <c>protocols</c>, by default its first protocol, into a route group, and returns the group.</summary>
@@ -383,6 +413,7 @@ final class ServerGenerator {
         Map.of(
             "contract", contract,
             "handlers", handlers,
+            "operationHandlers", handlers.subList(1, handlers.size()),
             "protocols", runtimeTypes,
             "defaultProtocol", protocols.isEmpty() ? "" : protocols.get(0).name()));
   }

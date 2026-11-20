@@ -250,15 +250,16 @@ The generated server uses [ASP.NET Core minimal API](https://learn.microsoft.com
   </TabItem>
   <TabItem label="F#">
     ```fsharp title="HelloWorld.Server/Program.fs"
-    builder.Services.AddHelloServiceHandler<HelloHandler>() |> ignore
+    builder.Services.AddHelloServiceHandler helloHandler |> ignore
 
     app.MapHelloService() |> ignore
     ```
   </TabItem>
 </Tabs>
 
-The template supplies `HelloHandler` in `Program.cs`; this is your implementation,
-not a file regenerated during the build:
+The template supplies the handler in `Program.cs` (`HelloHandler` in C#,
+`helloHandler` in F#); this is your implementation, not a file regenerated
+during the build:
 
 <Tabs syncKey="lang">
   <TabItem label="C#">
@@ -274,10 +275,10 @@ not a file regenerated during the build:
   </TabItem>
   <TabItem label="F#">
     ```fsharp title="HelloWorld.Server/Program.fs"
-    type HelloHandler() =
-        interface IHelloServiceHandler with
+    let helloHandler =
+        { new IHelloServiceHandler with
             member _.SayHelloAsync(input, _) =
-                Task.FromResult(Ok { Message = $"Hello, {input.Name}!" })
+                Task.FromResult(Ok { Message = $"Hello, {input.Name}!" }) }
     ```
   </TabItem>
 </Tabs>

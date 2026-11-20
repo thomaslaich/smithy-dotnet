@@ -7,7 +7,7 @@ open Example.Bookshelf
 
 /// Keeps the shelf in memory. The runtime has already validated each input against the model,
 /// so a handler only deals with the business rules.
-type BookshelfHandler() =
+let create () =
     let books = ConcurrentDictionary<string, Book>()
 
     let find id =
@@ -15,7 +15,7 @@ type BookshelfHandler() =
         | true, book -> Ok book
         | false, _ -> Error(NoSuchBook(id))
 
-    interface IBookshelfServiceHandler with
+    { new IBookshelfServiceHandler with
         member _.AddBookAsync(input, _) =
             let book =
                 { Id = Guid.NewGuid().ToString("N").[..7]
@@ -58,4 +58,4 @@ type BookshelfHandler() =
             find input.Id
             |> Result.mapError LendBookError.NoSuchBook
             |> Result.bind lend
-            |> Task.FromResult
+            |> Task.FromResult }

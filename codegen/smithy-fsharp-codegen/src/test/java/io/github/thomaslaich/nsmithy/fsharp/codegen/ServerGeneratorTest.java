@@ -77,6 +77,18 @@ class ServerGeneratorTest {
     assertTrue(server.contains("type CafeServiceDefinition() ="), server);
     assertTrue(server.contains("global.NSmithy.Server.OperationJsonSchemas("), server);
     assertTrue(server.contains("static member AddCafeServiceHandler<'THandler"), server);
+    assertTrue(
+        server.contains(
+            "static member AddCafeServiceHandler(services:"
+                + " global.Microsoft.Extensions.DependencyInjection.IServiceCollection, handler:"
+                + " ICafeServiceHandler)"),
+        server);
+    assertTrue(server.contains("(services, handler :> global.Example.Cafe.IOrderHandler)"), server);
+    assertTrue(
+        server.contains(
+            "factory: global.System.IServiceProvider -> ICafeServiceHandler, ?lifetime:"
+                + " global.Microsoft.Extensions.DependencyInjection.ServiceLifetime)"),
+        server);
     assertTrue(server.contains("static member MapCafeService("), server);
   }
 
