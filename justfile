@@ -79,11 +79,16 @@ smoke-templates:
     # codegen rename breaks `dotnet new` while everything else stays green.
     bash templates/smoke-test.sh
 
+# The templates again, on the next SDK major: generated code is compiled by the consumer's SDK.
+# rc.1 floor until nixpkgs ships 11.0.100.
+smoke-templates-sdk11:
+    SMOKE_SDK=11.0.100-rc.1 bash templates/smoke-test.sh
+
 # Build against the packed packages once per way of providing the Smithy CLI.
 smoke-smithy-cli:
     bash packages/NSmithy.SmithyCli/smoke-test.sh
 
-ci: check-format build test aot-smoke pack refresh-examples smoke-templates smoke-smithy-cli
+ci: check-format build test aot-smoke pack refresh-examples smoke-templates smoke-templates-sdk11 smoke-smithy-cli
 
 # The examples pin the fixed `0.0.0-SNAPSHOT` dev version permanently, while a release build packs
 # release-versioned packages, so NuGet resolves a version other than the pinned one and NU1603

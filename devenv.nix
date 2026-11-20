@@ -18,6 +18,8 @@ in
     package =
       with pkgs.dotnetCorePackages;
       combinePackages [
+        # Only for `just smoke-templates-sdk11`; global.json keeps the repo on SDK 10.
+        sdk_11_0-bin
         sdk_10_0-bin
         sdk_9_0-bin
         sdk_8_0-bin
