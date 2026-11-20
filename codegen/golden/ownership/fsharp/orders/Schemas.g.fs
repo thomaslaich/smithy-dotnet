@@ -41,9 +41,10 @@ type internal OutOfStockSchemaImpl() =
         traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(409M)) |])
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = OutOfStockBuilder()
-    override _.Build(builder) =
-        global.Acme.Shop.OutOfStock(
-            item = (match builder.Item with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("item"))))
+    override _.Build(builder) : global.Acme.Shop.OutOfStock =
+        {
+            Item = (match builder.Item with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("item")))
+        }
 
 [<AbstractClass; Sealed>]
 type OutOfStockSchema =
@@ -92,3 +93,24 @@ type internal PlaceOrderOutputSchemaImpl() =
 [<AbstractClass; Sealed>]
 type PlaceOrderOutputSchema =
     static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.PlaceOrderOutput, PlaceOrderOutputBuilder> = PlaceOrderOutputSchemaImpl()
+
+namespace rec Acme.Shop.Exceptions.Schemas
+
+type internal OutOfStockSchemaImpl() =
+    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.Exceptions.OutOfStock, global.Acme.Shop.Schemas.OutOfStockBuilder>(
+        global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"),
+        [|
+            global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.Exceptions.OutOfStock, global.Acme.Shop.Schemas.OutOfStockBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("item", OutOfStockSchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), OutOfStockSchemaImpl.Target0, (fun (value: global.Acme.Shop.Exceptions.OutOfStock) -> value.Error.Item), (fun (builder: global.Acme.Shop.Schemas.OutOfStockBuilder) value -> builder.Item <- ValueSome value))
+        |],
+        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(409M)) |])
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    override _.CreateTypedBuilder() = global.Acme.Shop.Schemas.OutOfStockBuilder()
+    override _.Build(builder) : global.Acme.Shop.Exceptions.OutOfStock =
+        global.Acme.Shop.Exceptions.OutOfStock(
+            ({
+                Item = (match builder.Item with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("item")))
+            }: global.Acme.Shop.OutOfStock))
+
+[<AbstractClass; Sealed>]
+type OutOfStockSchema =
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.Exceptions.OutOfStock, global.Acme.Shop.Schemas.OutOfStockBuilder> = OutOfStockSchemaImpl()

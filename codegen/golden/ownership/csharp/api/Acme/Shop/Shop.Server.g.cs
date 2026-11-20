@@ -37,7 +37,7 @@ public sealed class ShopServiceDefinition : IServiceDefinition
     /// <summary>The service's operation table, shared by every host adapter.</summary>
     internal static ServiceOperationCatalog Catalog { get; } = new(
         global::Acme.Shop.Schemas.ShopSchema.Schema,
-        ServerOperation.Create(global::Acme.Shop.Schemas.PlaceOrderSchema.Schema, services => (services.GetService<IPlaceOrderHandler>() ?? services.GetRequiredService<IShopServiceHandler>()).PlaceOrderAsync, PlaceOrderJsonSchemas.Value)
+        ServerOperation.Create(global::Acme.Shop.Schemas.PlaceOrderSchema.Schema, services => (services.GetService<IPlaceOrderHandler>() ?? services.GetRequiredService<IShopServiceHandler>()).PlaceOrderAsync, PlaceOrderJsonSchemas.Value, handlerTypes: [typeof(IPlaceOrderHandler), typeof(IShopServiceHandler)])
     );
 
     public ServiceOperationCatalog Operations => Catalog;

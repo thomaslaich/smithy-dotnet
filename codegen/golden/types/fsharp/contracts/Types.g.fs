@@ -30,11 +30,11 @@ type Allergen =
         member this.Value = this.Value
         static member FromValue(value) = Allergen.FromValue(value)
 
-type Busy(errorMessage: string) =
-    inherit global.System.Exception(errorMessage)
-    member val ErrorMessage: string = errorMessage
-    interface global.NSmithy.Core.ISmithyRetryableError with
-        member _.IsThrottlingError = true
+[<RequireQualifiedAccess>]
+type Busy =
+    {
+        Message: string
+    }
 
 type MainCourse =
     {
@@ -90,7 +90,30 @@ type Empty() =
 /// <summary>
 /// The dish is sold out.
 /// </summary>
-type SoldOut(dish: string, ?errorMessage: string) =
-    inherit global.System.Exception(global.Microsoft.FSharp.Core.Option.toObj errorMessage)
-    member val ErrorMessage: string option = errorMessage
-    member val Dish: string = dish
+[<RequireQualifiedAccess>]
+type SoldOut =
+    {
+        Message: string option
+        Dish: string
+    }
+
+namespace rec Example.Types.Exceptions
+
+/// <summary>Carries a <c>Busy</c> through the runtime, which reports modeled errors as exceptions.</summary>
+[<global.System.ComponentModel.EditorBrowsable(global.System.ComponentModel.EditorBrowsableState.Never)>]
+type Busy(error: global.Example.Types.Busy) =
+    inherit global.System.Exception(error.Message)
+
+    /// <summary>The error.</summary>
+    member _.Error = error
+
+    interface global.NSmithy.Core.ISmithyRetryableError with
+        member _.IsThrottlingError = true
+
+/// <summary>Carries a <c>SoldOut</c> through the runtime, which reports modeled errors as exceptions.</summary>
+[<global.System.ComponentModel.EditorBrowsable(global.System.ComponentModel.EditorBrowsableState.Never)>]
+type SoldOut(error: global.Example.Types.SoldOut) =
+    inherit global.System.Exception(global.Microsoft.FSharp.Core.Option.toObj error.Message)
+
+    /// <summary>The error.</summary>
+    member _.Error = error

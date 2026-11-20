@@ -4,10 +4,12 @@
     "generatorVersion": "<version>",
     "shapes": {
         "example.kitchen#Closed": {
+            "exception": "Example.Kitchen.Exceptions.Closed",
             "schema": "Example.Kitchen.Schemas.ClosedSchema",
             "type": "Example.Kitchen.Closed"
         },
         "example.kitchen#GetOrder": {
+            "errorShapes": "example.kitchen#Closed,example.kitchen#NoSuchOrder,smithy.framework#ValidationException",
             "errors": "Example.Kitchen.GetOrderError",
             "handler": "Example.Kitchen.IGetOrderHandler",
             "schema": "Example.Kitchen.Schemas.GetOrderSchema"
@@ -24,6 +26,7 @@
             "schema": "Example.Kitchen.Schemas.KitchenSchema"
         },
         "example.kitchen#NoSuchOrder": {
+            "exception": "Example.Kitchen.Exceptions.NoSuchOrder",
             "schema": "Example.Kitchen.Schemas.NoSuchOrderSchema",
             "type": "Example.Kitchen.NoSuchOrder"
         },
@@ -32,6 +35,8 @@
             "type": "Example.Kitchen.OrderStatus"
         },
         "example.kitchen#Ping": {
+            "errorShapes": "example.kitchen#Closed",
+            "errors": "Example.Kitchen.PingError",
             "handler": "Example.Kitchen.IPingHandler",
             "schema": "Example.Kitchen.Schemas.PingSchema"
         },
@@ -44,6 +49,7 @@
             "type": "Example.Kitchen.PingOutput"
         },
         "example.kitchen#PlaceOrder": {
+            "errorShapes": "example.kitchen#Closed,example.kitchen#SoldOut,smithy.framework#ValidationException",
             "errors": "Example.Kitchen.PlaceOrderError",
             "handler": "Example.Kitchen.IPlaceOrderHandler",
             "schema": "Example.Kitchen.Schemas.PlaceOrderSchema"
@@ -57,6 +63,7 @@
             "type": "Example.Kitchen.PlaceOrderOutput"
         },
         "example.kitchen#SoldOut": {
+            "exception": "Example.Kitchen.Exceptions.SoldOut",
             "schema": "Example.Kitchen.Schemas.SoldOutSchema",
             "type": "Example.Kitchen.SoldOut"
         }

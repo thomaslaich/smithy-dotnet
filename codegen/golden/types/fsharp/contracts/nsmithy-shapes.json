@@ -11,6 +11,7 @@
             "schema": "Example.Types.Schemas.AllergensSchema"
         },
         "example.types#Busy": {
+            "exception": "Example.Types.Exceptions.Busy",
             "schema": "Example.Types.Schemas.BusySchema",
             "type": "Example.Types.Busy"
         },
@@ -35,6 +36,7 @@
             "type": "Example.Types.Price"
         },
         "example.types#SoldOut": {
+            "exception": "Example.Types.Exceptions.SoldOut",
             "schema": "Example.Types.Schemas.SoldOutSchema",
             "type": "Example.Types.SoldOut"
         },

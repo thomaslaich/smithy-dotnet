@@ -3,37 +3,26 @@
 
 namespace Example.Kitchen
 
-/// <summary>The errors the model declares for every operation of <c>Kitchen</c>.</summary>
-[<RequireQualifiedAccess>]
-type KitchenError =
-    | Closed of global.Example.Kitchen.Closed
-
-/// <summary>The errors of a <c>Kitchen</c> operation that declares its own: the operation's, or those the service declares for every operation.</summary>
-[<RequireQualifiedAccess>]
-type KitchenCallError<'Operation> =
-    | Operation of 'Operation
-    | Service of KitchenError
-
 /// <summary>
 /// A kitchen that takes orders.
 /// </summary>
 type IKitchenClient =
     inherit global.System.IDisposable
 
-    abstract GetOrderAsync: input: global.Example.Kitchen.GetOrderInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, KitchenCallError<global.Example.Kitchen.GetOrderError>>>
+    abstract GetOrderAsync: input: global.Example.Kitchen.GetOrderInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, global.Example.Kitchen.GetOrderError>>
 
-    abstract PingAsync: input: global.Example.Kitchen.PingInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, KitchenError>>
+    abstract PingAsync: input: global.Example.Kitchen.PingInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>>
 
     /// <summary>
     /// Places an order for a table.
     /// </summary>
-    abstract PlaceOrderAsync: input: global.Example.Kitchen.PlaceOrderInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, KitchenCallError<global.Example.Kitchen.PlaceOrderError>>>
+    abstract PlaceOrderAsync: input: global.Example.Kitchen.PlaceOrderInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, global.Example.Kitchen.PlaceOrderError>>
 
 /// <summary>Overloads of <c>IKitchenClient</c> for the operations whose input may be left out.</summary>
 [<AutoOpen>]
 module IKitchenClientExtensions =
     type IKitchenClient with
-        member this.PingAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, KitchenError>> =
+        member this.PingAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>> =
             this.PingAsync(global.Example.Kitchen.PingInput(), ?cancellationToken = cancellationToken)
 
 /// <summary>Options for the client. It copies them when it is constructed.</summary>
@@ -122,34 +111,33 @@ type KitchenClient private (parts: global.NSmithy.Client.SmithyHttpClientEnviron
         global.NSmithy.Client.SmithyHttpClientEnvironment.FromRuntime(global.Example.Kitchen.Schemas.KitchenSchema.Schema, runtime, config, global.System.Func<global.NSmithy.Http.IProtocol>(fun () -> global.NSmithy.Protocols.RestJson.RestJson1Protocol() :> global.NSmithy.Http.IProtocol)),
         config :> global.NSmithy.Client.SmithyClientConfig
 
-    member _.GetOrderAsync(input: global.Example.Kitchen.GetOrderInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, KitchenCallError<global.Example.Kitchen.GetOrderError>>> =
+    member _.GetOrderAsync(input: global.Example.Kitchen.GetOrderInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, global.Example.Kitchen.GetOrderError>> =
         global.System.ArgumentNullException.ThrowIfNull(input)
         task {
             try
                 let! output = runtime.InvokeAsync(bindings.GetOrder, input, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
                 return global.Microsoft.FSharp.Core.Result.Ok output
             with
-            | error when (global.Example.Kitchen.GetOrderError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error(KitchenCallError.Operation((global.Example.Kitchen.GetOrderError.FromException error).Value))
-            | :? global.Example.Kitchen.Closed as error -> return global.Microsoft.FSharp.Core.Result.Error(KitchenCallError.Service(KitchenError.Closed error))
+            | error when (global.Example.Kitchen.GetOrderError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error((global.Example.Kitchen.GetOrderError.FromException error).Value)
         }
 
-    member _.PingAsync(input: global.Example.Kitchen.PingInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, KitchenError>> =
+    member _.PingAsync(input: global.Example.Kitchen.PingInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>> =
         global.System.ArgumentNullException.ThrowIfNull(input)
         task {
             try
                 let! output = runtime.InvokeAsync(bindings.Ping, input, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
                 return global.Microsoft.FSharp.Core.Result.Ok output
             with
-            | :? global.Example.Kitchen.Closed as error -> return global.Microsoft.FSharp.Core.Result.Error(KitchenError.Closed error)
+            | error when (global.Example.Kitchen.PingError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error((global.Example.Kitchen.PingError.FromException error).Value)
         }
 
-    member this.PingAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, KitchenError>> =
+    member this.PingAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>> =
         this.PingAsync(global.Example.Kitchen.PingInput(), ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Places an order for a table.
     /// </summary>
-    member _.PlaceOrderAsync(input: global.Example.Kitchen.PlaceOrderInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, KitchenCallError<global.Example.Kitchen.PlaceOrderError>>> =
+    member _.PlaceOrderAsync(input: global.Example.Kitchen.PlaceOrderInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, global.Example.Kitchen.PlaceOrderError>> =
         global.System.ArgumentNullException.ThrowIfNull(input)
         let input =
             { input with
@@ -160,8 +148,7 @@ type KitchenClient private (parts: global.NSmithy.Client.SmithyHttpClientEnviron
                 let! output = runtime.InvokeAsync(bindings.PlaceOrder, input, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
                 return global.Microsoft.FSharp.Core.Result.Ok output
             with
-            | error when (global.Example.Kitchen.PlaceOrderError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error(KitchenCallError.Operation((global.Example.Kitchen.PlaceOrderError.FromException error).Value))
-            | :? global.Example.Kitchen.Closed as error -> return global.Microsoft.FSharp.Core.Result.Error(KitchenCallError.Service(KitchenError.Closed error))
+            | error when (global.Example.Kitchen.PlaceOrderError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error((global.Example.Kitchen.PlaceOrderError.FromException error).Value)
         }
 
     member _.Dispose() = environment.Dispose()

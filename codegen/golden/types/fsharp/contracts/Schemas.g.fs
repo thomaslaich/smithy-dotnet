@@ -28,20 +28,21 @@ type AllergensSchema =
 
 type BusyBuilder() =
     inherit global.NSmithy.Core.Serde.StructBuilder()
-    member val ErrorMessage: string voption = ValueNone with get, set
+    member val Message: string voption = ValueNone with get, set
 
 type internal BusySchemaImpl() =
     inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Types.Busy, BusyBuilder>(
         global.NSmithy.Core.ShapeId.Parse("example.types#Busy"),
         [|
-            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Types.Busy, BusyBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("message", BusySchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), BusySchemaImpl.Target0, (fun (value: global.Example.Types.Busy) -> value.ErrorMessage), (fun (builder: BusyBuilder) value -> builder.ErrorMessage <- ValueSome value))
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Types.Busy, BusyBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("message", BusySchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), BusySchemaImpl.Target0, (fun (value: global.Example.Types.Busy) -> value.Message), (fun (builder: BusyBuilder) value -> builder.Message <- ValueSome value))
         |],
         traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("server")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#retryable"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("throttling", global.NSmithy.Core.Document.From(true)) ]))) |])
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = BusyBuilder()
-    override _.Build(builder) =
-        global.Example.Types.Busy(
-            errorMessage = (match builder.ErrorMessage with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("message"))))
+    override _.Build(builder) : global.Example.Types.Busy =
+        {
+            Message = (match builder.Message with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("message")))
+        }
 
 [<AbstractClass; Sealed>]
 type BusySchema =
@@ -205,25 +206,69 @@ type EmptySchema =
 
 type SoldOutBuilder() =
     inherit global.NSmithy.Core.Serde.StructBuilder()
-    member val ErrorMessage: string voption = ValueNone with get, set
+    member val Message: string voption = ValueNone with get, set
     member val Dish: string voption = ValueNone with get, set
 
 type internal SoldOutSchemaImpl() =
     inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Types.SoldOut, SoldOutBuilder>(
         global.NSmithy.Core.ShapeId.Parse("example.types#SoldOut"),
         [|
-            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Types.SoldOut, SoldOutBuilder, string option>(global.NSmithy.Core.Serde.MemberSchema("message", SoldOutSchemaImpl.Target0), global.NSmithy.Core.Serde.Schemas.Optional<string option, string>(SoldOutSchemaImpl.Target0, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Types.SoldOut) -> value.ErrorMessage), (fun (builder: SoldOutBuilder) value -> builder.ErrorMessage <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Types.SoldOut, SoldOutBuilder, string option>(global.NSmithy.Core.Serde.MemberSchema("message", SoldOutSchemaImpl.Target0), global.NSmithy.Core.Serde.Schemas.Optional<string option, string>(SoldOutSchemaImpl.Target0, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Types.SoldOut) -> value.Message), (fun (builder: SoldOutBuilder) value -> builder.Message <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
             global.NSmithy.Core.Serde.StructMember.Create<global.Example.Types.SoldOut, SoldOutBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("dish", SoldOutSchemaImpl.Target1, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), SoldOutSchemaImpl.Target1, (fun (value: global.Example.Types.SoldOut) -> value.Dish), (fun (builder: SoldOutBuilder) value -> builder.Dish <- ValueSome value))
         |],
         traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")) |])
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     static member val Target1: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = SoldOutBuilder()
-    override _.Build(builder) =
-        global.Example.Types.SoldOut(
-            dish = (match builder.Dish with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("dish"))),
-            ?errorMessage = global.Microsoft.FSharp.Core.ValueOption.toOption builder.ErrorMessage)
+    override _.Build(builder) : global.Example.Types.SoldOut =
+        {
+            Message = global.Microsoft.FSharp.Core.ValueOption.toOption builder.Message
+            Dish = (match builder.Dish with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("dish")))
+        }
 
 [<AbstractClass; Sealed>]
 type SoldOutSchema =
     static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Types.SoldOut, SoldOutBuilder> = SoldOutSchemaImpl()
+
+namespace rec Example.Types.Exceptions.Schemas
+
+type internal BusySchemaImpl() =
+    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Types.Exceptions.Busy, global.Example.Types.Schemas.BusyBuilder>(
+        global.NSmithy.Core.ShapeId.Parse("example.types#Busy"),
+        [|
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Types.Exceptions.Busy, global.Example.Types.Schemas.BusyBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("message", BusySchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), BusySchemaImpl.Target0, (fun (value: global.Example.Types.Exceptions.Busy) -> value.Error.Message), (fun (builder: global.Example.Types.Schemas.BusyBuilder) value -> builder.Message <- ValueSome value))
+        |],
+        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("server")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#retryable"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("throttling", global.NSmithy.Core.Document.From(true)) ]))) |])
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    override _.CreateTypedBuilder() = global.Example.Types.Schemas.BusyBuilder()
+    override _.Build(builder) : global.Example.Types.Exceptions.Busy =
+        global.Example.Types.Exceptions.Busy(
+            ({
+                Message = (match builder.Message with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("message")))
+            }: global.Example.Types.Busy))
+
+[<AbstractClass; Sealed>]
+type BusySchema =
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Types.Exceptions.Busy, global.Example.Types.Schemas.BusyBuilder> = BusySchemaImpl()
+
+type internal SoldOutSchemaImpl() =
+    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Types.Exceptions.SoldOut, global.Example.Types.Schemas.SoldOutBuilder>(
+        global.NSmithy.Core.ShapeId.Parse("example.types#SoldOut"),
+        [|
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Types.Exceptions.SoldOut, global.Example.Types.Schemas.SoldOutBuilder, string option>(global.NSmithy.Core.Serde.MemberSchema("message", SoldOutSchemaImpl.Target0), global.NSmithy.Core.Serde.Schemas.Optional<string option, string>(SoldOutSchemaImpl.Target0, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Types.Exceptions.SoldOut) -> value.Error.Message), (fun (builder: global.Example.Types.Schemas.SoldOutBuilder) value -> builder.Message <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Types.Exceptions.SoldOut, global.Example.Types.Schemas.SoldOutBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("dish", SoldOutSchemaImpl.Target1, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), SoldOutSchemaImpl.Target1, (fun (value: global.Example.Types.Exceptions.SoldOut) -> value.Error.Dish), (fun (builder: global.Example.Types.Schemas.SoldOutBuilder) value -> builder.Dish <- ValueSome value))
+        |],
+        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")) |])
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    static member val Target1: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    override _.CreateTypedBuilder() = global.Example.Types.Schemas.SoldOutBuilder()
+    override _.Build(builder) : global.Example.Types.Exceptions.SoldOut =
+        global.Example.Types.Exceptions.SoldOut(
+            ({
+                Message = global.Microsoft.FSharp.Core.ValueOption.toOption builder.Message
+                Dish = (match builder.Dish with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("dish")))
+            }: global.Example.Types.SoldOut))
+
+[<AbstractClass; Sealed>]
+type SoldOutSchema =
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Types.Exceptions.SoldOut, global.Example.Types.Schemas.SoldOutBuilder> = SoldOutSchemaImpl()

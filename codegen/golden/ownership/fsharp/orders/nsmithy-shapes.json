@@ -8,10 +8,12 @@
             "type": "Acme.Shop.Money"
         },
         "acme.shop#OutOfStock": {
+            "exception": "Acme.Shop.Exceptions.OutOfStock",
             "schema": "Acme.Shop.Schemas.OutOfStockSchema",
             "type": "Acme.Shop.OutOfStock"
         },
         "acme.shop#PlaceOrder": {
+            "errorShapes": "acme.shop#OutOfStock,smithy.framework#ValidationException",
             "errors": "Acme.Shop.PlaceOrderError",
             "handler": "Acme.Shop.IPlaceOrderHandler",
             "schema": "Acme.Shop.Schemas.PlaceOrderSchema"

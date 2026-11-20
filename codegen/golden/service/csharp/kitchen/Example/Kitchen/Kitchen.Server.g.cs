@@ -40,9 +40,9 @@ public sealed class KitchenServiceDefinition : IServiceDefinition
     /// <summary>The service's operation table, shared by every host adapter.</summary>
     internal static ServiceOperationCatalog Catalog { get; } = new(
         global::Example.Kitchen.Schemas.KitchenSchema.Schema,
-        ServerOperation.Create(global::Example.Kitchen.Schemas.GetOrderSchema.Schema, services => (services.GetService<IGetOrderHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).GetOrderAsync, GetOrderJsonSchemas.Value),
-        ServerOperation.Create(global::Example.Kitchen.Schemas.PingSchema.Schema, services => (services.GetService<IPingHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).PingAsync, PingJsonSchemas.Value),
-        ServerOperation.Create(global::Example.Kitchen.Schemas.PlaceOrderSchema.Schema, services => (services.GetService<IPlaceOrderHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).PlaceOrderAsync, PlaceOrderJsonSchemas.Value)
+        ServerOperation.Create(global::Example.Kitchen.Schemas.GetOrderSchema.Schema, services => (services.GetService<IGetOrderHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).GetOrderAsync, GetOrderJsonSchemas.Value, handlerTypes: [typeof(IGetOrderHandler), typeof(IKitchenServiceHandler)]),
+        ServerOperation.Create(global::Example.Kitchen.Schemas.PingSchema.Schema, services => (services.GetService<IPingHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).PingAsync, PingJsonSchemas.Value, handlerTypes: [typeof(IPingHandler), typeof(IKitchenServiceHandler)]),
+        ServerOperation.Create(global::Example.Kitchen.Schemas.PlaceOrderSchema.Schema, services => (services.GetService<IPlaceOrderHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).PlaceOrderAsync, PlaceOrderJsonSchemas.Value, handlerTypes: [typeof(IPlaceOrderHandler), typeof(IKitchenServiceHandler)])
     );
 
     public ServiceOperationCatalog Operations => Catalog;

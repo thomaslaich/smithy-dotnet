@@ -9,9 +9,11 @@ type Money =
         Currency: string
     }
 
-type OutOfStock(item: string) =
-    inherit global.System.Exception()
-    member val Item: string = item
+[<RequireQualifiedAccess>]
+type OutOfStock =
+    {
+        Item: string
+    }
 
 type PlaceOrderInput =
     {
@@ -22,3 +24,13 @@ type PlaceOrderOutput =
     {
         OrderId: string
     }
+
+namespace rec Acme.Shop.Exceptions
+
+/// <summary>Carries a <c>OutOfStock</c> through the runtime, which reports modeled errors as exceptions.</summary>
+[<global.System.ComponentModel.EditorBrowsable(global.System.ComponentModel.EditorBrowsableState.Never)>]
+type OutOfStock(error: global.Acme.Shop.OutOfStock) =
+    inherit global.System.Exception()
+
+    /// <summary>The error.</summary>
+    member _.Error = error

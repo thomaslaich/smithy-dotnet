@@ -11,14 +11,14 @@ type PlaceOrderSchema =
             global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.PlaceOrderInput>(fun () -> global.Acme.Shop.Schemas.PlaceOrderInputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.PlaceOrderInput>),
             global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.PlaceOrderOutput>(fun () -> global.Acme.Shop.Schemas.PlaceOrderOutputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.PlaceOrderOutput>),
             [|
-                global.NSmithy.Core.Serde.Schemas.OperationError<global.Acme.Shop.OutOfStock>(global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"), global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.OutOfStock>(fun () -> global.Acme.Shop.Schemas.OutOfStockSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.OutOfStock>), 409) :> global.NSmithy.Core.Serde.IOperationErrorSchema
+                global.NSmithy.Core.Serde.Schemas.OperationError<global.Acme.Shop.Exceptions.OutOfStock>(global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"), global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.Exceptions.OutOfStock>(fun () -> global.Acme.Shop.Exceptions.Schemas.OutOfStockSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.Exceptions.OutOfStock>), 409) :> global.NSmithy.Core.Serde.IOperationErrorSchema
                 global.NSmithy.Core.Serde.Schemas.OperationError<global.NSmithy.Core.Validation.ValidationException>(global.NSmithy.Core.ShapeId.Parse("smithy.framework#ValidationException"), global.NSmithy.Core.Validation.ValidationExceptionSchema.Schema, 400) :> global.NSmithy.Core.Serde.IOperationErrorSchema
             |],
             traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#http"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("method", global.NSmithy.Core.Document.From("POST")); ("uri", global.NSmithy.Core.Document.From("/orders")); ("code", global.NSmithy.Core.Document.From(201M)) ]))) |])
 
 namespace Acme.Shop
 
-/// <summary>The errors the model declares for <c>PlaceOrder</c>.</summary>
+/// <summary>The errors <c>PlaceOrder</c> can return: its own and its service's.</summary>
 [<RequireQualifiedAccess>]
 type PlaceOrderError =
     | OutOfStock of global.Acme.Shop.OutOfStock
@@ -27,13 +27,13 @@ type PlaceOrderError =
     /// <summary>The error as the exception the runtime writes.</summary>
     member this.ToException() : global.System.Exception =
         match this with
-        | PlaceOrderError.OutOfStock error -> error :> global.System.Exception
+        | PlaceOrderError.OutOfStock error -> global.Acme.Shop.Exceptions.OutOfStock(error) :> global.System.Exception
         | PlaceOrderError.ValidationException error -> error :> global.System.Exception
 
-    /// <summary>The case that holds <c>error</c>, or None when the operation does not declare it.</summary>
+    /// <summary>The case that holds <c>error</c>, or None when it is not one of these errors.</summary>
     static member FromException(error: global.System.Exception) : PlaceOrderError option =
         match error with
-        | :? global.Acme.Shop.OutOfStock as error -> global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.OutOfStock error)
+        | :? global.Acme.Shop.Exceptions.OutOfStock as error -> global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.OutOfStock error.Error)
         | :? global.NSmithy.Core.Validation.ValidationException as error -> global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.ValidationException error)
         | _ -> global.Microsoft.FSharp.Core.Option.None
 

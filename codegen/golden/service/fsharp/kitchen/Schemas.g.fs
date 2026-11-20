@@ -9,20 +9,21 @@ type OrderStatusSchema =
 
 type ClosedBuilder() =
     inherit global.NSmithy.Core.Serde.StructBuilder()
-    member val ErrorMessage: string voption = ValueNone with get, set
+    member val Message: string voption = ValueNone with get, set
 
 type internal ClosedSchemaImpl() =
     inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Kitchen.Closed, ClosedBuilder>(
         global.NSmithy.Core.ShapeId.Parse("example.kitchen#Closed"),
         [|
-            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.Closed, ClosedBuilder, string option>(global.NSmithy.Core.Serde.MemberSchema("message", ClosedSchemaImpl.Target0), global.NSmithy.Core.Serde.Schemas.Optional<string option, string>(ClosedSchemaImpl.Target0, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Kitchen.Closed) -> value.ErrorMessage), (fun (builder: ClosedBuilder) value -> builder.ErrorMessage <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.Closed, ClosedBuilder, string option>(global.NSmithy.Core.Serde.MemberSchema("message", ClosedSchemaImpl.Target0), global.NSmithy.Core.Serde.Schemas.Optional<string option, string>(ClosedSchemaImpl.Target0, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Kitchen.Closed) -> value.Message), (fun (builder: ClosedBuilder) value -> builder.Message <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
         |],
         traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("server")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(503M)) |])
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = ClosedBuilder()
-    override _.Build(builder) =
-        global.Example.Kitchen.Closed(
-            ?errorMessage = global.Microsoft.FSharp.Core.ValueOption.toOption builder.ErrorMessage)
+    override _.Build(builder) : global.Example.Kitchen.Closed =
+        {
+            Message = global.Microsoft.FSharp.Core.ValueOption.toOption builder.Message
+        }
 
 [<AbstractClass; Sealed>]
 type ClosedSchema =
@@ -93,9 +94,10 @@ type internal NoSuchOrderSchemaImpl() =
         traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(404M)) |])
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = NoSuchOrderBuilder()
-    override _.Build(builder) =
-        global.Example.Kitchen.NoSuchOrder(
-            orderId = (match builder.OrderId with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("orderId"))))
+    override _.Build(builder) : global.Example.Kitchen.NoSuchOrder =
+        {
+            OrderId = (match builder.OrderId with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("orderId")))
+        }
 
 [<AbstractClass; Sealed>]
 type NoSuchOrderSchema =
@@ -200,9 +202,10 @@ type internal SoldOutSchemaImpl() =
         traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(409M)) |])
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = SoldOutBuilder()
-    override _.Build(builder) =
-        global.Example.Kitchen.SoldOut(
-            dish = (match builder.Dish with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("dish"))))
+    override _.Build(builder) : global.Example.Kitchen.SoldOut =
+        {
+            Dish = (match builder.Dish with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("dish")))
+        }
 
 [<AbstractClass; Sealed>]
 type SoldOutSchema =
@@ -216,5 +219,64 @@ type KitchenSchema =
             "2026-01-01",
             traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("aws.protocols#restJson1"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |],
             errors = [|
-                global.NSmithy.Core.Serde.Schemas.OperationError<global.Example.Kitchen.Closed>(global.NSmithy.Core.ShapeId.Parse("example.kitchen#Closed"), global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.Closed>(fun () -> global.Example.Kitchen.Schemas.ClosedSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.Closed>), 503) :> global.NSmithy.Core.Serde.IOperationErrorSchema
+                global.NSmithy.Core.Serde.Schemas.OperationError<global.Example.Kitchen.Exceptions.Closed>(global.NSmithy.Core.ShapeId.Parse("example.kitchen#Closed"), global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.Exceptions.Closed>(fun () -> global.Example.Kitchen.Exceptions.Schemas.ClosedSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.Exceptions.Closed>), 503) :> global.NSmithy.Core.Serde.IOperationErrorSchema
             |])
+
+namespace rec Example.Kitchen.Exceptions.Schemas
+
+type internal ClosedSchemaImpl() =
+    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Kitchen.Exceptions.Closed, global.Example.Kitchen.Schemas.ClosedBuilder>(
+        global.NSmithy.Core.ShapeId.Parse("example.kitchen#Closed"),
+        [|
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.Exceptions.Closed, global.Example.Kitchen.Schemas.ClosedBuilder, string option>(global.NSmithy.Core.Serde.MemberSchema("message", ClosedSchemaImpl.Target0), global.NSmithy.Core.Serde.Schemas.Optional<string option, string>(ClosedSchemaImpl.Target0, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Kitchen.Exceptions.Closed) -> value.Error.Message), (fun (builder: global.Example.Kitchen.Schemas.ClosedBuilder) value -> builder.Message <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
+        |],
+        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("server")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(503M)) |])
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    override _.CreateTypedBuilder() = global.Example.Kitchen.Schemas.ClosedBuilder()
+    override _.Build(builder) : global.Example.Kitchen.Exceptions.Closed =
+        global.Example.Kitchen.Exceptions.Closed(
+            ({
+                Message = global.Microsoft.FSharp.Core.ValueOption.toOption builder.Message
+            }: global.Example.Kitchen.Closed))
+
+[<AbstractClass; Sealed>]
+type ClosedSchema =
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Kitchen.Exceptions.Closed, global.Example.Kitchen.Schemas.ClosedBuilder> = ClosedSchemaImpl()
+
+type internal NoSuchOrderSchemaImpl() =
+    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Kitchen.Exceptions.NoSuchOrder, global.Example.Kitchen.Schemas.NoSuchOrderBuilder>(
+        global.NSmithy.Core.ShapeId.Parse("example.kitchen#NoSuchOrder"),
+        [|
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.Exceptions.NoSuchOrder, global.Example.Kitchen.Schemas.NoSuchOrderBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("orderId", NoSuchOrderSchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), NoSuchOrderSchemaImpl.Target0, (fun (value: global.Example.Kitchen.Exceptions.NoSuchOrder) -> value.Error.OrderId), (fun (builder: global.Example.Kitchen.Schemas.NoSuchOrderBuilder) value -> builder.OrderId <- ValueSome value))
+        |],
+        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(404M)) |])
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    override _.CreateTypedBuilder() = global.Example.Kitchen.Schemas.NoSuchOrderBuilder()
+    override _.Build(builder) : global.Example.Kitchen.Exceptions.NoSuchOrder =
+        global.Example.Kitchen.Exceptions.NoSuchOrder(
+            ({
+                OrderId = (match builder.OrderId with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("orderId")))
+            }: global.Example.Kitchen.NoSuchOrder))
+
+[<AbstractClass; Sealed>]
+type NoSuchOrderSchema =
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Kitchen.Exceptions.NoSuchOrder, global.Example.Kitchen.Schemas.NoSuchOrderBuilder> = NoSuchOrderSchemaImpl()
+
+type internal SoldOutSchemaImpl() =
+    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Kitchen.Exceptions.SoldOut, global.Example.Kitchen.Schemas.SoldOutBuilder>(
+        global.NSmithy.Core.ShapeId.Parse("example.kitchen#SoldOut"),
+        [|
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.Exceptions.SoldOut, global.Example.Kitchen.Schemas.SoldOutBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("dish", SoldOutSchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), SoldOutSchemaImpl.Target0, (fun (value: global.Example.Kitchen.Exceptions.SoldOut) -> value.Error.Dish), (fun (builder: global.Example.Kitchen.Schemas.SoldOutBuilder) value -> builder.Dish <- ValueSome value))
+        |],
+        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(409M)) |])
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    override _.CreateTypedBuilder() = global.Example.Kitchen.Schemas.SoldOutBuilder()
+    override _.Build(builder) : global.Example.Kitchen.Exceptions.SoldOut =
+        global.Example.Kitchen.Exceptions.SoldOut(
+            ({
+                Dish = (match builder.Dish with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("dish")))
+            }: global.Example.Kitchen.SoldOut))
+
+[<AbstractClass; Sealed>]
+type SoldOutSchema =
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Kitchen.Exceptions.SoldOut, global.Example.Kitchen.Schemas.SoldOutBuilder> = SoldOutSchemaImpl()

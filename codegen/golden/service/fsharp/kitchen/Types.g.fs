@@ -6,9 +6,11 @@ namespace rec Example.Kitchen
 /// <summary>
 /// The kitchen does not take orders right now.
 /// </summary>
-type Closed(?errorMessage: string) =
-    inherit global.System.Exception(global.Microsoft.FSharp.Core.Option.toObj errorMessage)
-    member val ErrorMessage: string option = errorMessage
+[<RequireQualifiedAccess>]
+type Closed =
+    {
+        Message: string option
+    }
 
 type GetOrderInput =
     {
@@ -49,9 +51,11 @@ type GetOrderOutput =
         Status: global.Example.Kitchen.OrderStatus option
     }
 
-type NoSuchOrder(orderId: string) =
-    inherit global.System.Exception()
-    member val OrderId: string = orderId
+[<RequireQualifiedAccess>]
+type NoSuchOrder =
+    {
+        OrderId: string
+    }
 
 [<Sealed>]
 type PingInput() =
@@ -76,6 +80,34 @@ type PlaceOrderOutput =
         OrderId: string
     }
 
-type SoldOut(dish: string) =
+[<RequireQualifiedAccess>]
+type SoldOut =
+    {
+        Dish: string
+    }
+
+namespace rec Example.Kitchen.Exceptions
+
+/// <summary>Carries a <c>Closed</c> through the runtime, which reports modeled errors as exceptions.</summary>
+[<global.System.ComponentModel.EditorBrowsable(global.System.ComponentModel.EditorBrowsableState.Never)>]
+type Closed(error: global.Example.Kitchen.Closed) =
+    inherit global.System.Exception(global.Microsoft.FSharp.Core.Option.toObj error.Message)
+
+    /// <summary>The error.</summary>
+    member _.Error = error
+
+/// <summary>Carries a <c>NoSuchOrder</c> through the runtime, which reports modeled errors as exceptions.</summary>
+[<global.System.ComponentModel.EditorBrowsable(global.System.ComponentModel.EditorBrowsableState.Never)>]
+type NoSuchOrder(error: global.Example.Kitchen.NoSuchOrder) =
     inherit global.System.Exception()
-    member val Dish: string = dish
+
+    /// <summary>The error.</summary>
+    member _.Error = error
+
+/// <summary>Carries a <c>SoldOut</c> through the runtime, which reports modeled errors as exceptions.</summary>
+[<global.System.ComponentModel.EditorBrowsable(global.System.ComponentModel.EditorBrowsableState.Never)>]
+type SoldOut(error: global.Example.Kitchen.SoldOut) =
+    inherit global.System.Exception()
+
+    /// <summary>The error.</summary>
+    member _.Error = error
