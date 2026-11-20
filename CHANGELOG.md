@@ -11,6 +11,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.21.0]
+
+F# handlers return modeled errors as a `Result` of record errors, and servers choose handler
+lifetimes and fail at startup when an operation has no handler.
+
 ### Added
 
 - **F# handlers register as an instance or a factory.** `Add{Service}Handler` has an overload that
@@ -1094,7 +1099,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.1...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.2...v0.19.0
