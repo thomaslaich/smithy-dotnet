@@ -164,6 +164,33 @@ public class FakeHandlerTests
         Assert.Equal("Seattle", Assert.IsType<GetCityOutput>(output).Name);
     }
 
+    [Fact]
+    public async Task MappingFailsWhenAnOperationHasNoHandler()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddWeatherService();
+        builder.Services.AddSingleton<IGetCityHandler, AnywhereIsSeattle>();
+        await using var app = builder.Build();
+
+        var error = Assert.Throws<InvalidOperationException>(() => app.MapWeatherService());
+
+        Assert.Contains("GetCurrentTime, ListCities", error.Message);
+        Assert.DoesNotContain("GetCity,", error.Message);
+    }
+
+    [Fact]
+    public async Task MappingSucceedsWhenEveryOperationHasAHandler()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddWeatherService();
+        builder.Services.AddScoped<IGetCityHandler, AnywhereIsSeattle>();
+        builder.Services.AddScoped<IGetCurrentTimeHandler, FakeWeatherServiceHandler>();
+        builder.Services.AddScoped<IListCitiesHandler, FakeWeatherServiceHandler>();
+        await using var app = builder.Build();
+
+        app.MapWeatherService();
+    }
+
     private sealed class Counter
     {
         public int Created { get; set; }

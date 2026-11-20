@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
@@ -20,7 +21,8 @@ public static partial class SmithyAspNetCoreServer
     /// Maps the operations of <paramref name="catalog"/> over each of
     /// <paramref name="protocols"/>: one endpoint per route a protocol reports, or one endpoint for
     /// a protocol that resolves the operation from the request. Two routes with the same method and
-    /// path fail. The endpoints are mapped into a route group, which is returned so conventions
+    /// path fail, and so does an operation none of whose <see cref="IServerOperation.HandlerTypes"/>
+    /// is registered. The endpoints are mapped into a route group, which is returned so conventions
     /// apply to all of them, and each carries <see cref="SmithyEndpointMetadata"/>.
     /// </summary>
     public static RouteGroupBuilder MapSmithyService(
@@ -35,6 +37,7 @@ public static partial class SmithyAspNetCoreServer
 
         var service = catalog.Schema;
         var operations = catalog.Operations;
+        RequireHandlers(endpoints.ServiceProvider, service, operations);
 
         IOperationSchema[] schemas = [.. operations.Select(operation => operation.Schema)];
         var mappedRoutes = new HashSet<string>(StringComparer.Ordinal);
@@ -122,6 +125,35 @@ public static partial class SmithyAspNetCoreServer
         }
 
         return group;
+    }
+
+    // Fails at startup rather than on the first call to an operation without a handler.
+    private static void RequireHandlers(
+        IServiceProvider services,
+        ServiceSchema service,
+        IReadOnlyList<IServerOperation> operations
+    )
+    {
+        if (services.GetService<IServiceProviderIsService>() is not { } registered)
+        {
+            return;
+        }
+
+        string[] missing =
+        [
+            .. operations
+                .Where(operation =>
+                    operation.HandlerTypes.Count > 0
+                    && !operation.HandlerTypes.Any(registered.IsService)
+                )
+                .Select(operation => operation.Schema.Id.Name),
+        ];
+        if (missing.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"{service.Id.Name} has no handler for {string.Join(", ", missing)}. Register its service handler, or each operation's handler."
+            );
+        }
     }
 
     private static async Task DispatchRouteAsync(

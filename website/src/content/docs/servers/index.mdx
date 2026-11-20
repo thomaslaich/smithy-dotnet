@@ -33,6 +33,14 @@ protocol package explicitly, using the same NSmithy version as the host.
 
 ## Implement an operation
 
+:::tip[Choosing a handler shape]
+Use a single service handler, shown here, when the operations share their
+dependencies and lifetime: the compiler then checks that every operation is
+implemented. Use [separate operation handlers](#separate-operation-handlers)
+when operations need different dependencies or lifetimes; `Map{Service}` then
+checks at startup that each one is registered.
+:::
+
 For a `Library` service with a `GetBook` operation, modeled as in
 [Modeling contracts](/smithy-dotnet/concepts/modeling/), implement the generated
 service interface:
@@ -173,8 +181,9 @@ each one, with or without the aggregate helper:
   </TabItem>
 </Tabs>
 
-Register a handler for every mapped operation. `GetBookHandler` implements
-`IGetBookHandler` with the same method shown above.
+`GetBookHandler` implements `IGetBookHandler` with the same method shown above.
+`Map{Service}` fails at startup if an operation has neither its own handler nor
+the service handler, and names the operations that are missing.
 
 ## Request validation
 

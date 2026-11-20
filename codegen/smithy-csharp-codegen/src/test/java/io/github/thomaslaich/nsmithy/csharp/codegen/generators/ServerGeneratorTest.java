@@ -307,7 +307,8 @@ final class ServerGeneratorTest {
         generated.contains(
             "ServerOperation.Create(global::Example.Example.Streaming.Schemas.ChatSchema.Schema,"
                 + " services => (services.GetService<IChatHandler>() ??"
-                + " services.GetRequiredService<IStreamingServiceHandler>()).ChatAsync),"),
+                + " services.GetRequiredService<IStreamingServiceHandler>()).ChatAsync,"
+                + " handlerTypes: [typeof(IChatHandler), typeof(IStreamingServiceHandler)]),"),
         generated);
     assertTrue(generated.contains("selected.Add(new(\"Grpc\", new GrpcProtocol()));"), generated);
     assertTrue(
@@ -442,14 +443,16 @@ final class ServerGeneratorTest {
                 + " services => async (input, ct) => { await (services.GetService<INotifyHandler>()"
                 + " ?? services.GetRequiredService<ICatalogServiceHandler>()).NotifyAsync(input,"
                 + " ct).ConfigureAwait(false); return SmithyUnit.Value; },"
-                + " NotifyJsonSchemas.Value),"),
+                + " NotifyJsonSchemas.Value, handlerTypes: [typeof(INotifyHandler),"
+                + " typeof(ICatalogServiceHandler)]),"),
         generated);
     assertTrue(
         generated.contains(
             "ServerOperation.Create(global::Example.Example.Catalog.Schemas.PingSchema.Schema,"
                 + " services => (_, ct) => (services.GetService<IPingHandler>() ??"
                 + " services.GetRequiredService<ICatalogServiceHandler>()).PingAsync(ct),"
-                + " PingJsonSchemas.Value)"),
+                + " PingJsonSchemas.Value, handlerTypes: [typeof(IPingHandler),"
+                + " typeof(ICatalogServiceHandler)])"),
         generated);
   }
 
@@ -489,20 +492,20 @@ final class ServerGeneratorTest {
         generated.contains(
             "DeleteJsonSchemas.Value, authSchemes:"
                 + " [ShapeId.Parse(\"smithy.api#httpApiKeyAuth\"),"
-                + " ShapeId.Parse(\"smithy.api#httpBearerAuth\")]),"),
+                + " ShapeId.Parse(\"smithy.api#httpBearerAuth\")], handlerTypes:"),
         generated);
-    assertTrue(generated.contains("HealthJsonSchemas.Value),"), generated);
+    assertTrue(generated.contains("HealthJsonSchemas.Value, handlerTypes:"), generated);
     assertTrue(
         generated.contains(
             "LookupJsonSchemas.Value, authSchemes:"
-                + " [ShapeId.Parse(\"smithy.api#httpApiKeyAuth\")]),"),
+                + " [ShapeId.Parse(\"smithy.api#httpApiKeyAuth\")], handlerTypes:"),
         generated);
     assertTrue(
         generated.contains(
             "StatusJsonSchemas.Value, authSchemes:"
                 + " [ShapeId.Parse(\"smithy.api#httpApiKeyAuth\"),"
                 + " ShapeId.Parse(\"smithy.api#httpBearerAuth\"),"
-                + " ShapeId.Parse(\"smithy.api#noAuth\")])"),
+                + " ShapeId.Parse(\"smithy.api#noAuth\")], handlerTypes:"),
         generated);
   }
 

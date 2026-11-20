@@ -31,6 +31,12 @@ public interface IServerOperation
     /// <summary>Whether every call must authenticate with one of <see cref="AuthSchemes"/>.</summary>
     bool RequiresAuthentication { get; }
 
+    /// <summary>
+    /// The services, any one of which serves the operation, so mapping can fail when none is
+    /// registered. Empty when the operation does not say.
+    /// </summary>
+    IReadOnlyList<Type> HandlerTypes => [];
+
     /// <summary>Binds the operation to <paramref name="protocol"/>, once per mapped protocol.</summary>
     IServerOperationBinding Bind(IServiceProtocol protocol);
 
@@ -77,13 +83,15 @@ public static class ServerOperation
     /// An operation whose handler <paramref name="resolveHandler"/> resolves from each request's
     /// services, so handler lifetimes are the application's. Without
     /// <paramref name="authSchemes"/>, the operation needs no authentication.
+    /// <paramref name="handlerTypes"/> are the services, any one of which serves it.
     /// </summary>
     public static ServerOperation<TInput, TOutput> Create<TInput, TOutput>(
         OperationSchema<TInput, TOutput> schema,
         Func<IServiceProvider, Func<TInput, CancellationToken, Task<TOutput>>> resolveHandler,
         OperationJsonSchemas? jsonSchemas = null,
-        IReadOnlyList<ShapeId>? authSchemes = null
-    ) => new(schema, resolveHandler, jsonSchemas, authSchemes);
+        IReadOnlyList<ShapeId>? authSchemes = null,
+        IReadOnlyList<Type>? handlerTypes = null
+    ) => new(schema, resolveHandler, jsonSchemas, authSchemes, handlerTypes);
 }
 
 /// <summary>
@@ -94,7 +102,8 @@ public sealed class ServerOperation<TInput, TOutput>(
     OperationSchema<TInput, TOutput> schema,
     Func<IServiceProvider, Func<TInput, CancellationToken, Task<TOutput>>> resolveHandler,
     OperationJsonSchemas? jsonSchemas = null,
-    IReadOnlyList<ShapeId>? authSchemes = null
+    IReadOnlyList<ShapeId>? authSchemes = null,
+    IReadOnlyList<Type>? handlerTypes = null
 ) : IServerOperation
 {
     private readonly Func<
@@ -112,6 +121,8 @@ public sealed class ServerOperation<TInput, TOutput>(
     public IReadOnlyList<ShapeId> AuthSchemes { get; } = CopyAuthSchemes(authSchemes);
 
     public bool RequiresAuthentication => !AuthSchemes.Contains(ServerOperation.NoAuth);
+
+    public IReadOnlyList<Type> HandlerTypes { get; } = [.. handlerTypes ?? []];
 
     // For invocation with decoded input; HTTP dispatch validates through its protocol instead.
     private readonly ISmithyValidator<TInput>? inputValidator = SmithyValidator.FromSchema(

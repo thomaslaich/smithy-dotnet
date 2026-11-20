@@ -248,3 +248,16 @@ let ``A scoped handler is shared within a request only`` () =
 
     Assert.Same(handler, first.ServiceProvider.GetRequiredService<IKitchenServiceHandler>())
     Assert.NotSame(handler, second.ServiceProvider.GetRequiredService<IKitchenServiceHandler>())
+
+[<Fact>]
+let ``Mapping fails when an operation has no handler`` () =
+    let builder = WebApplication.CreateBuilder()
+    builder.Services.AddKitchenService() |> ignore
+    builder.Services.AddSingleton<IOrderHandler, Kitchen>() |> ignore
+    use app = builder.Build()
+
+    let error =
+        Assert.Throws<InvalidOperationException>(fun () ->
+            app.MapKitchenService(KitchenServiceProtocols.RestJson1) |> ignore)
+
+    Assert.Contains("CloseTable, Ping", error.Message)
