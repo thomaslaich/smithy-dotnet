@@ -148,7 +148,7 @@ let run () =
         | Error(GetCityError.NoSuchResource error) -> printfn "No such %s" error.ResourceType
     }
 
-run().Wait()
+(run ()).GetAwaiter().GetResult()
 ```
 
 Errors the service declares for every operation are one union for the whole
