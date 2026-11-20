@@ -161,7 +161,7 @@ let private paidHandler () =
         member _.OrderAsync(_, _) =
             Task.FromResult(Ok { Receipt = Receipt.Paid { Amount = 1M; Currency = "CHF" } })
 
-        member _.PingAsync(_, _) = Task.FromResult(PingOutput())
+        member _.PingAsync(_, _) = Task.FromResult(Ok(PingOutput()))
         member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput())) }
 
 /// Serves the kitchen over RestJson1 with the handler `register` adds, and orders twice.
