@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NSmithy.Core;
 using NSmithy.Server;
 using NSmithy.Server.AspNetCore;
 
@@ -72,5 +73,126 @@ public class FakeHandlerTests
         customized.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
         using var customProvider = customized.BuildServiceProvider();
         Assert.Same(custom, customProvider.GetRequiredService<SmithyServerRuntime>());
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Singleton)]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public void HandlerRegistrationUsesTheGivenLifetime(ServiceLifetime lifetime)
+    {
+        var services = new ServiceCollection();
+        services.AddWeatherServiceHandler<FakeWeatherServiceHandler>(lifetime);
+
+        var handler = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IWeatherServiceHandler)
+        );
+        Assert.Equal(lifetime, handler.Lifetime);
+        Assert.DoesNotContain(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IGetCityHandler)
+        );
+    }
+
+    [Fact]
+    public void HandlerRegistrationDefaultsToASingleton()
+    {
+        var services = new ServiceCollection();
+        services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
+
+        Assert.Equal(
+            ServiceLifetime.Singleton,
+            services
+                .Single(descriptor => descriptor.ServiceType == typeof(IWeatherServiceHandler))
+                .Lifetime
+        );
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Singleton)]
+    [InlineData(ServiceLifetime.Scoped)]
+    public async Task AHandlerServingSeveralOperationsIsCreatedAndDisposedOnce(
+        ServiceLifetime lifetime
+    )
+    {
+        var counter = new Counter();
+        var services = new ServiceCollection();
+        services.AddSingleton(counter);
+        services.AddWeatherServiceHandler<DisposableWeatherHandler>(lifetime);
+        var operations = new WeatherServiceDefinition().Operations;
+
+        await using (var provider = services.BuildServiceProvider(validateScopes: true))
+        {
+            await using (var scope = provider.CreateAsyncScope())
+            {
+                await operations
+                    .GetOperation(new ShapeId("example.weather", "GetCity"))
+                    .InvokeAsync(
+                        SmithyServerRuntime.Default,
+                        new GetCityInput("SEA"),
+                        scope.ServiceProvider
+                    );
+                await operations
+                    .GetOperation(new ShapeId("example.weather", "ListCities"))
+                    .InvokeAsync(
+                        SmithyServerRuntime.Default,
+                        new ListCitiesInput(),
+                        scope.ServiceProvider
+                    );
+            }
+
+            Assert.Equal(1, counter.Created);
+            Assert.Equal(lifetime == ServiceLifetime.Scoped ? 1 : 0, counter.Disposed);
+        }
+
+        Assert.Equal(1, counter.Disposed);
+    }
+
+    [Fact]
+    public async Task AnOperationsOwnHandlerTakesPrecedence()
+    {
+        var services = new ServiceCollection();
+        services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
+        services.AddSingleton<IGetCityHandler, AnywhereIsSeattle>();
+        await using var provider = services.BuildServiceProvider();
+
+        var output = await new WeatherServiceDefinition()
+            .Operations.GetOperation(new ShapeId("example.weather", "GetCity"))
+            .InvokeAsync(SmithyServerRuntime.Default, new GetCityInput("HOU"), provider);
+
+        Assert.Equal("Seattle", Assert.IsType<GetCityOutput>(output).Name);
+    }
+
+    private sealed class Counter
+    {
+        public int Created { get; set; }
+
+        public int Disposed { get; set; }
+    }
+
+    private sealed class DisposableWeatherHandler : FakeWeatherServiceHandler, IDisposable
+    {
+        private readonly Counter counter;
+
+        public DisposableWeatherHandler(Counter counter)
+        {
+            this.counter = counter;
+            counter.Created++;
+        }
+
+        public void Dispose() => counter.Disposed++;
+    }
+
+    private sealed class AnywhereIsSeattle : IGetCityHandler
+    {
+        public Task<GetCityOutput> GetCityAsync(
+            GetCityInput input,
+            CancellationToken cancellationToken = default
+        ) =>
+            new FakeWeatherServiceHandler().GetCityAsync(
+                new GetCityInput("SEA"),
+                cancellationToken
+            );
     }
 }

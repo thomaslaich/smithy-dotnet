@@ -89,7 +89,7 @@ final class ServerGenerator {
       writeProtocols(writer, contract, protocols);
     }
     writeDefinition(writer, contract, operations);
-    writeExtensions(writer, contract, operations, protocols);
+    writeExtensions(writer, contract, protocols);
   }
 
   private void writeServiceHandler(
@@ -137,7 +137,7 @@ final class ServerGenerator {
     String serviceSchema = FSharpSymbolProvider.render(symbols.schemaSymbol(service)) + ".Schema";
     List<String> catalog = new ArrayList<>();
     catalog.add(serviceSchema);
-    operations.forEach(operation -> catalog.add(serverOperation(operation)));
+    operations.forEach(operation -> catalog.add(serverOperation(operation, contract)));
     writer.writeTemplate(
         """
         /// <summary>The service's operation table, shared by every host adapter.</summary>
@@ -185,10 +185,10 @@ final class ServerGenerator {
 
   /**
    * An operation table entry: the operation's schema, a function that resolves its handler from a
-   * request's services, for an operation that streams nothing, its JSON Schemas, and its auth
-   * schemes.
+   * request's services (the operation's own handler if one is registered, else the service's), for
+   * an operation that streams nothing, its JSON Schemas, and its auth schemes.
    */
-  private String serverOperation(OperationShape operation) {
+  private String serverOperation(OperationShape operation, String contract) {
     boolean hasInput = !ShapeSupport.isUnit(operation.getInputShape());
     String input = schemas.operationType(operation.getInputShape());
     String output = schemas.operationType(operation.getOutputShape());
@@ -203,7 +203,10 @@ final class ServerGenerator {
         global.NSmithy.Server.ServerOperation.Create<${input:L}, ${output:L}>(
             ${schema:L},
             global.System.Func<global.System.IServiceProvider, ${delegate:L}>(fun services ->
-                let handler = global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<${handler:L}>(services)
+                let handler =
+                    match global.Microsoft.FSharp.Core.Operators.box (global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<${handler:L}>(services)) with
+                    | :? ${handler:L} as handler -> handler
+                    | _ -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<I${contract:L}Handler>(services) :> ${handler:L}
                 ${delegate:L}(fun ${inputName:L} cancellationToken -> ${body:L}))${?jsonSchemas},
             jsonSchemas = ${jsonSchemas:L}${/jsonSchemas}${?authSchemes},
             authSchemes = ${authSchemes:L}${/authSchemes}) :> global.NSmithy.Server.IServerOperation\
@@ -227,6 +230,8 @@ final class ServerGenerator {
                 + ">>",
             "handler",
             handlerName(operation),
+            "contract",
+            contract,
             "inputName",
             hasInput ? "input" : "_",
             "body",
@@ -328,13 +333,7 @@ final class ServerGenerator {
         .collect(Collectors.joining("; ", "[| ", " |]"));
   }
 
-  private void writeExtensions(
-      FSharpWriter writer,
-      String contract,
-      List<OperationShape> operations,
-      List<ProtocolInfo> protocols) {
-    List<String> handlers = new ArrayList<>(List.of("I" + contract + "Handler"));
-    operations.forEach(operation -> handlers.add(handlerName(operation)));
+  private void writeExtensions(FSharpWriter writer, String contract, List<ProtocolInfo> protocols) {
     Map<String, String> runtimeTypes = new LinkedHashMap<>();
     protocols.forEach(protocol -> runtimeTypes.put(protocol.name(), protocol.runtimeTypeName()));
     writer.writeTemplate(
@@ -350,21 +349,23 @@ final class ServerGenerator {
                 global.Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<global.NSmithy.Server.IServiceDefinition, ${contract:L}Definition>())
                 services
 
-            /// <summary>Registers <c>'THandler</c> as the handler of every operation, and the service.</summary>
+            /// <summary>Registers <c>'THandler</c>, as a singleton, as the handler of every operation, and the service.</summary>
             [<global.System.Runtime.CompilerServices.Extension>]
             static member Add${contract:L}Handler<'THandler when 'THandler : not struct and 'THandler : not null and 'THandler :> I${contract:L}Handler>(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+                ${contract:L}ServerExtensions.Add${contract:L}Handler<'THandler>(services, global.Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton)
+
+            /// <summary>Registers <c>'THandler</c>, once per <c>lifetime</c>, as the handler of every operation without a handler of its own, and the service.</summary>
+            [<global.System.Runtime.CompilerServices.Extension>]
+            static member Add${contract:L}Handler<'THandler when 'THandler : not struct and 'THandler : not null and 'THandler :> I${contract:L}Handler>(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
                 global.System.ArgumentNullException.ThrowIfNull(services)
                 ${?protocols}
                 global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
                 ${/protocols}
                 ${contract:L}ServerExtensions.Add${contract:L}(services) |> ignore
-                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<'THandler>(services) |> ignore
-                ${#handlers}
-                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<${value:L}>(services, global.System.Func<global.System.IServiceProvider, ${value:L}>(fun provider -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<'THandler>(provider) :> ${value:L})) |> ignore
-                ${/handlers}
+                services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<I${contract:L}Handler>, global.Microsoft.FSharp.Core.Operators.typeof<'THandler>, lifetime))
                 services
 
-            /// <summary>Registers <c>handler</c>, such as an object expression, as the handler of every operation, and the service.</summary>
+            /// <summary>Registers <c>handler</c>, such as an object expression, as the handler of every operation without a handler of its own, and the service.</summary>
             [<global.System.Runtime.CompilerServices.Extension>]
             static member Add${contract:L}Handler(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, handler: I${contract:L}Handler) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
                 global.System.ArgumentNullException.ThrowIfNull(services)
@@ -374,12 +375,9 @@ final class ServerGenerator {
                 ${/protocols}
                 ${contract:L}ServerExtensions.Add${contract:L}(services) |> ignore
                 global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<I${contract:L}Handler>(services, handler) |> ignore
-                ${#operationHandlers}
-                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<${value:L}>(services, handler :> ${value:L}) |> ignore
-                ${/operationHandlers}
                 services
 
-            /// <summary>Registers the handler <c>factory</c> creates from the container, once per <c>lifetime</c> (by default a singleton), as the handler of every operation, and the service.</summary>
+            /// <summary>Registers the handler <c>factory</c> creates from the container, once per <c>lifetime</c> (by default a singleton), as the handler of every operation without a handler of its own, and the service.</summary>
             [<global.System.Runtime.CompilerServices.Extension>]
             static member Add${contract:L}Handler(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, factory: global.System.IServiceProvider -> I${contract:L}Handler, ?lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
                 global.System.ArgumentNullException.ThrowIfNull(services)
@@ -389,9 +387,6 @@ final class ServerGenerator {
                 ${/protocols}
                 ${contract:L}ServerExtensions.Add${contract:L}(services) |> ignore
                 services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<I${contract:L}Handler>, global.System.Func<global.System.IServiceProvider, obj>(fun provider -> factory provider :> obj), lifetime))
-                ${#operationHandlers}
-                services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<${value:L}>, global.System.Func<global.System.IServiceProvider, obj>(fun provider -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<I${contract:L}Handler>(provider) :> obj), lifetime))
-                ${/operationHandlers}
                 services
             ${?protocols}
 
@@ -412,8 +407,6 @@ final class ServerGenerator {
         """,
         Map.of(
             "contract", contract,
-            "handlers", handlers,
-            "operationHandlers", handlers.subList(1, handlers.size()),
             "protocols", runtimeTypes,
             "defaultProtocol", protocols.isEmpty() ? "" : protocols.get(0).name()));
   }
