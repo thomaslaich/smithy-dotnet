@@ -343,7 +343,10 @@ service, so a caller handles them once. A client operation returns
 when the operation declares none, or `{Service}CallError<{Operation}Error>`,
 with an `Operation` and a `Service` case, when both declare errors. The client
 catches the error exceptions the runtime raises and returns them as those
-cases; every other failure stays an exception, including a modeled error the
+cases. It maps an exception to the operation's case through the union's
+`FromException`, so a client of an operation another project owns uses that
+project's cases even when its own model declares others. Every other failure
+stays an exception, including a modeled error the
 operation does not declare. The client binds each operation to the service's default
 protocol when it is constructed and calls `SmithyClientRuntime`, so transport,
 retries, auth, and serialization are the C# client's. It fills in a missing

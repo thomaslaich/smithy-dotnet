@@ -1,26 +1,25 @@
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
+import java.util.Optional;
 import software.amazon.smithy.codegen.core.CodegenException;
-import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.Shape;
+import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
-/** The types a service's client and server declare, which no model type may share a name with. */
+/** The types generated code declares, which no type generated for a model shape may share. */
 @SmithyInternalApi
 final class GeneratedNames {
 
   private GeneratedNames() {}
 
-  /** Fails when a model type of the service's namespace would have one of {@code names}. */
-  static void check(Model model, ServiceShape service, String... names) {
-    String namespace = service.getId().getNamespace();
+  /**
+   * Fails when a model shape's F# type would have one of {@code names} in the service's namespace.
+   */
+  static void check(FSharpContext context, ServiceShape service, String... names) {
+    String namespace = context.settings().fsharpNamespace(service.getId().getNamespace());
     for (String name : names) {
-      model
-          .shapes()
-          .filter(shape -> !shape.isMemberShape())
-          .filter(shape -> shape.getId().getNamespace().equals(namespace))
-          .filter(shape -> FSharpNaming.typeName(shape.getId().getName()).equals(name))
-          .findFirst()
+      declaring(context, namespace, name)
           .ifPresent(shape -> {
             throw new CodegenException(
                 "Shape "
@@ -33,5 +32,27 @@ final class GeneratedNames {
                     + " transform.");
           });
     }
+  }
+
+  /**
+   * The model shape whose generated F# type is {@code namespace.name}, if any. Only structures,
+   * unions, and enums declare types; other shapes use F# or runtime types.
+   */
+  static Optional<Shape> declaring(FSharpContext context, String namespace, String name) {
+    String fullName = namespace + "." + name;
+    return context
+        .model()
+        .shapes()
+        .filter(GeneratedNames::declaresType)
+        .filter(shape -> context.symbolProvider().toSymbol(shape).getFullName().equals(fullName))
+        .findFirst();
+  }
+
+  private static boolean declaresType(Shape shape) {
+    ShapeType type = shape.getType();
+    return type == ShapeType.STRUCTURE
+        || type == ShapeType.UNION
+        || type == ShapeType.ENUM
+        || type == ShapeType.INT_ENUM;
   }
 }

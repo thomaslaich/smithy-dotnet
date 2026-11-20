@@ -160,10 +160,15 @@ class ClientGeneratorTest {
         operations.contains("| OrderError.SoldOut error -> error :> global.System.Exception"),
         operations);
     assertTrue(
+        operations.contains(
+            "| :? global.Example.Cafe.SoldOut as error ->"
+                + " global.Microsoft.FSharp.Core.Option.Some(OrderError.SoldOut error)"),
+        operations);
+    assertTrue(
         client.contains(
-            "| :? global.Example.Cafe.SoldOut as error -> return"
-                + " global.Microsoft.FSharp.Core.Result.Error(global.Example.Cafe.OrderError.SoldOut"
-                + " error)"),
+            "| error when (global.Example.Cafe.OrderError.FromException error).IsSome -> return"
+                + " global.Microsoft.FSharp.Core.Result.Error((global.Example.Cafe.OrderError"
+                + ".FromException error).Value)"),
         client);
     assertFalse(client.contains("type OrderError"), client);
     assertFalse(operations.contains("type PingError"), operations);
@@ -197,7 +202,8 @@ class ClientGeneratorTest {
         client);
     assertTrue(
         client.contains(
-            "Result.Error(CafeCallError.Operation(global.Example.Cafe.OrderError.SoldOut error))"),
+            "Result.Error(CafeCallError.Operation((global.Example.Cafe.OrderError.FromException"
+                + " error).Value))"),
         client);
     assertTrue(
         client.contains(
@@ -240,9 +246,6 @@ class ClientGeneratorTest {
                 "type OrderError =\n    | Busy of global.Example.Cafe.Busy\n"
                     + "    | SoldOut of global.Example.Cafe.SoldOut\n"),
         client);
-    assertTrue(
-        client.contains("Result.Error(CafeCallError.Operation(global.Example.Cafe.OrderError.Busy"),
-        client);
     assertFalse(client.contains("CafeCallError.Service(CafeError.Busy"), client);
   }
 
@@ -255,11 +258,31 @@ class ClientGeneratorTest {
   }
 
   @Test
+  void aShapeWithoutATypeOfItsOwnMayShareAnErrorTypesName() {
+    String model = SERVICE_ERRORS + "\nstring OrderError\nlist CafeError { member: String }\n";
+
+    MockManifest manifest = generate(model, true);
+
+    assertTrue(manifest.expectFileString(OPERATIONS).contains("type OrderError ="));
+    assertTrue(manifest.expectFileString(CLIENT).contains("type CafeError ="));
+  }
+
+  @Test
   void aShapeNamedLikeTheServiceErrorTypeFails() {
     String model = SERVICE_ERRORS + "\nstructure CafeError {}\n";
 
     CodegenException error = assertThrows(CodegenException.class, () -> generate(model, true));
     assertTrue(error.getMessage().contains("example.cafe#CafeError"), error.getMessage());
+  }
+
+  @Test
+  void anErrorNamedFromExceptionFails() {
+    String model =
+        MODEL.replace("errors: [SoldOut]", "errors: [SoldOut, FromException]")
+            + "\n@error(\"client\")\nstructure FromException {}\n";
+
+    CodegenException error = assertThrows(CodegenException.class, () -> generate(model, true));
+    assertTrue(error.getMessage().contains("example.cafe#FromException"), error.getMessage());
   }
 
   @Test

@@ -111,13 +111,13 @@ class ValidationExceptionTest {
                 + VALIDATION_EXCEPTION),
         operations);
     assertTrue(
-        client.contains(
+        operations.contains(
             "| :? "
                 + VALIDATION_EXCEPTION
-                + " as error -> return"
-                + " global.Microsoft.FSharp.Core.Result.Error(global.Example.Cafe.OrderError"
+                + " as error -> global.Microsoft.FSharp.Core.Option.Some(OrderError"
                 + ".ValidationException error)"),
-        client);
+        operations);
+    assertTrue(client.contains("(global.Example.Cafe.OrderError.FromException error)"), client);
   }
 
   @Test

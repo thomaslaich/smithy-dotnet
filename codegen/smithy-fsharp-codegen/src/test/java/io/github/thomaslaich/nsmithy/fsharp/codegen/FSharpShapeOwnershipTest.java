@@ -25,6 +25,7 @@ class FSharpShapeOwnershipTest {
   private static final Path TYPES = Path.of("Types.g.fs");
   private static final Path OPERATIONS = Path.of("Operations.g.fs");
   private static final Path SERVER = Path.of("Server.g.fs");
+  private static final Path CLIENT = Path.of("Client.g.fs");
 
   private static final String PROTOCOLS =
       """
@@ -32,6 +33,7 @@ class FSharpShapeOwnershipTest {
       namespace aws.protocols
 
       @trait(selector: "service")
+      @protocolDefinition
       structure restJson1 {}
       """;
 
@@ -46,7 +48,12 @@ class FSharpShapeOwnershipTest {
       operation PlaceOrder {
           input := { total: Money }
           output := { orderId: String }
+          errors: [SoldOut]
       }
+
+      @error("client")
+      @httpError(409)
+      structure SoldOut {}
       """;
 
   /** The common model: Money is targeted by the module, Unused by nobody. */
@@ -142,6 +149,29 @@ class FSharpShapeOwnershipTest {
     ObjectNode shapes = manifestNode(manifest).expectObjectMember("shapes");
     assertFalse(shapes.containsMember("acme.shop#PlaceOrder"));
     assertTrue(shapes.containsMember("acme.shop#Shop"));
+  }
+
+  @Test
+  void aClientMapsErrorsThroughTheUnionItsReferenceGenerated() throws IOException {
+    Path orders = writeManifest("orders.json", generate(owned("orders.smithy")));
+
+    MockManifest manifest =
+        generate(
+            owned("api.smithy")
+                .withMember("service", "acme.shop#Shop")
+                .withMember("generateServer", false)
+                .withMember("providedShapes", ArrayNode.fromStrings(List.of(orders.toString()))));
+
+    // The union's cases are the owner's, which this project's model may not match (for example
+    // with attachValidationException), so the client names none of them.
+    String client = manifest.expectFileString(CLIENT);
+    assertTrue(
+        client.contains("(global.Acme.Shop.PlaceOrderError.FromException error).IsSome"), client);
+    assertFalse(client.contains("PlaceOrderError.SoldOut"), client);
+    ObjectNode shapes = manifestNode(generate(owned("orders.smithy"))).expectObjectMember("shapes");
+    assertEquals(
+        "Acme.Shop.PlaceOrderError",
+        shapes.expectObjectMember("acme.shop#PlaceOrder").expectStringMember("errors").getValue());
   }
 
   @Test

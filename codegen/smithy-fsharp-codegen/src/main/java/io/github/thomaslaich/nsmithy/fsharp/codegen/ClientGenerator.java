@@ -92,7 +92,7 @@ final class ClientGenerator {
     if (callErrors) {
       generatedNames.add(callErrorTypeName());
     }
-    GeneratedNames.check(model, service, generatedNames.toArray(String[]::new));
+    GeneratedNames.check(context, service, generatedNames.toArray(String[]::new));
 
     FSharpWriter writer = context.files().client(service);
     writeServiceErrorType(writer);
@@ -596,26 +596,36 @@ final class ClientGenerator {
   }
 
   /**
-   * The match clauses that turn a caught error into the operation's Error case: the operation's own
-   * errors as cases of its union, then the service's as cases of the service's union, each inside a
-   * {Service}CallError when the operation has both. An error declared on both is the operation's.
+   * The match clauses that turn a caught error into the operation's Error case: the cases of the
+   * operation's union, which it maps itself, so a client of an operation another project generated
+   * uses that project's cases; then the service's errors as cases of the service's union. Each is
+   * inside a {Service}CallError when the operation has both. An error declared on both is the
+   * operation's.
    */
   private List<String> errorClauses(OperationShape operation) {
     List<String> clauses = new ArrayList<>();
     boolean both = returnsCallError(operation);
-    List<StructureShape> own = List.of();
     Optional<Symbol> errors = symbols.errorsSymbol(operation);
     if (errors.isPresent()) {
-      own = OperationHandlerGenerator.errorShapes(model, operation);
-      String type = FSharpSymbolProvider.render(errors.get());
-      for (StructureShape error : own) {
-        String value = type + "." + OperationHandlerGenerator.caseName(error) + " error";
-        clauses.add(
-            errorClause(error, both ? callErrorTypeName() + ".Operation(" + value + ")" : value));
-      }
+      String from =
+          "("
+              + FSharpSymbolProvider.render(errors.get())
+              + "."
+              + OperationHandlerGenerator.fromExceptionMethod()
+              + " error)";
+      String value = from + ".Value";
+      clauses.add(
+          "| error when "
+              + from
+              + ".IsSome -> return "
+              + RESULT
+              + ".Error("
+              + (both ? callErrorTypeName() + ".Operation(" + value + ")" : value)
+              + ")");
     }
+    List<ShapeId> own = operation.getErrors();
     for (StructureShape error : serviceErrors()) {
-      if (!own.contains(error)) {
+      if (!own.contains(error.getId())) {
         String value = serviceErrorTypeName() + "." + errorCaseName(error) + " error";
         clauses.add(
             errorClause(

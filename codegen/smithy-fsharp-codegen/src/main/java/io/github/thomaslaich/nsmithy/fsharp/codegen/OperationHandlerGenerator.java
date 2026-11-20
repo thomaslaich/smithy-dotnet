@@ -28,6 +28,8 @@ final class OperationHandlerGenerator {
   private static final String CANCELLATION_TOKEN = "global.System.Threading.CancellationToken";
   private static final String RESULT = "global.Microsoft.FSharp.Core.Result";
   private static final String TO_EXCEPTION = "ToException";
+  private static final String FROM_EXCEPTION = "FromException";
+  private static final String OPTION = "global.Microsoft.FSharp.Core.Option";
 
   private final FSharpContext context;
   private final SchemaGenerator schemas;
@@ -44,14 +46,15 @@ final class OperationHandlerGenerator {
       return;
     }
     String type = symbol.get().getName();
-    checkName(context.model(), operation, type);
+    checkName(operation, symbol.get());
     List<String> cases = new ArrayList<>();
     List<String> clauses = new ArrayList<>();
+    List<String> fromClauses = new ArrayList<>();
     Map<String, StructureShape> byCase = new HashMap<>();
     for (StructureShape error : errorShapes(context.model(), operation)) {
       String name = caseName(error);
       StructureShape clash = byCase.put(name, error);
-      if (clash != null || name.equals(TO_EXCEPTION)) {
+      if (clash != null || name.equals(TO_EXCEPTION) || name.equals(FROM_EXCEPTION)) {
         throw new CodegenException(
             "Error "
                 + error.getId()
@@ -63,11 +66,21 @@ final class OperationHandlerGenerator {
                 + type
                 + (clash != null
                     ? ", like " + clash.getId()
-                    : ", which clashes with its " + TO_EXCEPTION + " method")
+                    : ", which clashes with its " + name + " method")
                 + ". Rename the error, for example with the renameShapes build transform.");
       }
       cases.add("| " + name + " of " + context.symbolProvider().typeOf(error));
       clauses.add("| " + type + "." + name + " error -> error :> global.System.Exception");
+      fromClauses.add(
+          "| :? "
+              + context.symbolProvider().typeOf(error)
+              + " as error -> "
+              + OPTION
+              + ".Some("
+              + type
+              + "."
+              + name
+              + " error)");
     }
     context
         .files()
@@ -87,6 +100,14 @@ final class OperationHandlerGenerator {
                     ${#clauses}
                     ${value:L}
                     ${/clauses}
+
+                /// <summary>The case that holds <c>error</c>, or None when the operation does not declare it.</summary>
+                static member ${fromException:L}(error: global.System.Exception) : ${type:L} option =
+                    match error with
+                    ${#fromClauses}
+                    ${value:L}
+                    ${/fromClauses}
+                    | _ -> ${option:L}.None
             """,
             Map.of(
                 "operation",
@@ -97,6 +118,12 @@ final class OperationHandlerGenerator {
                 cases,
                 "clauses",
                 clauses,
+                "fromClauses",
+                fromClauses,
+                "fromException",
+                FROM_EXCEPTION,
+                "option",
+                OPTION,
                 "toException",
                 TO_EXCEPTION));
   }
@@ -159,6 +186,11 @@ final class OperationHandlerGenerator {
     return FSharpNaming.typeName(operation.getId().getName()) + "Async";
   }
 
+  /** The method of an error union that returns the case holding an exception, if any. */
+  static String fromExceptionMethod() {
+    return FROM_EXCEPTION;
+  }
+
   /** The method of an error union that returns the error as its exception. */
   static String toExceptionMethod() {
     return TO_EXCEPTION;
@@ -177,21 +209,15 @@ final class OperationHandlerGenerator {
         .toList();
   }
 
-  /** Fails when a model type of the operation's namespace would have the union's name. */
-  private static void checkName(Model model, OperationShape operation, String name) {
-    String namespace = operation.getId().getNamespace();
-    model
-        .shapes()
-        .filter(shape -> !shape.isMemberShape())
-        .filter(shape -> shape.getId().getNamespace().equals(namespace))
-        .filter(shape -> FSharpNaming.typeName(shape.getId().getName()).equals(name))
-        .findFirst()
+  /** Fails when a model shape's F# type would have the union's name. */
+  private void checkName(OperationShape operation, Symbol union) {
+    GeneratedNames.declaring(context, union.getNamespace(), union.getName())
         .ifPresent(shape -> {
           throw new CodegenException(
               "Shape "
                   + shape.getId()
                   + " would generate an F# type named "
-                  + name
+                  + union.getName()
                   + ", which holds the errors of "
                   + operation.getId()
                   + ". Rename the shape, for example with the renameShapes build transform.");
