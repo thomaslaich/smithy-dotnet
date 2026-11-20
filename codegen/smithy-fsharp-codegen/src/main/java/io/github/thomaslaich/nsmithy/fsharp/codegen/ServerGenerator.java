@@ -350,17 +350,18 @@ final class ServerGenerator {
                 global.Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<global.NSmithy.Server.IServiceDefinition, ${contract:L}Definition>())
                 services
 
-            /// <summary>Registers <c>'THandler</c> as the handler of every operation, and the service.</summary>
+            /// <summary>Registers <c>'THandler</c>, once per <c>lifetime</c> (by default a singleton), as the handler of every operation, and the service.</summary>
             [<global.System.Runtime.CompilerServices.Extension>]
-            static member Add${contract:L}Handler<'THandler when 'THandler : not struct and 'THandler : not null and 'THandler :> I${contract:L}Handler>(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+            static member Add${contract:L}Handler<'THandler when 'THandler : not struct and 'THandler : not null and 'THandler :> I${contract:L}Handler>(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, ?lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
                 global.System.ArgumentNullException.ThrowIfNull(services)
+                let lifetime = global.Microsoft.FSharp.Core.Operators.defaultArg lifetime global.Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton
                 ${?protocols}
                 global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
                 ${/protocols}
                 ${contract:L}ServerExtensions.Add${contract:L}(services) |> ignore
-                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<'THandler>(services) |> ignore
+                services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<'THandler>, global.Microsoft.FSharp.Core.Operators.typeof<'THandler>, lifetime))
                 ${#handlers}
-                global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<${value:L}>(services, global.System.Func<global.System.IServiceProvider, ${value:L}>(fun provider -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<'THandler>(provider) :> ${value:L})) |> ignore
+                services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<${value:L}>, global.System.Func<global.System.IServiceProvider, obj>(fun provider -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<'THandler>(provider) :> obj), lifetime))
                 ${/handlers}
                 services
 

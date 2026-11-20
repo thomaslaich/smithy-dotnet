@@ -148,6 +148,8 @@ public final class RuntimeTypes {
       type("Microsoft.Extensions.DependencyInjection.IServiceCollection");
   public static final Symbol SERVICE_DESCRIPTOR =
       type("Microsoft.Extensions.DependencyInjection.ServiceDescriptor");
+  public static final Symbol SERVICE_LIFETIME =
+      type("Microsoft.Extensions.DependencyInjection.ServiceLifetime");
 
   // Namespace imports required for extension-method lookup.
   public static final String MS_EXT_DI = "Microsoft.Extensions.DependencyInjection";

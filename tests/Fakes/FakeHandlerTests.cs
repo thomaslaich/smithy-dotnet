@@ -73,4 +73,54 @@ public class FakeHandlerTests
         using var customProvider = customized.BuildServiceProvider();
         Assert.Same(custom, customProvider.GetRequiredService<SmithyServerRuntime>());
     }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Singleton)]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public void HandlerRegistrationUsesTheGivenLifetime(ServiceLifetime lifetime)
+    {
+        var services = new ServiceCollection();
+        services.AddWeatherServiceHandler<FakeWeatherServiceHandler>(lifetime);
+
+        Assert.All(
+            services.Where(descriptor =>
+                descriptor.ServiceType == typeof(FakeWeatherServiceHandler)
+                || descriptor.ServiceType == typeof(IWeatherServiceHandler)
+                || descriptor.ServiceType == typeof(IGetCityHandler)
+            ),
+            descriptor => Assert.Equal(lifetime, descriptor.Lifetime)
+        );
+    }
+
+    [Fact]
+    public void AScopedHandlerIsSharedWithinARequestOnly()
+    {
+        var services = new ServiceCollection();
+        services.AddWeatherServiceHandler<FakeWeatherServiceHandler>(ServiceLifetime.Scoped);
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var handler = first.ServiceProvider.GetRequiredService<IGetCityHandler>();
+
+        Assert.Same(handler, first.ServiceProvider.GetRequiredService<IListCitiesHandler>());
+        Assert.NotSame(handler, second.ServiceProvider.GetRequiredService<IGetCityHandler>());
+    }
+
+    [Fact]
+    public void HandlerRegistrationDefaultsToASingleton()
+    {
+        var services = new ServiceCollection();
+        services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
+        using var provider = services.BuildServiceProvider();
+
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+
+        Assert.Same(
+            first.ServiceProvider.GetRequiredService<IGetCityHandler>(),
+            second.ServiceProvider.GetRequiredService<IGetCityHandler>()
+        );
+    }
 }

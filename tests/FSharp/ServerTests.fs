@@ -212,3 +212,15 @@ let ``A scoped handler factory runs once per request`` () : Task =
 
         Assert.Equal(2, created.Value)
     }
+
+[<Fact>]
+let ``A scoped handler is shared within a request only`` () =
+    let services = ServiceCollection()
+    services.AddKitchenServiceHandler<Kitchen>(ServiceLifetime.Scoped) |> ignore
+    use provider = services.BuildServiceProvider(validateScopes = true)
+    use first = provider.CreateScope()
+    use second = provider.CreateScope()
+    let handler = first.ServiceProvider.GetRequiredService<IOrderHandler>()
+
+    Assert.Same(handler, first.ServiceProvider.GetRequiredService<IPingHandler>())
+    Assert.NotSame(handler, second.ServiceProvider.GetRequiredService<IOrderHandler>())

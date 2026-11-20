@@ -17,6 +17,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   handler, such as an object expression, and one that takes a factory over the container with an
   optional `ServiceLifetime`, by default a singleton. Either registers the handler as every
   operation's handler.
+- **Handler lifetime.** `Add{Service}Handler<THandler>` takes an optional `ServiceLifetime`, by
+  default a singleton as before, so a handler that depends on a scoped service such as a
+  `DbContext` registers with `ServiceLifetime.Scoped`. In C# and F#.
 
 ### Changed
 

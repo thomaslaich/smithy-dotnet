@@ -89,6 +89,10 @@ class ServerGeneratorTest {
             "factory: global.System.IServiceProvider -> ICafeServiceHandler, ?lifetime:"
                 + " global.Microsoft.Extensions.DependencyInjection.ServiceLifetime)"),
         server);
+    assertTrue(
+        server.contains(
+            "?lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime"),
+        server);
     assertTrue(server.contains("static member MapCafeService("), server);
   }
 

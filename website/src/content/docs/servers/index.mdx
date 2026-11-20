@@ -109,6 +109,23 @@ and default server runtime. `Map{Service}` maps the first declared supported
 server protocol. To select several, see
 [Hosting multiple protocols](/smithy-dotnet/servers/hosting/).
 
+The handler is a singleton by default. Each request resolves it from its own
+scope, so a handler that depends on a scoped service, such as an EF Core
+`DbContext`, registers with `ServiceLifetime.Scoped`:
+
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    builder.Services.AddLibraryServiceHandler<LibraryHandler>(ServiceLifetime.Scoped);
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    builder.Services.AddLibraryServiceHandler<LibraryHandler>(ServiceLifetime.Scoped) |> ignore
+    ```
+  </TabItem>
+</Tabs>
+
 ## Separate operation handlers
 
 The service interface inherits one interface per operation:

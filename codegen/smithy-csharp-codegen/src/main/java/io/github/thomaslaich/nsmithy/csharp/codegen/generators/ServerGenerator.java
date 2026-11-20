@@ -234,6 +234,7 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("serviceCollection", RuntimeTypes.I_SERVICE_COLLECTION);
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext("serviceDescriptor", RuntimeTypes.SERVICE_DESCRIPTOR);
+      writer.putContext("serviceLifetime", RuntimeTypes.SERVICE_LIFETIME);
       writer.putContext("serviceDefinition", RuntimeTypes.I_SERVICE_DEFINITION);
       writer.putContext(
           "registrations",
@@ -244,14 +245,15 @@ public final class ServerGenerator implements Runnable {
             w.write(
                 """
                 services.Add${contract:L}();
-                services.AddSingleton<THandler>();
-                services.AddSingleton<${handler:L}>(serviceProvider =>
-                    serviceProvider.GetRequiredService<THandler>());\
+                services.Add(new ${serviceDescriptor:T}(typeof(THandler), typeof(THandler), lifetime));
+                services.Add(new ${serviceDescriptor:T}(typeof(${handler:L}), serviceProvider =>
+                    serviceProvider.GetRequiredService<THandler>(), lifetime));\
                 """);
             for (OperationShape op : ops) {
               w.write(
-                  "services.AddSingleton<$L>(serviceProvider =>"
-                      + " serviceProvider.GetRequiredService<THandler>());",
+                  "services.Add(new $T(typeof($L), serviceProvider =>"
+                      + " serviceProvider.GetRequiredService<THandler>(), lifetime));",
+                  RuntimeTypes.SERVICE_DESCRIPTOR,
                   opHandlerName(op));
             }
           }));
@@ -276,7 +278,8 @@ public final class ServerGenerator implements Runnable {
               }
 
               public static ${serviceCollection:T} Add${contract:L}Handler<THandler>(
-                  this ${serviceCollection:T} services)
+                  this ${serviceCollection:T} services,
+                  ${serviceLifetime:T} lifetime = ${serviceLifetime:T}.Singleton)
                   where THandler : class, ${handler:L}
               {
                   ${argumentNullException:T}.ThrowIfNull(services);
