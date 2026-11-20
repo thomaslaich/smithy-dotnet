@@ -33,6 +33,12 @@ protocol package explicitly, using the same NSmithy version as the host.
 
 ## Implement an operation
 
+:::tip[Recommended]
+For production services, implement one handler per operation, as described in
+[Separate operation handlers](#separate-operation-handlers). A single service
+handler, shown here, suits small services and prototypes.
+:::
+
 For a `Library` service with a `GetBook` operation, modeled as in
 [Modeling contracts](/smithy-dotnet/concepts/modeling/), implement the generated
 service interface:
@@ -129,9 +135,8 @@ request then shares one handler, which the container disposes once:
 
 ## Separate operation handlers
 
-We recommend one handler per operation for production services: each handler
-stays small, takes only the dependencies its operation needs, and can have its
-own lifetime. A single service handler suits small services and prototypes.
+A handler per operation stays small, takes only the dependencies its operation
+needs, and can have its own lifetime.
 
 The service interface inherits one interface per operation:
 
