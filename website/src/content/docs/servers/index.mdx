@@ -61,7 +61,7 @@ service interface:
                 if input.Id = "1" then
                     Task.FromResult(Ok { Id = input.Id; Title = "The Odyssey" })
                 else
-                    Task.FromResult(Error(GetBookError.BookNotFound(BookNotFound("Book not found."))))
+                    Task.FromResult(Error(GetBookError.BookNotFound { Message = "Book not found." }))
     ```
   </TabItem>
 </Tabs>

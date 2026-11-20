@@ -152,11 +152,32 @@ class FSharpCodegenPluginTest {
     assertTrue(
         types.contains("| Unknown of tag: string * value: global.NSmithy.Core.Document"), types);
     assertTrue(types.contains("| VALUE\n"), types);
+  }
+
+  @Test
+  void anErrorIsARecordThatAnExceptionOfTheSameNameCarries() {
+    MockManifest manifest = generate(settings("a.kitchen#Kitchen", null), KITCHEN, SHARED);
+
+    // A record has no exception members to avoid, so data and message keep their names.
+    String types = manifest.expectFileString(TYPES);
     assertTrue(
         types.contains(
-            "type OutOfStock(item: global.A.Kitchen.Ingredient, ?errorMessage: string, ?dataValue:"
-                + " string) ="),
+            "[<RequireQualifiedAccess>]\ntype OutOfStock =\n    {\n        Message: string option\n"
+                + "        Item: global.A.Kitchen.Ingredient\n        Data: string option\n    }"),
         types);
+    assertTrue(types.contains("namespace rec A.Kitchen.Exceptions\n"), types);
+    assertTrue(
+        types.contains(
+            "type OutOfStock(error: global.A.Kitchen.OutOfStock) =\n"
+                + "    inherit global.System.Exception(global.Microsoft.FSharp.Core.Option.toObj"
+                + " error.Message)"),
+        types);
+    // The runtime reads and writes the exception.
+    assertTrue(
+        manifest
+            .expectFileString(SCHEMAS)
+            .contains("(fun (value: global.A.Kitchen.Exceptions.OutOfStock) -> value.Error.Item)"),
+        manifest.expectFileString(SCHEMAS));
   }
 
   @Test

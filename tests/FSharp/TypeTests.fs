@@ -12,21 +12,28 @@ let ``A string enum maps a value it does not define to Unknown`` () =
 [<Fact>]
 let ``Members whose names clash with generated or inherited names take a suffix`` () =
     let receipt = Receipt.UnknownCase "a case named unknown"
-    let error = OutOfStock(Ingredient.BACON, dataValue = "d")
-    Assert.Equal(Some "d", error.DataValue)
     Assert.NotEqual(Receipt.Pending "a case named unknown", receipt)
 
-[<Fact>]
-let ``An error takes its optional members as optional arguments and applies defaults`` () =
-    let error = OutOfStock(Ingredient.BACON, errorMessage = "gone")
-    Assert.Equal("gone", error.Message)
-    Assert.Equal(Some "gone", error.ErrorMessage)
-    Assert.Equal(5, error.RestockDays)
-    Assert.Equal(None, OutOfStock(Ingredient.BACON).ErrorMessage)
+let private outOfStock: OutOfStock =
+    { Message = Some "gone"
+      Item = Ingredient.BACON
+      RestockDays = 5
+      Data = Some "d" }
 
 [<Fact>]
-let ``A retryable error implements ISmithyRetryableError`` () =
-    let error: exn = Throttled("slow down")
+let ``An error is a value-equal record`` () =
+    Assert.Equal(outOfStock, { outOfStock with Data = Some "d" })
+    Assert.NotEqual(outOfStock, { outOfStock with Data = None })
+
+[<Fact>]
+let ``An error's exception carries the record and its message`` () =
+    let error = Exceptions.OutOfStock outOfStock
+    Assert.Equal(outOfStock, error.Error)
+    Assert.Equal("gone", error.Message)
+
+[<Fact>]
+let ``A retryable error's exception implements ISmithyRetryableError`` () =
+    let error: exn = Exceptions.Throttled { Message = "slow down" }
 
     match box error with
     | :? NSmithy.Core.ISmithyRetryableError as retryable -> Assert.True(retryable.IsThrottlingError)

@@ -97,13 +97,13 @@ C# and F# projects do not share generated types.
 | Model | Generated F# |
 | --- | --- |
 | Structures | Records, such as `GetCityOutput`. A member that may be absent is an `option`; a member with a default is a plain value that reading fills in. |
-| `@error` structures | Exception classes, such as `NoSuchResource`, that take optional members as optional constructor arguments. |
+| `@error` structures | Records, such as `NoSuchResource`, whose field labels need the type where F# cannot infer it: `({ ResourceType = "City" }: NoSuchResource)`. |
 | Unions | Discriminated unions with an `Unknown of tag * value` case for a variant this model does not define. |
 | Enums | Discriminated unions with an `Unknown of string` case. `FromValue` and `.Value` convert to and from the wire value. |
 | Int enums | F# enums. |
 | Lists and maps | `'T list` and `Map<string, 'T>`, with `option` elements when `@sparse`. |
-| Operations | A union such as `GetCityError` of the errors each operation declares, which its handler and clients return. |
-| The service, when `SmithyGenerateClient` is on | `IWeatherClient`, `WeatherClient`, and `WeatherClientConfig`, plus `WeatherError` for the errors the service declares. |
+| Operations | A union such as `GetCityError` of the errors each operation can return, which its handler and clients return. |
+| The service, when `SmithyGenerateClient` is on | `IWeatherClient`, `WeatherClient`, and `WeatherClientConfig`. |
 | The service, when `SmithyGenerateServer` is on | A handler interface `IWeatherServiceHandler` composed of one interface per operation, plus `AddWeatherServiceHandler` and `MapWeatherService` extensions for ASP.NET Core. |
 | Every shape | A runtime schema in the child `Schemas` namespace, such as `Example.Weather.Schemas.GetCityOutputSchema`. |
 
@@ -111,7 +111,7 @@ C# and F# projects do not share generated types.
 
 Implement the handler interface and register it with `AddWeatherServiceHandler`
 and `MapWeatherService`; the [Servers](/smithy-dotnet/servers/) pages show each
-step in C# and F#. The handler of an operation that declares errors returns a
+step in C# and F#. The handler of an operation that can return errors returns a
 `Result` with the operation's error union, and the runtime writes the `Error`
 case as that error:
 
@@ -119,11 +119,8 @@ case as that error:
 member _.GetCityAsync(input, _) =
     match cities.TryFind input.CityId with
     | Some city -> Task.FromResult(Ok city)
-    | None -> Task.FromResult(Error(GetCityError.NoSuchResource(NoSuchResource("City"))))
+    | None -> Task.FromResult(Error(GetCityError.NoSuchResource { ResourceType = "City" }))
 ```
-
-Errors the service declares for every operation are not in that union; a
-handler raises them, such as `raise (Unavailable())`.
 
 `AddWeatherServiceHandler` also takes a handler instance, such as an object
 expression:
@@ -156,8 +153,8 @@ Each operation is a method that takes the input record and an optional
 all optional also has an overload without the input. In a project that
 generates only the client, every input member is an `option` (see
 [Member optionality](/smithy-dotnet/reference/generated-code/#member-optionality)).
-An operation that declares errors returns its output as a `Result` with a union
-of those errors:
+An operation that can return errors returns its output as a `Result` with its
+error union:
 
 ```fsharp title="Program.fs"
 open System
@@ -175,32 +172,21 @@ let run () =
 (run ()).GetAwaiter().GetResult()
 ```
 
-Errors the service declares for every operation are one union for the whole
-service, `WeatherError`. An operation without errors of its own returns it
-directly. One that has both returns a `WeatherCallError`, with the operation's
-union in its `Operation` case and the service's in its `Service` case, so one
-function handles the service's errors for every call:
-
-```fsharp
-let handleServiceError =
-    function
-    | WeatherError.Unavailable error -> printfn "Try again: %s" error.Message
-
-match! client.GetCityAsync { CityId = "SEA" } with
-| Ok city -> printfn "%s" city.Name
-| Error(WeatherCallError.Operation(GetCityError.NoSuchResource error)) -> printfn "No such %s" error.ResourceType
-| Error(WeatherCallError.Service error) -> handleServiceError error
-```
+The union also has a case for each error the service declares for every
+operation, so handlers return those as well and never raise a modeled error.
+The project that generates an operation adds its service's errors when it also
+generates the service. When operations live in a project of their own (see
+[Splitting a service across projects](/smithy-dotnet/guides/distributing-contracts/#splitting-a-service-across-projects)),
+that project does not see the service, so the service's project fails
+generation until each operation declares the service's errors itself.
 
 An operation that declares `smithy.framework#ValidationException` has a
 `ValidationException` case: the server rejects a request that violates the
 model's constraint traits with that error, and a server requires the model to
 declare it on every operation whose input is constrained (see
 [Validation](/smithy-dotnet/servers/validation/#declaring-the-error)). Declare
-it on the operation rather than the service, so that it is a case of the
-operation's own union. The case holds the
-runtime's `ValidationException`, whose `FieldList` names each member and the
-constraint it failed:
+it on the operation. The case holds the runtime's `ValidationException`, whose
+`FieldList` names each member and the constraint it failed:
 
 ```fsharp
 match! client.GetCityAsync { CityId = "SEA!" } with

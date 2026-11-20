@@ -175,6 +175,58 @@ class FSharpShapeOwnershipTest {
   }
 
   @Test
+  void aServiceRequiresItsErrorsInTheUnionsItsReferencesGenerated() throws IOException {
+    // Orders does not generate Shop, so PlaceOrder's union has only its own error.
+    Path orders = writeManifest("orders.json", generate(owned("orders.smithy")));
+    String api =
+        API.replace("operations: [PlaceOrder]", "operations: [PlaceOrder]\n    errors: [Busy]")
+            + "\n@error(\"server\")\nstructure Busy {}\n";
+
+    CodegenException error =
+        assertThrows(
+            CodegenException.class,
+            () ->
+                generate(
+                    owned("api.smithy")
+                        .withMember("service", "acme.shop#Shop")
+                        .withMember(
+                            "providedShapes", ArrayNode.fromStrings(List.of(orders.toString()))),
+                    api));
+
+    assertTrue(error.getMessage().contains("acme.shop#PlaceOrder"), error.getMessage());
+    assertTrue(error.getMessage().contains("acme.shop#Busy"), error.getMessage());
+  }
+
+  @Test
+  void aProjectThatOwnsTheServiceAddsItsErrorsToTheUnion() {
+    String api =
+        API.replace("operations: [PlaceOrder]", "operations: [PlaceOrder]\n    errors: [Busy]")
+            + "\n@error(\"server\")\nstructure Busy {}\n";
+
+    MockManifest manifest =
+        generate(
+            ObjectNode.builder()
+                .withMember(
+                    "ownedSources", ArrayNode.fromStrings(List.of("orders.smithy", "api.smithy")))
+                .withMember("service", "acme.shop#Shop"),
+            api);
+
+    String operations = manifest.expectFileString(OPERATIONS);
+    assertTrue(
+        operations.contains(
+            "type PlaceOrderError =\n    | Busy of global.Acme.Shop.Busy\n"
+                + "    | SoldOut of global.Acme.Shop.SoldOut\n"),
+        operations);
+    assertEquals(
+        "acme.shop#Busy,acme.shop#SoldOut",
+        manifestNode(manifest)
+            .expectObjectMember("shapes")
+            .expectObjectMember("acme.shop#PlaceOrder")
+            .expectStringMember("errorShapes")
+            .getValue());
+  }
+
+  @Test
   void aCSharpManifestListingAGeneratedShapeFails() throws IOException {
     Path csharp = writeCSharpManifest("acme.shop#Money");
 
@@ -231,12 +283,16 @@ class FSharpShapeOwnershipTest {
   }
 
   private static MockManifest generate(ObjectNode.Builder settings) {
+    return generate(settings, API);
+  }
+
+  private static MockManifest generate(ObjectNode.Builder settings, String api) {
     Model model =
         Model.assembler()
             .addUnparsedModel("protocols.smithy", PROTOCOLS)
             .addUnparsedModel("orders.smithy", ORDERS)
             .addUnparsedModel("common.smithy", COMMON)
-            .addUnparsedModel("api.smithy", API)
+            .addUnparsedModel("api.smithy", api)
             .assemble()
             .unwrap();
     MockManifest manifest = new MockManifest();

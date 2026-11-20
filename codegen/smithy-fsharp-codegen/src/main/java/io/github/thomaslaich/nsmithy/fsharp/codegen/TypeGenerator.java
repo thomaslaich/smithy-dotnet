@@ -2,8 +2,8 @@
  * Declares the F# type of each shape:
  *
  *   structure  a record, or a class with no members when the structure has none
- *   @error     a class deriving from Exception, with a constructor that takes optional members
- *              as optional arguments
+ *   @error     a record like a structure's, and an exception class of the same name in the child
+ *              Exceptions namespace that carries it through the runtime
  *   union      a discriminated union, with an Unknown case for one this model does not define
  *   enum       a discriminated union with an Unknown case, and the value each case stands for
  *   intEnum    an F# enum
@@ -34,6 +34,15 @@ final class TypeGenerator {
   }
 
   void structure(StructureShape shape) {
+    record(shape, false);
+  }
+
+  /**
+   * A structure's record. An error's record requires qualified field labels, so its fields never
+   * capture the inference of another record's, such as an input's {@code { Id = ... }}; where its
+   * type is known, as in a union case or a pattern, labels need no qualifier.
+   */
+  private void record(StructureShape shape, boolean qualified) {
     List<String> fields = new ArrayList<>();
     for (MemberShape member : shape.members()) {
       fields.add(
@@ -56,6 +65,9 @@ final class TypeGenerator {
                 override _.GetHashCode() = 0
             ${/fields}
             ${?fields}
+            ${?qualified}
+            [<RequireQualifiedAccess>]
+            ${/qualified}
             type ${name:L} =
                 {
                     ${#fields}
@@ -65,61 +77,57 @@ final class TypeGenerator {
             ${/fields}
             """,
             Map.of(
-                "docs", FSharpWriter.docs(shape),
-                "name", FSharpNaming.typeName(shape.getId().getName()),
-                "fields", fields));
+                "docs",
+                FSharpWriter.docs(shape),
+                "name",
+                FSharpNaming.typeName(shape.getId().getName()),
+                "fields",
+                fields,
+                "qualified",
+                qualified));
   }
 
+  /**
+   * An error: a record like any structure, and, in the child Exceptions namespace, the exception
+   * class that carries it through the runtime, which reports modeled errors as exceptions.
+   */
   void error(StructureShape shape) {
+    record(shape, true);
     Optional<MemberShape> message = ShapeSupport.errorMessageMember(context.model(), shape);
-
-    List<String> parameters = new ArrayList<>();
-    for (MemberShape member : constructorOrder(shape)) {
-      String parameter = FSharpNaming.parameterName(errorPropertyName(member, message));
-      parameters.add(
-          FSharpMembers.isOptional(member) || FSharpMembers.usesDefault(member)
-              ? "?" + parameter + ": " + FSharpMembers.valueType(context, member)
-              : parameter + ": " + FSharpMembers.valueType(context, member));
-    }
-    List<String> properties = new ArrayList<>();
-    for (MemberShape member : shape.members()) {
-      properties.add(
-          documented(
-              member,
-              "member val "
-                  + errorPropertyName(member, message)
-                  + ": "
-                  + FSharpMembers.fieldType(context, member)
-                  + " = "
-                  + argument(member, message)));
-    }
     Optional<RetryableTrait> retryable = shape.getTrait(RetryableTrait.class);
+    String record = context.symbolProvider().typeOf(shape);
     context
         .files()
-        .types(shape)
+        .exceptions(shape)
         .writeTemplate(
             """
-            ${?docs}
-            ${docs:L|}
-            ${/docs}
-            type ${name:L}(${parameters:L}) =
+            /// <summary>Carries a <c>${name:L}</c> through the runtime, which reports modeled errors as exceptions.</summary>
+            [<global.System.ComponentModel.EditorBrowsable(global.System.ComponentModel.EditorBrowsableState.Never)>]
+            type ${name:L}(error: ${record:L}) =
                 inherit global.System.Exception(${message:L})
-                ${#properties}
-                ${value:L|}
-                ${/properties}
+
+                /// <summary>The error.</summary>
+                member _.Error = error
                 ${?retryable}
+
                 interface global.NSmithy.Core.ISmithyRetryableError with
                     member _.IsThrottlingError = ${throttling:L}
                 ${/retryable}
             """,
             Map.of(
-                "docs", FSharpWriter.docs(shape),
                 "name", FSharpNaming.typeName(shape.getId().getName()),
-                "parameters", String.join(", ", parameters),
-                "message", message.map(this::argument).orElse(""),
-                "properties", properties,
+                "record", record,
+                "message", message.map(this::message).orElse(""),
                 "retryable", retryable.isPresent(),
                 "throttling", retryable.map(RetryableTrait::getThrottling).orElse(false)));
+  }
+
+  /** The exception message: the message member's text, or null when it has none. */
+  private String message(MemberShape member) {
+    String field = "error." + FSharpNaming.fieldName(member);
+    return FSharpMembers.isOptional(member)
+        ? "global.Microsoft.FSharp.Core.Option.toObj " + field
+        : field;
   }
 
   void union(UnionShape shape) {
@@ -253,58 +261,6 @@ final class TypeGenerator {
                 "docs", FSharpWriter.docs(shape),
                 "name", FSharpNaming.typeName(shape.getId().getName()),
                 "cases", cases));
-  }
-
-  /** The order of an error's constructor parameters: required members, then optional ones. */
-  static List<MemberShape> constructorOrder(StructureShape shape) {
-    List<MemberShape> order = new ArrayList<>();
-    for (MemberShape member : shape.members()) {
-      if (!FSharpMembers.isOptional(member) && !FSharpMembers.usesDefault(member)) {
-        order.add(member);
-      }
-    }
-    for (MemberShape member : shape.members()) {
-      if (FSharpMembers.isOptional(member) || FSharpMembers.usesDefault(member)) {
-        order.add(member);
-      }
-    }
-    return order;
-  }
-
-  /** An error's property: {@code ErrorMessage} for its message member. */
-  static String errorPropertyName(MemberShape member, Optional<MemberShape> message) {
-    return message.isPresent() && message.get().equals(member)
-        ? FSharpNaming.ERROR_MESSAGE
-        : FSharpNaming.errorPropertyName(member);
-  }
-
-  /** The exception message: the message member's text, or null when it has none. */
-  private String argument(MemberShape message) {
-    String parameter = FSharpNaming.parameterName(FSharpNaming.ERROR_MESSAGE);
-    if (FSharpMembers.isOptional(message)) {
-      return "global.Microsoft.FSharp.Core.Option.toObj " + parameter;
-    }
-    if (FSharpMembers.usesDefault(message)) {
-      return "global.Microsoft.FSharp.Core.Operators.defaultArg "
-          + parameter
-          + " ("
-          + FSharpLiterals.defaultValue(context, message)
-          + ")";
-    }
-    return parameter;
-  }
-
-  /** The value an error property holds: its argument, or its default when one is left out. */
-  private String argument(MemberShape member, Optional<MemberShape> message) {
-    String parameter = FSharpNaming.parameterName(errorPropertyName(member, message));
-    if (FSharpMembers.usesDefault(member)) {
-      return "global.Microsoft.FSharp.Core.Operators.defaultArg "
-          + parameter
-          + " ("
-          + FSharpLiterals.defaultValue(context, member)
-          + ")";
-    }
-    return parameter;
   }
 
   /** A member's code with the member's documentation, if any, on the lines before it. */

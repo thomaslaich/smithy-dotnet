@@ -8,18 +8,21 @@ import java.util.Map;
 import java.util.Optional;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
-import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.OperationShape;
+import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 /**
  * Declares an operation's error union and handler interface in Operations.g.fs, in the operation's
- * namespace: {@code {Operation}Error}, one case per error the operation declares, which its handler
- * and clients return in a Result; and {@code I{Operation}Handler}, with one method that takes the
- * operation's input and returns its output. Both depend only on the operation, so the project that
- * owns the operation declares them, whether or not it generates a server; the service's server
- * combines the interfaces of its operations.
+ * namespace: {@code {Operation}Error}, one case per error the operation can return, its own and its
+ * service's, holding the error's record, which its handler and clients return in a Result; and
+ * {@code I{Operation}Handler}, with one method that takes the operation's input and returns its
+ * output. Both depend only on the operation, so the project that owns the operation declares them,
+ * whether or not it generates a server; the service's server combines the interfaces of its
+ * operations.
  */
 @SmithyInternalApi
 final class OperationHandlerGenerator {
@@ -53,7 +56,7 @@ final class OperationHandlerGenerator {
     List<String> clauses = new ArrayList<>();
     List<String> fromClauses = new ArrayList<>();
     Map<String, StructureShape> byCase = new HashMap<>();
-    for (StructureShape error : errorShapes(context.model(), operation)) {
+    for (StructureShape error : context.symbolProvider().operationErrors(operation)) {
       String name = caseName(error);
       StructureShape clash = byCase.put(name, error);
       if (clash != null || name.equals(TO_EXCEPTION) || name.equals(FROM_EXCEPTION)) {
@@ -71,25 +74,37 @@ final class OperationHandlerGenerator {
                     : ", which clashes with its " + name + " method")
                 + ". Rename the error, for example with the renameShapes build transform.");
       }
+      // The runtime's ValidationException is a class already; every other error's record travels
+      // in the exception class of the same name.
+      boolean wrapped = !ShapeSupport.isValidationException(error.getId());
+      String exception =
+          FSharpSymbolProvider.render(context.symbolProvider().exceptionSymbol(error));
       cases.add("| " + name + " of " + context.symbolProvider().typeOf(error));
-      clauses.add("| " + type + "." + name + " error -> error :> global.System.Exception");
+      clauses.add(
+          "| "
+              + type
+              + "."
+              + name
+              + " error -> "
+              + (wrapped ? exception + "(error)" : "error")
+              + " :> global.System.Exception");
       fromClauses.add(
           "| :? "
-              + context.symbolProvider().typeOf(error)
+              + exception
               + " as error -> "
               + OPTION
               + ".Some("
               + type
               + "."
               + name
-              + " error)");
+              + (wrapped ? " error.Error)" : " error)"));
     }
     context
         .files()
         .handlers(operation)
         .writeTemplate(
             """
-            /// <summary>The errors the model declares for <c>${operation:L}</c>.</summary>
+            /// <summary>The errors <c>${operation:L}</c> can return: its own and its service's.</summary>
             [<RequireQualifiedAccess>]
             type ${type:L} =
                 ${#cases}
@@ -103,7 +118,7 @@ final class OperationHandlerGenerator {
                     ${value:L}
                     ${/clauses}
 
-                /// <summary>The case that holds <c>error</c>, or None when the operation does not declare it.</summary>
+                /// <summary>The case that holds <c>error</c>, or None when it is not one of these errors.</summary>
                 static member ${fromException:L}(error: global.System.Exception) : ${type:L} option =
                     match error with
                     ${#fromClauses}
@@ -203,11 +218,39 @@ final class OperationHandlerGenerator {
     return FSharpNaming.typeName(error.getId().getName());
   }
 
-  /** The errors an operation declares, in a stable order. */
-  static List<StructureShape> errorShapes(Model model, OperationShape operation) {
-    return operation.getErrors().stream()
-        .sorted()
-        .map(error -> model.expectShape(error, StructureShape.class))
-        .toList();
+  /**
+   * Fails when an operation of {@code service} that another project generated has a union without
+   * every error the service declares, because that project did not generate the service. Its
+   * handler could then only raise them. ValidationException is exempt: the runtime returns it
+   * before a handler runs.
+   */
+  static void checkServiceErrors(FSharpContext context, ServiceShape service) {
+    for (OperationShape operation :
+        TopDownIndex.of(context.model()).getContainedOperations(service)) {
+      if (!context.settings().providedShapes().contains(operation.getId())) {
+        continue;
+      }
+      List<ShapeId> covered = context.settings().providedShapes().errorShapes(operation.getId());
+      List<ShapeId> missing =
+          service.getErrors().stream()
+              .filter(error -> !ShapeSupport.isValidationException(error))
+              .filter(error -> !covered.contains(error))
+              .sorted()
+              .toList();
+      if (!missing.isEmpty()) {
+        throw new CodegenException(
+            "Operation "
+                + operation.getId()
+                + " comes from the shape manifest "
+                + context.settings().providedShapes().manifest(operation.getId()).orElseThrow()
+                + ", whose error union lacks "
+                + missing
+                + ", which "
+                + service.getId()
+                + " declares for every operation. The project that generated the operation does"
+                + " not generate the service, so declare these errors on the operation in its own"
+                + " model.");
+      }
+    }
   }
 }

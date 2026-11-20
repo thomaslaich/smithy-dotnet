@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -168,6 +169,20 @@ public final class ProvidedShapes {
   /** The union of the errors operation {@code id} declares. */
   public Optional<Symbol> errors(ShapeId id) {
     return symbol(id, ShapeManifest.ERRORS);
+  }
+
+  /** The errors the union of operation {@code id} holds. */
+  public List<ShapeId> errorShapes(ShapeId id) {
+    return Optional.ofNullable(shapes.get(id))
+        .map(entry -> entry.symbols().get(ShapeManifest.ERROR_SHAPES))
+        .filter(value -> !value.isEmpty())
+        .map(value -> Arrays.stream(value.split(",")).map(ShapeId::from).toList())
+        .orElse(List.of());
+  }
+
+  /** The exception class that carries error {@code id}'s F# record. */
+  public Optional<Symbol> exception(ShapeId id) {
+    return symbol(id, ShapeManifest.EXCEPTION);
   }
 
   /**

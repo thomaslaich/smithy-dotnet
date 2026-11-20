@@ -156,13 +156,16 @@ class ClientGeneratorTest {
             "[<RequireQualifiedAccess>]\ntype OrderError =\n"
                 + "    | SoldOut of global.Example.Cafe.SoldOut\n"),
         operations);
+    // The union holds the record; the runtime sees the exception that carries it.
     assertTrue(
-        operations.contains("| OrderError.SoldOut error -> error :> global.System.Exception"),
+        operations.contains(
+            "| OrderError.SoldOut error -> global.Example.Cafe.Exceptions.SoldOut(error) :>"
+                + " global.System.Exception"),
         operations);
     assertTrue(
         operations.contains(
-            "| :? global.Example.Cafe.SoldOut as error ->"
-                + " global.Microsoft.FSharp.Core.Option.Some(OrderError.SoldOut error)"),
+            "| :? global.Example.Cafe.Exceptions.SoldOut as error ->"
+                + " global.Microsoft.FSharp.Core.Option.Some(OrderError.SoldOut error.Error)"),
         operations);
     assertTrue(
         client.contains(
@@ -181,72 +184,46 @@ class ClientGeneratorTest {
           + "\n@error(\"server\")\n@httpError(503)\nstructure Busy {}\n";
 
   @Test
-  void aServiceErrorIsACaseOfTheServicesUnion() {
+  void aServiceErrorIsACaseOfEveryOperationsUnion() {
     MockManifest manifest = generate(SERVICE_ERRORS, true);
+    String operations = manifest.expectFileString(OPERATIONS);
     String client = manifest.expectFileString(CLIENT);
 
     assertTrue(
-        client.contains(
-            "[<RequireQualifiedAccess>]\ntype CafeError =\n    | Busy of global.Example.Cafe.Busy"),
+        operations.contains(
+            "type OrderError =\n    | Busy of global.Example.Cafe.Busy\n"
+                + "    | SoldOut of global.Example.Cafe.SoldOut\n"),
+        operations);
+    assertTrue(
+        operations.contains("type PingError =\n    | Busy of global.Example.Cafe.Busy\n"),
+        operations);
+    assertTrue(
+        client.contains("global.Example.Cafe.OrderOutput, global.Example.Cafe.OrderError>>"),
         client);
     assertTrue(
-        client.contains(
-            "type CafeCallError<'Operation> =\n    | Operation of 'Operation\n"
-                + "    | Service of CafeError"),
-        client);
-    assertTrue(
-        client.contains(
-            "| :? global.Example.Cafe.Busy as error -> return"
-                + " global.Microsoft.FSharp.Core.Result.Error(CafeCallError.Service(CafeError.Busy"
-                + " error))"),
-        client);
-    assertTrue(
-        client.contains(
-            "Result.Error(CafeCallError.Operation((global.Example.Cafe.OrderError.FromException"
-                + " error).Value))"),
-        client);
-    assertTrue(
-        client.contains(
-            "global.Example.Cafe.OrderOutput,"
-                + " CafeCallError<global.Example.Cafe.OrderError>>>"),
-        client);
-    // An operation without errors of its own returns the service's union.
-    assertTrue(client.contains("global.Example.Cafe.PingOutput, CafeError>>"), client);
-    assertTrue(client.contains("Result.Error(CafeError.Busy error)"), client);
+        client.contains("global.Example.Cafe.PingOutput, global.Example.Cafe.PingError>>"), client);
+    assertFalse(client.contains("CafeError"), client);
     // The service schema lists the service's errors once; the protocols add them to every
     // operation (ServiceSchema.ErrorsOf), so operation schemas list only their own.
     String schemas = manifest.expectFileString(SCHEMAS);
     assertEquals(
-        1, schemas.split("OperationError<global.Example.Cafe.Busy", -1).length - 1, schemas);
+        1,
+        schemas.split("OperationError<global.Example.Cafe.Exceptions.Busy", -1).length - 1,
+        schemas);
     assertTrue(schemas.contains("errors ="), schemas);
-    assertFalse(manifest.expectFileString(OPERATIONS).contains("Busy"));
   }
 
   @Test
-  void aServiceWithoutOperationErrorsHasNoCallError() {
-    String model = SERVICE_ERRORS.replace("    errors: [SoldOut]\n", "");
-
-    String client = generate(model, true).expectFileString(CLIENT);
-
-    assertFalse(client.contains("CafeCallError"), client);
-    assertTrue(client.contains("global.Example.Cafe.OrderOutput, CafeError>>"), client);
-  }
-
-  @Test
-  void anErrorOnBothTheOperationAndTheServiceIsTheOperations() {
+  void anErrorOnBothTheOperationAndTheServiceIsOneCase() {
     String model = SERVICE_ERRORS.replace("errors: [SoldOut]", "errors: [SoldOut, Busy]");
 
-    MockManifest manifest = generate(model, true);
-    String client = manifest.expectFileString(CLIENT);
+    String operations = generate(model, true).expectFileString(OPERATIONS);
 
     assertTrue(
-        manifest
-            .expectFileString(OPERATIONS)
-            .contains(
-                "type OrderError =\n    | Busy of global.Example.Cafe.Busy\n"
-                    + "    | SoldOut of global.Example.Cafe.SoldOut\n"),
-        client);
-    assertFalse(client.contains("CafeCallError.Service(CafeError.Busy"), client);
+        operations.contains(
+            "type OrderError =\n    | Busy of global.Example.Cafe.Busy\n"
+                + "    | SoldOut of global.Example.Cafe.SoldOut\n\n"),
+        operations);
   }
 
   @Test
@@ -270,20 +247,14 @@ class ClientGeneratorTest {
 
   @Test
   void aShapeWithoutATypeOfItsOwnMayShareAnErrorTypesName() {
-    String model = SERVICE_ERRORS + "\nstring OrderError\nlist CafeError { member: String }\n";
+    String model = MODEL + "\nstring OrderError\nlist CafeClient { member: String }\n";
 
     MockManifest manifest = generate(model, true);
 
     assertTrue(manifest.expectFileString(OPERATIONS).contains("type OrderError ="));
-    assertTrue(manifest.expectFileString(CLIENT).contains("type CafeError ="));
-  }
-
-  @Test
-  void aShapeNamedLikeTheServiceErrorTypeFails() {
-    String model = referencing(SERVICE_ERRORS, "CafeError");
-
-    CodegenException error = assertThrows(CodegenException.class, () -> generate(model, true));
-    assertTrue(error.getMessage().contains("example.cafe#CafeError"), error.getMessage());
+    assertTrue(
+        manifest.expectFileString(CLIENT).contains("type CafeClient private"),
+        manifest.expectFileString(CLIENT));
   }
 
   @Test

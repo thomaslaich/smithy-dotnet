@@ -24,7 +24,7 @@ type private Kitchen() =
                               Currency = "CHF" } }
             )
 
-        member _.PingAsync(_, _) = Task.FromResult(PingOutput())
+        member _.PingAsync(_, _) = Task.FromResult(Ok(PingOutput()))
 
         member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
 

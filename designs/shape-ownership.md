@@ -249,7 +249,7 @@ ahead of the project's own:
 
 | File | Contents | Compiled |
 | --- | --- | --- |
-| `Types.g.fs` | Types | Always |
+| `Types.g.fs` | Types, and the exception class of each error in the child `Exceptions` namespace | Always |
 | `Schemas.g.fs` | Schemas of the types | Always |
 | `Operations.g.fs` | Each operation's schema, its `{Operation}Error` union, and `I{Operation}Handler` | Always |
 | `Client.g.fs` | The service's client | With `SmithyGenerateClient` |
@@ -259,8 +259,11 @@ Each file holds one section per Smithy namespace; those of types and schemas
 are `namespace rec`, so the declarations of one namespace can refer to each
 other. A project that owns an operation compiles its handler interface whatever
 `SmithyGenerateServer` says, as in C#. An operation's error union is generated
-with the operation, and its manifest entry names it as `errors`, so clients and
-servers built on the owning project return that project's union. Provided types and schemas come from referenced assemblies, which F#
+with the operation. Its manifest entry names it as `errors` and lists the
+errors it holds as `errorShapes`, so clients and servers built on the owning
+project return that project's union, and the service's project can check that
+the union holds the errors the service declares. An error's entry names, as
+`exception`, the class that carries its record through the runtime. Provided types and schemas come from referenced assemblies, which F#
 sees before any file of the project, so the file order does not constrain them.
 
 ### Mixed languages

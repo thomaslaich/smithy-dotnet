@@ -45,6 +45,12 @@ public final class ShapeManifest {
   /** The union of the errors an operation declares, which F# handlers and clients return. */
   public static final String ERRORS = "errors";
 
+  /** The errors an operation's union holds, as comma-separated shape ids. */
+  public static final String ERROR_SHAPES = "errorShapes";
+
+  /** The exception class that carries an F# error record through the runtime. */
+  public static final String EXCEPTION = "exception";
+
   private final String generator;
   private final Map<ShapeId, Map<String, String>> shapes = new TreeMap<>();
 
@@ -56,6 +62,11 @@ public final class ShapeManifest {
   /** Records that {@code shape} is represented by {@code symbol} in the given role. */
   public void add(ShapeId shape, String role, Symbol symbol) {
     shapes.computeIfAbsent(shape, id -> new TreeMap<>()).put(role, symbol.getFullName());
+  }
+
+  /** Records {@code value}, which is not a symbol, for {@code shape} in the given role. */
+  public void add(ShapeId shape, String role, String value) {
+    shapes.computeIfAbsent(shape, id -> new TreeMap<>()).put(role, value);
   }
 
   /** The recorded shapes and their symbols, by shape id. */

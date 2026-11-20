@@ -13,7 +13,7 @@ let create () =
     let find id =
         match books.TryGetValue id with
         | true, book -> Ok book
-        | false, _ -> Error(NoSuchBook(id))
+        | false, _ -> Error({ Id = id }: NoSuchBook)
 
     { new IBookshelfServiceHandler with
         member _.AddBookAsync(input, _) =
@@ -46,7 +46,7 @@ let create () =
         member _.LendBookAsync(input, _) =
             let lend book =
                 match book.Status with
-                | Status.LentTo reader -> Error(LendBookError.AlreadyLent(AlreadyLent(reader)))
+                | Status.LentTo reader -> Error(LendBookError.AlreadyLent { Reader = reader })
                 | _ ->
                     let lent =
                         { book with

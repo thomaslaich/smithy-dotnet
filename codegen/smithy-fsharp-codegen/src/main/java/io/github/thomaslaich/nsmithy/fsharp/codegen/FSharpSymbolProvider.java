@@ -8,11 +8,16 @@ package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.BigDecimalShape;
 import software.amazon.smithy.model.shapes.BigIntegerShape;
 import software.amazon.smithy.model.shapes.BlobShape;
@@ -32,6 +37,7 @@ import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ResourceShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeVisitor;
 import software.amazon.smithy.model.shapes.ShortShape;
 import software.amazon.smithy.model.shapes.StringShape;
@@ -46,8 +52,15 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
   /** The child namespace that holds the generated schemas, so they never clash with model types. */
   public static final String SCHEMAS_NAMESPACE = "Schemas";
 
+  /**
+   * The child namespace that holds the exception class carrying each error record through the
+   * runtime, named like the record.
+   */
+  public static final String EXCEPTIONS_NAMESPACE = "Exceptions";
+
   private final Model model;
   private final FSharpSettings settings;
+  private Set<ShapeId> serviceOperations;
 
   public FSharpSymbolProvider(Model model, FSharpSettings settings) {
     this.model = model;
@@ -257,15 +270,15 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
   }
 
   /**
-   * The union of the errors an operation declares: {@code {Operation}Error} in the operation's
+   * The union of the errors an operation can return: {@code {Operation}Error} in the operation's
    * namespace, or the one its manifest records when another project generated the operation. Empty
-   * when the operation declares no errors.
+   * when the operation can return no modeled error.
    */
   public Optional<Symbol> errorsSymbol(OperationShape operation) {
     if (settings.providedShapes().contains(operation.getId())) {
       return settings.providedShapes().errors(operation.getId());
     }
-    if (operation.getErrors().isEmpty()) {
+    if (operationErrors(operation).isEmpty()) {
       return Optional.empty();
     }
     return Optional.of(
@@ -273,6 +286,52 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
             .name(FSharpNaming.typeName(operation.getId().getName()) + "Error")
             .namespace(settings.fsharpNamespace(operation.getId().getNamespace()), ".")
             .build());
+  }
+
+  /**
+   * The errors an operation can return, sorted by shape id: its own, and those of the service this
+   * run generates when it binds the operation, so a handler returns every modeled error and never
+   * raises one. Another service's errors are not added, since the run may not have their types; a
+   * service's own project checks that the unions of its operations cover them (see
+   * OperationHandlerGenerator).
+   */
+  public List<StructureShape> operationErrors(OperationShape operation) {
+    if (serviceOperations == null) {
+      serviceOperations =
+          settings
+              .service()
+              .flatMap(model::getShape)
+              .flatMap(Shape::asServiceShape)
+              .map(service ->
+                  TopDownIndex.of(model).getContainedOperations(service).stream()
+                      .map(OperationShape::getId)
+                      .collect(Collectors.toSet()))
+              .orElse(Set.of());
+    }
+    Set<ShapeId> errors = new TreeSet<>(operation.getErrors());
+    if (serviceOperations.contains(operation.getId())) {
+      errors.addAll(model.expectShape(settings.service().get(), ServiceShape.class).getErrors());
+    }
+    return errors.stream().map(id -> model.expectShape(id, StructureShape.class)).toList();
+  }
+
+  /**
+   * The exception class that carries an error's record through the runtime: the same name in the
+   * child Exceptions namespace, or the runtime's ValidationException, which is a class already.
+   */
+  public Symbol exceptionSymbol(StructureShape error) {
+    if (ShapeSupport.isValidationException(error.getId())) {
+      return toSymbol(error);
+    }
+    Optional<Symbol> provided = settings.providedShapes().exception(error.getId());
+    if (provided.isPresent()) {
+      return provided.get();
+    }
+    Symbol type = toSymbol(error);
+    return Symbol.builder()
+        .name(type.getName())
+        .namespace(type.getNamespace() + "." + EXCEPTIONS_NAMESPACE, ".")
+        .build();
   }
 
   /** The F# namespace of a Smithy namespace's schemas. */
@@ -293,14 +352,19 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
       return provided.get();
     }
     String name = FSharpNaming.typeName(shape.getId().getName());
-    if (name.equals(SCHEMAS_NAMESPACE)) {
+    if (name.equals(SCHEMAS_NAMESPACE) || name.equals(EXCEPTIONS_NAMESPACE)) {
       throw new CodegenException(
           "Shape "
               + shape.getId()
-              + " would generate an F# type named Schemas, which clashes with the "
+              + " would generate an F# type named "
+              + name
+              + ", which clashes with the "
               + settings.fsharpNamespace(shape.getId().getNamespace())
-              + ".Schemas namespace that holds generated schemas. Rename the shape, for example"
-              + " with the renameShapes build transform.");
+              + "."
+              + name
+              + " namespace that holds generated "
+              + (name.equals(SCHEMAS_NAMESPACE) ? "schemas" : "error exceptions")
+              + ". Rename the shape, for example with the renameShapes build transform.");
     }
     return Symbol.builder()
         .name(name)

@@ -5,6 +5,7 @@ import io.github.thomaslaich.nsmithy.codegen.core.ShapeManifest;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.codegen.core.ValidationErrors;
 import java.util.Set;
+import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.codegen.core.WriterDelegator;
 import software.amazon.smithy.codegen.core.directed.CreateContextDirective;
@@ -66,6 +67,7 @@ final class DirectedFSharpCodegen
   public void generateService(GenerateServiceDirective<FSharpContext, FSharpSettings> directive) {
     new SchemaGenerator(directive.context()).service(directive.shape());
     recordSchema(directive.context(), directive.shape());
+    OperationHandlerGenerator.checkServiceErrors(directive.context(), directive.shape());
     if (directive.settings().generateClient()) {
       new ClientGenerator(directive.context(), directive.shape()).run();
     }
@@ -89,7 +91,15 @@ final class DirectedFSharpCodegen
     context
         .symbolProvider()
         .errorsSymbol(operation)
-        .ifPresent(symbol -> shapeManifest.add(operation.getId(), ShapeManifest.ERRORS, symbol));
+        .ifPresent(symbol -> {
+          shapeManifest.add(operation.getId(), ShapeManifest.ERRORS, symbol);
+          shapeManifest.add(
+              operation.getId(),
+              ShapeManifest.ERROR_SHAPES,
+              context.symbolProvider().operationErrors(operation).stream()
+                  .map(error -> error.getId().toString())
+                  .collect(Collectors.joining(",")));
+        });
     if (generatesHandler(context, operation)) {
       handlers.run(operation);
       shapeManifest.add(
@@ -137,6 +147,10 @@ final class DirectedFSharpCodegen
     new TypeGenerator(directive.context()).error(directive.shape());
     new SchemaGenerator(directive.context()).structure(directive.shape());
     recordType(directive.context(), directive.shape());
+    shapeManifest.add(
+        directive.shape().getId(),
+        ShapeManifest.EXCEPTION,
+        directive.context().symbolProvider().exceptionSymbol(directive.shape()));
   }
 
   @Override

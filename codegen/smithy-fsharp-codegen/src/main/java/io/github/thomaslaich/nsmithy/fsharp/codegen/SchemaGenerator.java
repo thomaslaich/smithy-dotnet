@@ -97,21 +97,23 @@ final class SchemaGenerator {
         SCHEMAS + ".IntEnum<" + type + ">(" + String.join(", ", arguments) + ")");
   }
 
-  /** A structure or an error. */
+  /**
+   * A structure or an error. An error's schema reads and writes the exception class that carries
+   * its record, since the runtime reports modeled errors as exceptions.
+   */
   void structure(StructureShape shape) {
     FSharpWriter writer = context.files().schemas(shape);
     String name = FSharpNaming.typeName(shape.getId().getName());
-    String type = symbols.typeOf(shape);
+    boolean isError = shape.hasTrait(ErrorTrait.class);
+    String record = symbols.typeOf(shape);
+    String type = isError ? FSharpSymbolProvider.render(symbols.exceptionSymbol(shape)) : record;
     String builder = name + "Builder";
     String impl = name + "SchemaImpl";
     List<MemberShape> members = List.copyOf(shape.members());
-    boolean isError = shape.hasTrait(ErrorTrait.class);
-    Optional<MemberShape> message =
-        isError ? ShapeSupport.errorMessageMember(model, shape) : Optional.empty();
 
     Map<String, String> properties = new LinkedHashMap<>();
     for (MemberShape member : members) {
-      properties.put(property(member, isError, message), FSharpMembers.valueType(context, member));
+      properties.put(FSharpNaming.fieldName(member), FSharpMembers.valueType(context, member));
     }
     List<String> accessors = new ArrayList<>();
     for (int i = 0; i < members.size(); i++) {
@@ -125,9 +127,10 @@ final class SchemaGenerator {
       }
       namedTraits(arguments, "traits", memberTraits(member));
       String memberSchema = SERDE + "MemberSchema(" + String.join(", ", arguments) + ")";
-      String property = property(member, isError, message);
+      String property = FSharpNaming.fieldName(member);
       String valueType = FSharpMembers.valueType(context, member);
-      String get = "(fun (value: " + type + ") -> value." + property + ")";
+      String get =
+          "(fun (value: " + type + ") -> value." + (isError ? "Error." : "") + property + ")";
       if (FSharpMembers.isOptional(member)) {
         accessors.add(
             String.format(
@@ -167,7 +170,7 @@ final class SchemaGenerator {
         "accessors", array(accessors, SERDE + "StructMember<" + type + ", " + builder + ">"));
     templateContext.put("traits", traits(shape));
     templateContext.put("targets", targets(members));
-    templateContext.put("build", build(shape, type, members, message, isError));
+    templateContext.put("build", build(type, record, members, isError));
     writer.writeTemplate(
         """
         ${^properties}
@@ -455,7 +458,7 @@ final class SchemaGenerator {
       errors.add(
           SCHEMAS
               + ".OperationError<"
-              + symbols.typeOf(error)
+              + FSharpSymbolProvider.render(symbols.exceptionSymbol(error))
               + ">("
               + FSharpLiterals.shapeId(errorId)
               + ", "
@@ -516,38 +519,15 @@ final class SchemaGenerator {
     return traits == null ? "" : traits;
   }
 
-  /** The schema class's Build override, which turns a filled-in builder into the value. */
-  private String build(
-      StructureShape shape,
-      String type,
-      List<MemberShape> members,
-      Optional<MemberShape> message,
-      boolean isError) {
+  /**
+   * The schema class's Build override, which turns a filled-in builder into the value: the record,
+   * or for an error the exception class carrying it.
+   */
+  private String build(String type, String record, List<MemberShape> members, boolean isError) {
     if (members.isEmpty()) {
-      return FSharpWriter.render("override _.Build(_builder) = ${type:L}()", Map.of("type", type));
-    }
-    if (isError) {
-      List<String> arguments = new ArrayList<>();
-      for (MemberShape member : TypeGenerator.constructorOrder(shape)) {
-        String parameter = FSharpNaming.parameterName(property(member, isError, message));
-        String builderValue = "builder." + property(member, isError, message);
-        if (FSharpMembers.isOptional(member) || FSharpMembers.usesDefault(member)) {
-          arguments.add(
-              "?"
-                  + parameter
-                  + " = global.Microsoft.FSharp.Core.ValueOption.toOption "
-                  + builderValue);
-        } else {
-          arguments.add(parameter + " = " + required(member, builderValue));
-        }
-      }
       return FSharpWriter.render(
-          """
-          override _.Build(builder) =
-              ${type:L}(
-                  ${arguments:L|})\
-          """,
-          Map.of("type", type, "arguments", String.join(",\n", arguments)));
+          "override _.Build(_builder) = ${value:L}",
+          Map.of("value", isError ? type + "(" + record + "())" : record + "()"));
     }
     Map<String, String> fields = new LinkedHashMap<>();
     for (MemberShape member : members) {
@@ -566,6 +546,19 @@ final class SchemaGenerator {
         value = required(member, builderValue);
       }
       fields.put(FSharpNaming.fieldName(member), value);
+    }
+    if (isError) {
+      return FSharpWriter.render(
+          """
+          override _.Build(builder) : ${type:L} =
+              ${type:L}(
+                  ({
+                      ${#fields}
+                      ${key:L} = ${value:L}
+                      ${/fields}
+                  }: ${record:L}))\
+          """,
+          Map.of("type", type, "record", record, "fields", fields));
     }
     return FSharpWriter.render(
         """
@@ -638,7 +631,10 @@ final class SchemaGenerator {
         || ShapeSupport.isValidationException(shape.getId())) {
       return schema(shape);
     }
-    String type = symbols.typeOf(shape);
+    String type =
+        shape.hasTrait(ErrorTrait.class)
+            ? FSharpSymbolProvider.render(symbols.exceptionSymbol(shape.asStructureShape().get()))
+            : symbols.typeOf(shape);
     return SCHEMAS
         + ".Lazy<"
         + type
@@ -676,14 +672,6 @@ final class SchemaGenerator {
     List<software.amazon.smithy.model.traits.Trait> traits =
         SchemaSupport.memberTraits(model, member);
     return FSharpLiterals.traits(traits);
-  }
-
-  /** The builder property, and record field or error property, a member is held in. */
-  private static String property(
-      MemberShape member, boolean isError, Optional<MemberShape> message) {
-    return isError
-        ? TypeGenerator.errorPropertyName(member, message)
-        : FSharpNaming.fieldName(member);
   }
 
   private static void namedTraits(List<String> arguments, String name, String traits) {
