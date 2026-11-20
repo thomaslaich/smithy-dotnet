@@ -11,10 +11,6 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-## [0.20.2]
-
-The F# client template awaits its call with `match!` inside a `task`.
-
 ### Changed
 
 - **F# client template uses `task { match! }`.** The `nsmithy-client -lang F#` template blocked
@@ -1065,8 +1061,7 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.2...HEAD
-[0.20.2]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.1...v0.20.2
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.1...HEAD
 [0.20.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.18.2...v0.19.0
