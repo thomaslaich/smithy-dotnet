@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NSmithy.Core;
 using NSmithy.Server;
 using NSmithy.Server.AspNetCore;
 
@@ -83,29 +84,15 @@ public class FakeHandlerTests
         var services = new ServiceCollection();
         services.AddWeatherServiceHandler<FakeWeatherServiceHandler>(lifetime);
 
-        Assert.All(
-            services.Where(descriptor =>
-                descriptor.ServiceType == typeof(FakeWeatherServiceHandler)
-                || descriptor.ServiceType == typeof(IWeatherServiceHandler)
-                || descriptor.ServiceType == typeof(IGetCityHandler)
-            ),
-            descriptor => Assert.Equal(lifetime, descriptor.Lifetime)
+        var handler = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IWeatherServiceHandler)
         );
-    }
-
-    [Fact]
-    public void AScopedHandlerIsSharedWithinARequestOnly()
-    {
-        var services = new ServiceCollection();
-        services.AddWeatherServiceHandler<FakeWeatherServiceHandler>(ServiceLifetime.Scoped);
-        using var provider = services.BuildServiceProvider(validateScopes: true);
-
-        using var first = provider.CreateScope();
-        using var second = provider.CreateScope();
-        var handler = first.ServiceProvider.GetRequiredService<IGetCityHandler>();
-
-        Assert.Same(handler, first.ServiceProvider.GetRequiredService<IListCitiesHandler>());
-        Assert.NotSame(handler, second.ServiceProvider.GetRequiredService<IGetCityHandler>());
+        Assert.Equal(lifetime, handler.Lifetime);
+        Assert.DoesNotContain(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IGetCityHandler)
+        );
     }
 
     [Fact]
@@ -113,14 +100,99 @@ public class FakeHandlerTests
     {
         var services = new ServiceCollection();
         services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
-        using var provider = services.BuildServiceProvider();
 
-        using var first = provider.CreateScope();
-        using var second = provider.CreateScope();
-
-        Assert.Same(
-            first.ServiceProvider.GetRequiredService<IGetCityHandler>(),
-            second.ServiceProvider.GetRequiredService<IGetCityHandler>()
+        Assert.Equal(
+            ServiceLifetime.Singleton,
+            services
+                .Single(descriptor => descriptor.ServiceType == typeof(IWeatherServiceHandler))
+                .Lifetime
         );
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Singleton)]
+    [InlineData(ServiceLifetime.Scoped)]
+    public async Task AHandlerServingSeveralOperationsIsCreatedAndDisposedOnce(
+        ServiceLifetime lifetime
+    )
+    {
+        var counter = new Counter();
+        var services = new ServiceCollection();
+        services.AddSingleton(counter);
+        services.AddWeatherServiceHandler<DisposableWeatherHandler>(lifetime);
+        var operations = new WeatherServiceDefinition().Operations;
+
+        await using (var provider = services.BuildServiceProvider(validateScopes: true))
+        {
+            await using (var scope = provider.CreateAsyncScope())
+            {
+                await operations
+                    .GetOperation(new ShapeId("example.weather", "GetCity"))
+                    .InvokeAsync(
+                        SmithyServerRuntime.Default,
+                        new GetCityInput("SEA"),
+                        scope.ServiceProvider
+                    );
+                await operations
+                    .GetOperation(new ShapeId("example.weather", "ListCities"))
+                    .InvokeAsync(
+                        SmithyServerRuntime.Default,
+                        new ListCitiesInput(),
+                        scope.ServiceProvider
+                    );
+            }
+
+            Assert.Equal(1, counter.Created);
+            Assert.Equal(lifetime == ServiceLifetime.Scoped ? 1 : 0, counter.Disposed);
+        }
+
+        Assert.Equal(1, counter.Disposed);
+    }
+
+    [Fact]
+    public async Task AnOperationsOwnHandlerTakesPrecedence()
+    {
+        var services = new ServiceCollection();
+        services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
+        services.AddSingleton<IGetCityHandler, AnywhereIsSeattle>();
+        await using var provider = services.BuildServiceProvider();
+
+        var output = await new WeatherServiceDefinition()
+            .Operations.GetOperation(new ShapeId("example.weather", "GetCity"))
+            .InvokeAsync(SmithyServerRuntime.Default, new GetCityInput("HOU"), provider);
+
+        Assert.Equal("Seattle", Assert.IsType<GetCityOutput>(output).Name);
+    }
+
+    private sealed class Counter
+    {
+        public int Created { get; set; }
+
+        public int Disposed { get; set; }
+    }
+
+    private sealed class DisposableWeatherHandler : FakeWeatherServiceHandler, IDisposable
+    {
+        private readonly Counter counter;
+
+        public DisposableWeatherHandler(Counter counter)
+        {
+            this.counter = counter;
+            counter.Created++;
+        }
+
+        public void Dispose() => counter.Disposed++;
+    }
+
+    private sealed class AnywhereIsSeattle : IGetCityHandler
+    {
+        public Task<GetCityOutput> GetCityAsync(
+            GetCityInput input,
+            CancellationToken cancellationToken = default
+        ) =>
+            new FakeWeatherServiceHandler().GetCityAsync(
+                new GetCityInput("SEA"),
+                cancellationToken
+            );
     }
 }

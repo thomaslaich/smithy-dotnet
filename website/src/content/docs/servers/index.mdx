@@ -111,7 +111,8 @@ server protocol. To select several, see
 
 The handler is a singleton by default. Each request resolves it from its own
 scope, so a handler that depends on a scoped service, such as an EF Core
-`DbContext`, registers with `ServiceLifetime.Scoped`:
+`DbContext`, registers with `ServiceLifetime.Scoped`; every operation of a
+request then shares one handler, which the container disposes once:
 
 <Tabs syncKey="lang">
   <TabItem label="C#">
@@ -153,8 +154,9 @@ The service interface inherits one interface per operation:
   </TabItem>
 </Tabs>
 
-Endpoints resolve the per-operation interfaces. To split a service across
-implementations, register each one instead of using the aggregate helper:
+Each operation uses its own interface's handler if one is registered, and the
+service handler otherwise. To split a service across implementations, register
+each one, with or without the aggregate helper:
 
 <Tabs syncKey="lang">
   <TabItem label="C#">

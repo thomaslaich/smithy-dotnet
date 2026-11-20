@@ -72,7 +72,7 @@ class ProvidedShapesIntegrationTest {
     assertTrue(server.contains("using Orders.Acme.Shop;"), server);
     assertTrue(
         server.contains("public interface IShopServiceHandler : IPlaceOrderHandler"), server);
-    assertTrue(server.contains("GetRequiredService<IPlaceOrderHandler>()"), server);
+    assertTrue(server.contains("GetService<IPlaceOrderHandler>()"), server);
     assertTrue(server.contains("global::Orders.Acme.Shop.Schemas.PlaceOrderSchema.Schema"), server);
     assertFalse(server.contains("global::Acme.Shop.Schemas.PlaceOrderSchema"), server);
   }

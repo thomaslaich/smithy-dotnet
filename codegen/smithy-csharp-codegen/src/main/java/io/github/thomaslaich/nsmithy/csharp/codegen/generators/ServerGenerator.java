@@ -88,7 +88,7 @@ public final class ServerGenerator implements Runnable {
       writer.write("");
     }
 
-    writeServiceDefinition(ops, prompts, contract);
+    writeServiceDefinition(ops, prompts, contract, aggInterface);
     writer.write("");
     writeServerExtensions(ops, contract, aggInterface, serverProtocols);
   }
@@ -96,7 +96,10 @@ public final class ServerGenerator implements Runnable {
   // ---------------- DI registration ----------------
 
   private void writeServiceDefinition(
-      List<OperationShape> ops, List<ServicePrompts.Prompt> prompts, String contract) {
+      List<OperationShape> ops,
+      List<ServicePrompts.Prompt> prompts,
+      String contract,
+      String aggInterface) {
     writer.pushState();
     try {
       writer.putContext("contract", contract);
@@ -106,7 +109,8 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("catalog", RuntimeTypes.SERVICE_OPERATION_CATALOG);
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext("prompts", writer.consumer(w -> writePromptDefinitions(prompts)));
-      writer.putContext("operations", writer.consumer(w -> writeCatalogOperations(ops)));
+      writer.putContext(
+          "operations", writer.consumer(w -> writeCatalogOperations(ops, aggInterface)));
       writer.putContext(
           "jsonSchemas",
           writer.consumer(w -> {
@@ -199,16 +203,20 @@ public final class ServerGenerator implements Runnable {
 
   /**
    * The operation table entries: each operation's schema, its handler resolved from a request's
-   * services, for unary operations its JSON Schemas, and its effective auth schemes unless it needs
-   * no authentication.
+   * services (the operation's own handler if one is registered, else the service's), for unary
+   * operations its JSON Schemas, and its effective auth schemes unless it needs no authentication.
    */
-  private void writeCatalogOperations(List<OperationShape> ops) {
+  private void writeCatalogOperations(List<OperationShape> ops, String aggInterface) {
     for (int i = 0; i < ops.size(); i++) {
       OperationShape op = ops.get(i);
       String resolver =
           "services => "
               + unaryAdapter(
-                  op, writer.format("services.GetRequiredService<$L>()", opHandlerName(op)));
+                  op,
+                  writer.format(
+                      "(services.GetService<$L>() ?? services.GetRequiredService<$L>())",
+                      opHandlerName(op),
+                      aggInterface));
       String separator = i + 1 == ops.size() ? "" : ",";
       String jsonSchemas = isStreaming(op) ? "" : ", " + operationJsonSchemasClass(op) + ".Value";
       writer.write(
@@ -242,20 +250,13 @@ public final class ServerGenerator implements Runnable {
             if (!serverProtocols.isEmpty()) {
               w.write("services.AddSmithyServer();");
             }
+            // Only the service's interface: an operation without a handler of its own falls back to
+            // it, so the container creates, and disposes, one handler per lifetime.
             w.write(
                 """
                 services.Add${contract:L}();
-                services.Add(new ${serviceDescriptor:T}(typeof(THandler), typeof(THandler), lifetime));
-                services.Add(new ${serviceDescriptor:T}(typeof(${handler:L}), serviceProvider =>
-                    serviceProvider.GetRequiredService<THandler>(), lifetime));\
+                services.Add(new ${serviceDescriptor:T}(typeof(${handler:L}), typeof(THandler), lifetime));\
                 """);
-            for (OperationShape op : ops) {
-              w.write(
-                  "services.Add(new $T(typeof($L), serviceProvider =>"
-                      + " serviceProvider.GetRequiredService<THandler>(), lifetime));",
-                  RuntimeTypes.SERVICE_DESCRIPTOR,
-                  opHandlerName(op));
-            }
           }));
       writer.putContext(
           "endpointMapping",
@@ -278,8 +279,13 @@ public final class ServerGenerator implements Runnable {
               }
 
               public static ${serviceCollection:T} Add${contract:L}Handler<THandler>(
+                  this ${serviceCollection:T} services)
+                  where THandler : class, ${handler:L} =>
+                  services.Add${contract:L}Handler<THandler>(${serviceLifetime:T}.Singleton);
+
+              public static ${serviceCollection:T} Add${contract:L}Handler<THandler>(
                   this ${serviceCollection:T} services,
-                  ${serviceLifetime:T} lifetime = ${serviceLifetime:T}.Singleton)
+                  ${serviceLifetime:T} lifetime)
                   where THandler : class, ${handler:L}
               {
                   ${argumentNullException:T}.ThrowIfNull(services);

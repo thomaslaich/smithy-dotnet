@@ -306,7 +306,8 @@ final class ServerGeneratorTest {
     assertTrue(
         generated.contains(
             "ServerOperation.Create(global::Example.Example.Streaming.Schemas.ChatSchema.Schema,"
-                + " services => services.GetRequiredService<IChatHandler>().ChatAsync),"),
+                + " services => (services.GetService<IChatHandler>() ??"
+                + " services.GetRequiredService<IStreamingServiceHandler>()).ChatAsync),"),
         generated);
     assertTrue(generated.contains("selected.Add(new(\"Grpc\", new GrpcProtocol()));"), generated);
     assertTrue(
@@ -345,7 +346,9 @@ final class ServerGeneratorTest {
     // Routes come from the protocol at runtime, not from generated code.
     assertFalse(generated.contains("MapMethods"), generated);
     assertTrue(
-        generated.contains("services => services.GetRequiredService<IUploadHandler>().UploadAsync"),
+        generated.contains(
+            "services => (services.GetService<IUploadHandler>() ??"
+                + " services.GetRequiredService<IStreamingServiceHandler>()).UploadAsync"),
         generated);
     assertTrue(
         generated.contains(
@@ -410,8 +413,16 @@ final class ServerGeneratorTest {
                 + " services)"),
         generated);
     assertTrue(generated.contains("services.AddCatalogService();"), generated);
-    assertTrue(generated.contains("services.GetRequiredService<INotifyHandler>()"), generated);
-    assertTrue(generated.contains("services.GetRequiredService<IPingHandler>()"), generated);
+    assertTrue(
+        generated.contains(
+            "(services.GetService<INotifyHandler>() ??"
+                + " services.GetRequiredService<ICatalogServiceHandler>())"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "(services.GetService<IPingHandler>() ??"
+                + " services.GetRequiredService<ICatalogServiceHandler>())"),
+        generated);
     assertFalse(generated.contains("CreateCatalogServiceOperationCatalog"), generated);
     assertTrue(generated.contains("CatalogServiceSchema.Schema,"), generated);
     assertTrue(generated.contains("private static class NotifyJsonSchemas"), generated);
@@ -428,16 +439,16 @@ final class ServerGeneratorTest {
     assertTrue(
         generated.contains(
             "ServerOperation.Create(global::Example.Example.Catalog.Schemas.NotifySchema.Schema,"
-                + " services => async (input, ct) => { await"
-                + " services.GetRequiredService<INotifyHandler>().NotifyAsync(input,"
+                + " services => async (input, ct) => { await (services.GetService<INotifyHandler>()"
+                + " ?? services.GetRequiredService<ICatalogServiceHandler>()).NotifyAsync(input,"
                 + " ct).ConfigureAwait(false); return SmithyUnit.Value; },"
                 + " NotifyJsonSchemas.Value),"),
         generated);
     assertTrue(
         generated.contains(
             "ServerOperation.Create(global::Example.Example.Catalog.Schemas.PingSchema.Schema,"
-                + " services => (_, ct) =>"
-                + " services.GetRequiredService<IPingHandler>().PingAsync(ct),"
+                + " services => (_, ct) => (services.GetService<IPingHandler>() ??"
+                + " services.GetRequiredService<ICatalogServiceHandler>()).PingAsync(ct),"
                 + " PingJsonSchemas.Value)"),
         generated);
   }

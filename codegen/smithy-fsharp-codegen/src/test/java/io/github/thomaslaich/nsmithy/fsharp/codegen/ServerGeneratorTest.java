@@ -83,16 +83,18 @@ class ServerGeneratorTest {
                 + " global.Microsoft.Extensions.DependencyInjection.IServiceCollection, handler:"
                 + " ICafeServiceHandler)"),
         server);
-    assertTrue(server.contains("(services, handler :> global.Example.Cafe.IOrderHandler)"), server);
     assertTrue(
         server.contains(
             "factory: global.System.IServiceProvider -> ICafeServiceHandler, ?lifetime:"
                 + " global.Microsoft.Extensions.DependencyInjection.ServiceLifetime)"),
         server);
+    assertFalse(server.contains("handler :> global.Example.Cafe.IOrderHandler"), server);
     assertTrue(
         server.contains(
-            "?lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime"),
+            "lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime)"),
         server);
+    assertTrue(
+        server.contains("| :? global.Example.Cafe.IOrderHandler as handler -> handler"), server);
     assertTrue(server.contains("static member MapCafeService("), server);
   }
 

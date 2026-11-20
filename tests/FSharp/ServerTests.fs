@@ -220,7 +220,7 @@ let ``A scoped handler is shared within a request only`` () =
     use provider = services.BuildServiceProvider(validateScopes = true)
     use first = provider.CreateScope()
     use second = provider.CreateScope()
-    let handler = first.ServiceProvider.GetRequiredService<IOrderHandler>()
+    let handler = first.ServiceProvider.GetRequiredService<IKitchenServiceHandler>()
 
-    Assert.Same(handler, first.ServiceProvider.GetRequiredService<IPingHandler>())
-    Assert.NotSame(handler, second.ServiceProvider.GetRequiredService<IOrderHandler>())
+    Assert.Same(handler, first.ServiceProvider.GetRequiredService<IKitchenServiceHandler>())
+    Assert.NotSame(handler, second.ServiceProvider.GetRequiredService<IKitchenServiceHandler>())
