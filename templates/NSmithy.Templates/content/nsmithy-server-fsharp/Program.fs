@@ -10,10 +10,10 @@ open Microsoft.Extensions.DependencyInjection
 open NSmithy.Server.AspNetCore.Docs
 //#endif
 
-type HelloHandler() =
-    interface IHelloServiceHandler with
+let helloHandler =
+    { new IHelloServiceHandler with
         member _.SayHelloAsync(input, _) =
-            Task.FromResult(Ok { Message = $"Hello, {input.Name}!" })
+            Task.FromResult(Ok { Message = $"Hello, {input.Name}!" }) }
 
 [<EntryPoint>]
 let main args =
@@ -28,7 +28,7 @@ let main args =
     |> ignore
 
     //#endif
-    builder.Services.AddHelloServiceHandler<HelloHandler>() |> ignore
+    builder.Services.AddHelloServiceHandler helloHandler |> ignore
 
     let app = builder.Build()
     //#if (WithDocs && IsRestJson1)
