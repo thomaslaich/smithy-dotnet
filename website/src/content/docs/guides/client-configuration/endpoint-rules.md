@@ -3,6 +3,10 @@ title: Endpoint rules
 description: Generated endpoint resolvers for services with modeled Smithy endpoint rules.
 ---
 
+:::note[C# only]
+F# projects do not generate endpoint resolvers. Set `Endpoint` or `EndpointResolver` on the client config. See [F#](/smithy-dotnet/guides/fsharp/).
+:::
+
 A service that declares `@smithy.rules#endpointRuleSet` or
 `@smithy.rules#endpointBdd` gets a generated `{Service}EndpointResolver`. Its
 client resolves endpoints from the rules, so it is configured with the rule

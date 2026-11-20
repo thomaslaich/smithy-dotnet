@@ -9,8 +9,8 @@ and server. Generation runs during `dotnet build`, as it does for C#, and the
 generated code uses the same runtime packages.
 
 :::caution[Experimental]
-Paginators, waiters, endpoint-rule resolvers, fake clients and handlers, and
-client dependency-injection registration are C# only.
+Paginators, waiters, endpoint-rule resolvers, fake clients and handlers, smoke
+tests, and client dependency-injection registration are C# only.
 :::
 
 The [F# example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/fsharp)
@@ -108,48 +108,10 @@ C# and F# projects do not share generated types.
 
 ## Serve the service
 
-Implement the handler interface and register it. The runtime reads each
-request, validates it against the model, calls the handler, and writes the
-response. A modeled error the handler raises is written as that error.
-
-```fsharp title="Program.fs"
-open System.Threading.Tasks
-open Microsoft.AspNetCore.Builder
-open Example.Weather
-
-type WeatherHandler() =
-    interface IWeatherServiceHandler with
-        member _.GetCityAsync(input, _) =
-            match input.CityId with
-            | "SEA" ->
-                Task.FromResult
-                    { Name = "Seattle"
-                      Coordinates = { Latitude = 47.6f; Longitude = -122.3f } }
-            | _ -> raise (NoSuchResource("City"))
-
-let builder = WebApplication.CreateBuilder()
-builder.Services.AddWeatherServiceHandler<WeatherHandler>() |> ignore
-
-let app = builder.Build()
-app.MapWeatherService() |> ignore
-app.Run()
-```
-
-`MapWeatherService` serves the service's first protocol. Pass
-`WeatherServiceProtocols` flags to serve others; see
-[Hosting multiple protocols](/smithy-dotnet/servers/hosting/).
-
-`MapWeatherService` returns the service's route group, so conventions apply to
-its endpoints. `WithModeledAuthorization()` authorizes each operation from its
-modeled auth; see [Authorization](/smithy-dotnet/servers/authorization/).
-
-The same handler can serve MCP clients. Reference `NSmithy.Server.Mcp` and
-register the generated definition; see [MCP](/smithy-dotnet/servers/mcp/).
-
-```fsharp
-builder.Services.AddMcpServer().WithSmithyService<WeatherServiceDefinition>()
-|> ignore
-```
+Implement the handler interface and register it with `AddWeatherServiceHandler`
+and `MapWeatherService`; the [Servers](/smithy-dotnet/servers/) pages show each
+step in C# and F#. A handler raises a modeled error, such as
+`raise (NoSuchResource("City"))`, and the runtime writes it as that error.
 
 ## Call the service
 
@@ -214,13 +176,9 @@ Other failures are exceptions: transport failures, cancellation, and error
 responses the model does not declare for the operation. Server handlers raise
 modeled errors, as in C#.
 
-The client runs on the same runtime as the C# client, so
-[authentication](/smithy-dotnet/guides/client-configuration/authentication/),
-[retries](/smithy-dotnet/guides/client-configuration/retry/),
-[interceptors](/smithy-dotnet/guides/client-configuration/interceptors/), and
-[transport](/smithy-dotnet/guides/client-configuration/transport/) are set on
-`WeatherClientConfig` the same way. For code that uses `async { }`, wrap a call
-in `Async.AwaitTask`.
+The client is configured through `WeatherClientConfig` as in C#; see
+[Client configuration](/smithy-dotnet/guides/client-configuration/). For code
+that uses `async { }`, wrap a call in `Async.AwaitTask`.
 
 ## Limitations
 

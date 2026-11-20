@@ -3,6 +3,10 @@ title: Fake clients
 description: A generated client that returns canned responses without a network call. Canned responses from @examples, placeholders everywhere else.
 ---
 
+:::note[C# only]
+F# projects do not generate fake clients. See [F#](/smithy-dotnet/guides/fsharp/).
+:::
+
 With `generateFakes` set on the `csharp-codegen` plugin, codegen emits a
 `Fake{Service}Client` implementing `I{Service}Client`. Code that depends on the
 client interface runs against it with no server and no network. Set it in the

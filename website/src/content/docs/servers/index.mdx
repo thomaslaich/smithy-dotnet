@@ -9,7 +9,7 @@ prev: false
 next: false
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, TabItem, Tabs } from '@astrojs/starlight/components';
 
 NSmithy generates handler interfaces whose methods accept modeled inputs and
 return modeled outputs. You implement the operations; the runtime handles
@@ -37,35 +37,71 @@ For a `Library` service with a `GetBook` operation, modeled as in
 [Modeling contracts](/smithy-dotnet/concepts/modeling/), implement the generated
 service interface:
 
-```csharp
-internal sealed class LibraryHandler : ILibraryServiceHandler
-{
-    public Task<GetBookOutput> GetBookAsync(
-        GetBookInput input, CancellationToken ct = default)
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    internal sealed class LibraryHandler : ILibraryServiceHandler
     {
-        if (input.Id != "1")
-            throw new BookNotFound("Book not found.");
+        public Task<GetBookOutput> GetBookAsync(
+            GetBookInput input, CancellationToken ct = default)
+        {
+            if (input.Id != "1")
+                throw new BookNotFound("Book not found.");
 
-        return Task.FromResult(new GetBookOutput(input.Id, "The Odyssey"));
+            return Task.FromResult(new GetBookOutput(input.Id, "The Odyssey"));
+        }
     }
-}
-```
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    type LibraryHandler() =
+        interface ILibraryServiceHandler with
+            member _.GetBookAsync(input, _) =
+                if input.Id <> "1" then
+                    raise (BookNotFound("Book not found."))
+
+                Task.FromResult { Id = input.Id; Title = "The Odyssey" }
+    ```
+  </TabItem>
+</Tabs>
 
 Return an output for success; throw a generated error for a modeled failure.
 The selected protocol determines the response encoding and status.
 
 ## Register and map
 
-```csharp title="Program.cs"
-using Example.Library;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="Program.cs"
+    using Example.Library;
 
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddLibraryServiceHandler<LibraryHandler>();
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddLibraryServiceHandler<LibraryHandler>();
 
-var app = builder.Build();
-app.MapLibraryService();
-app.Run();
-```
+    var app = builder.Build();
+    app.MapLibraryService();
+    app.Run();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="Program.fs"
+    open Example.Library
+    open Microsoft.AspNetCore.Builder
+    open Microsoft.Extensions.DependencyInjection
+
+    [<EntryPoint>]
+    let main args =
+        let builder = WebApplication.CreateBuilder(args)
+        builder.Services.AddLibraryServiceHandler<LibraryHandler>() |> ignore
+
+        let app = builder.Build()
+        app.MapLibraryService() |> ignore
+        app.Run()
+        0
+    ```
+  </TabItem>
+</Tabs>
 
 `Add{Service}Handler<THandler>` registers the implementation, service metadata,
 and default server runtime. `Map{Service}` maps the first declared supported
@@ -76,22 +112,46 @@ server protocol. To select several, see
 
 The service interface inherits one interface per operation:
 
-```csharp
-public interface IGetBookHandler
-{
-    Task<GetBookOutput> GetBookAsync(GetBookInput input, CancellationToken ct = default);
-}
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    public interface IGetBookHandler
+    {
+        Task<GetBookOutput> GetBookAsync(GetBookInput input, CancellationToken ct = default);
+    }
 
-public interface ILibraryServiceHandler : IGetBookHandler { }
-```
+    public interface ILibraryServiceHandler : IGetBookHandler { }
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    type IGetBookHandler =
+        abstract GetBookAsync:
+            input: GetBookInput * cancellationToken: CancellationToken -> Task<GetBookOutput>
+
+    type ILibraryServiceHandler =
+        inherit IGetBookHandler
+    ```
+  </TabItem>
+</Tabs>
 
 Endpoints resolve the per-operation interfaces. To split a service across
 implementations, register each one instead of using the aggregate helper:
 
-```csharp
-builder.Services.AddLibraryService();
-builder.Services.AddScoped<IGetBookHandler, GetBookHandler>();
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    builder.Services.AddLibraryService();
+    builder.Services.AddScoped<IGetBookHandler, GetBookHandler>();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    builder.Services.AddLibraryService() |> ignore
+    builder.Services.AddScoped<IGetBookHandler, GetBookHandler>() |> ignore
+    ```
+  </TabItem>
+</Tabs>
 
 Register a handler for every mapped operation. `GetBookHandler` implements
 `IGetBookHandler` with the same method shown above.

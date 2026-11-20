@@ -3,6 +3,10 @@ title: Waiters
 description: Generated waiters that poll an operation until a resource reaches a state, for @waitable operations.
 ---
 
+:::note[C# only]
+F# projects do not generate waiters. See [F#](/smithy-dotnet/guides/fsharp/).
+:::
+
 Operations modeled with [`@waitable`](https://smithy.io/2.0/additional-specs/waiters.html)
 generate one waiter method per waiter. The trait comes from
 `software.amazon.smithy:smithy-waiters`, which a model using it lists in

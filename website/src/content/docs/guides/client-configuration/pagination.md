@@ -3,6 +3,10 @@ title: Pagination
 description: Generated IAsyncEnumerable paginators for @paginated operations.
 ---
 
+:::note[C# only]
+F# projects do not generate paginators. See [F#](/smithy-dotnet/guides/fsharp/).
+:::
+
 Operations modeled with [`@paginated`](https://smithy.io/2.0/spec/behavior-traits.html#paginated-trait)
 generate paginator helpers alongside the normal operation method.
 

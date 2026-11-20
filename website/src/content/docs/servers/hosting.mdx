@@ -1,0 +1,130 @@
+---
+title: Hosting multiple protocols
+description: Expose one service over several protocols from a single handler set, and the listener/port rules that decide what can share a port.
+---
+
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
+Reference the protocol package for every generated server protocol alongside
+`NSmithy.Server.AspNetCore`; see [Server packages](/smithy-dotnet/servers/#reference-the-protocol-package).
+
+A service can declare more than one protocol trait. When it does, codegen emits
+a `Map{Service}` extension with a generated `{Service}Protocols` flags enum.
+Each selected protocol resolves the registered operation handlers. Their method
+signatures use the same model types across protocols.
+
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="Program.cs"
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddWeatherServiceHandler<WeatherHandler>();   // one handler
+
+    var app = builder.Build();
+    app.MapWeatherService(
+        WeatherServiceProtocols.RestJson1 | WeatherServiceProtocols.RpcV2Cbor);
+    app.Run();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="Program.fs"
+    let builder = WebApplication.CreateBuilder(args)
+    builder.Services.AddWeatherServiceHandler<WeatherHandler>() |> ignore // one handler
+
+    let app = builder.Build()
+
+    app.MapWeatherService(WeatherServiceProtocols.RestJson1 ||| WeatherServiceProtocols.RpcV2Cbor)
+    |> ignore
+
+    app.Run()
+    ```
+  </TabItem>
+</Tabs>
+
+The client must select the matching protocol as well as the endpoint.
+
+## Server runtime registration
+
+Endpoints resolve `SmithyServerRuntime` from request services, and use a default
+runtime when none is registered. `Add{Service}Handler<THandler>()` registers it
+through `AddSmithyServer()`; an existing application registration takes
+precedence.
+
+To implement operations separately, register each operation handler. The
+runtime needs no registration of its own:
+
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    builder.Services.AddScoped<IGetWeatherHandler, GetWeatherHandler>();
+    builder.Services.AddScoped<IGetForecastHandler, GetForecastHandler>();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    builder.Services.AddScoped<IGetWeatherHandler, GetWeatherHandler>() |> ignore
+    builder.Services.AddScoped<IGetForecastHandler, GetForecastHandler>() |> ignore
+    ```
+  </TabItem>
+</Tabs>
+
+The runtime currently has no configurable lifecycle options. DI establishes its
+ownership and lifetime; it does not add interceptors or telemetry by itself.
+
+## What can share a port
+
+Endpoints are port-agnostic — ports are a deployment concern, so the generated
+`Map` extension never binds one. Whether two protocols can share a listener
+depends on their routes and transport:
+
+- Protocols can share a listener when their routes do not conflict. REST paths
+  are model-defined, so check them against RPC or gRPC dispatch paths.
+- Conflicting routes need separate host or port constraints; the generated
+  router does not distinguish protocols by `Content-Type`.
+- gRPC requires HTTP/2. Use a dedicated HTTP/2 listener for cleartext development.
+  With TLS, HTTP/1.1 and HTTP/2 can share a listener through ALPN negotiation.
+
+## Pinning a protocol to a port
+
+Use ASP.NET Core's `RequireHost` to scope a protocol's endpoints to a specific
+port, and configure Kestrel to listen there:
+
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenLocalhost(5000);                                   // HTTP/1.1 — REST
+        options.ListenLocalhost(5001, o => o.Protocols = HttpProtocols.Http2); // gRPC
+    });
+
+    var app = builder.Build();
+    app.MapGroup("")
+        .RequireHost("*:5000")
+        .MapWeatherService(WeatherServiceProtocols.RestJson1);
+    app.MapGroup("")
+        .RequireHost("*:5001")
+        .MapWeatherService(WeatherServiceProtocols.Grpc);
+    app.Run();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    builder.WebHost.ConfigureKestrel(fun options ->
+        options.ListenLocalhost(5000) // HTTP/1.1: REST
+        options.ListenLocalhost(5001, fun o -> o.Protocols <- HttpProtocols.Http2)) // gRPC
+    |> ignore
+
+    let app = builder.Build()
+
+    app.MapGroup("").RequireHost("*:5000").MapWeatherService(WeatherServiceProtocols.RestJson1)
+    |> ignore
+
+    app.MapGroup("").RequireHost("*:5001").MapWeatherService(WeatherServiceProtocols.Grpc)
+    |> ignore
+
+    app.Run()
+    ```
+  </TabItem>
+</Tabs>
+
+See [gRPC](/smithy-dotnet/protocols/grpc/) for the full gRPC hosting example.

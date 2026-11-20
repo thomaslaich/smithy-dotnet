@@ -7,6 +7,8 @@ sidebar:
     variant: danger
 ---
 
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
 :::caution[Experimental]
 The MCP adapter's API and supported model surface can still change.
 :::
@@ -40,22 +42,49 @@ server runtimes.
 Register the generated handler as usual, then select the service by its generated
 service definition. This exposes its tools and prompts together:
 
-```csharp title="Program.cs"
-using Example.Weather;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using NSmithy.Server.Mcp;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="Program.cs"
+    using Example.Weather;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Hosting;
+    using NSmithy.Server.Mcp;
 
-var builder = Host.CreateApplicationBuilder(args);
+    var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddWeatherServiceHandler<WeatherHandler>();
-builder.Services
-    .AddMcpServer()
-    .WithStdioServerTransport()
-    .WithSmithyService<WeatherServiceDefinition>();
+    builder.Services.AddWeatherServiceHandler<WeatherHandler>();
+    builder.Services
+        .AddMcpServer()
+        .WithStdioServerTransport()
+        .WithSmithyService<WeatherServiceDefinition>();
 
-await builder.Build().RunAsync();
-```
+    await builder.Build().RunAsync();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="Program.fs"
+    open Example.Weather
+    open Microsoft.Extensions.DependencyInjection
+    open Microsoft.Extensions.Hosting
+    open NSmithy.Server.Mcp
+
+    [<EntryPoint>]
+    let main args =
+        let builder = Host.CreateApplicationBuilder(args)
+
+        builder.Services.AddWeatherServiceHandler<WeatherHandler>() |> ignore
+
+        builder.Services
+            .AddMcpServer()
+            .WithStdioServerTransport()
+            .WithSmithyService<WeatherServiceDefinition>()
+        |> ignore
+
+        builder.Build().Run()
+        0
+    ```
+  </TabItem>
+</Tabs>
 
 `AddWeatherServiceHandler` also registers the generated service definition.
 That definition resolves each operation through its per-operation handler
@@ -64,12 +93,24 @@ its handler from the call's services, so handlers can have any lifetime. For
 separately implemented operation handlers, register the service definition
 explicitly:
 
-```csharp
-builder.Services.AddWeatherService();
-builder.Services.AddScoped<IGetCityHandler, GetCityHandler>();
-builder.Services.AddScoped<IGetForecastHandler, GetForecastHandler>();
-// Register the remaining operation handlers exposed by the service.
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    builder.Services.AddWeatherService();
+    builder.Services.AddScoped<IGetCityHandler, GetCityHandler>();
+    builder.Services.AddScoped<IGetForecastHandler, GetForecastHandler>();
+    // Register the remaining operation handlers exposed by the service.
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    builder.Services.AddWeatherService() |> ignore
+    builder.Services.AddScoped<IGetCityHandler, GetCityHandler>() |> ignore
+    builder.Services.AddScoped<IGetForecastHandler, GetForecastHandler>() |> ignore
+    // Register the remaining operation handlers exposed by the service.
+    ```
+  </TabItem>
+</Tabs>
 
 `WithSmithyService` is explicit: registering a service or its handlers in DI
 does not expose it to MCP until its definition is selected.
@@ -99,7 +140,7 @@ the handler runs. Missing required members, constraint violations, and modeled
 errors are returned as MCP tool errors. Successful values are returned both as
 structured content and as JSON text for clients that only consume text content.
 
-JSON Schema generation is part of the C# code generator, not the MCP adapter.
+JSON Schema generation is part of the code generator, not the MCP adapter.
 Each generated unary server operation binding carries its input and output
 documents in `JsonSchemas`. The shared `OperationSchema` and client-only output
 do not carry this tool metadata. The schemas describe NSmithy's canonical JSON

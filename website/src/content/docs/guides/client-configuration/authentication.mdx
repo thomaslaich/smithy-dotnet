@@ -3,20 +3,36 @@ title: Authentication
 description: Configure generated clients with modeled auth schemes, including early-preview AWS SigV4 signing.
 ---
 
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
 Smithy models describe which auth schemes a service supports, but generated
 clients still need runtime auth configuration. Add auth schemes through
 `{Service}ClientConfig.AuthSchemes`:
 
-```csharp
-using NSmithy.Client;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    using NSmithy.Client;
 
-var client = new WeatherClient(
-    new Uri("https://api.example.com"),
-    new()
-    {
-        AuthSchemes = { new HttpBearerAuthScheme(token) },
-    });
-```
+    var client = new WeatherClient(
+        new Uri("https://api.example.com"),
+        new()
+        {
+            AuthSchemes = { new HttpBearerAuthScheme(token) },
+        });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    open NSmithy.Client
+
+    let config = WeatherClientConfig()
+    config.AuthSchemes.Add(HttpBearerAuthScheme(token))
+
+    let client = new WeatherClient(Uri "https://api.example.com", config)
+    ```
+  </TabItem>
+</Tabs>
 
 At construction time, NSmithy validates your configured schemes against the
 auth schemes modeled by the service. On each call it selects the first of the
@@ -28,10 +44,9 @@ credentials, and an [endpoint resolver](/smithy-dotnet/guides/client-configurati
 can narrow the candidate schemes per endpoint. If `AuthSchemes` is empty,
 requests are sent anonymously.
 
-The generated client sends credentials. Server-side authorization is still
-application code in this preview: generated ASP.NET Core handlers can read
-modeled auth headers or the ASP.NET Core request context, but NSmithy does not
-yet generate policy enforcement from auth traits.
+The generated client sends credentials. On the server,
+`WithModeledAuthorization()` requires authorization for the operations whose
+model requires authentication; see [Authorization](/smithy-dotnet/servers/authorization/).
 
 ## HTTP Auth Schemes
 
@@ -45,16 +60,30 @@ yet generate policy enforcement from auth traits.
 
 Example:
 
-```csharp
-using NSmithy.Client;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    using NSmithy.Client;
 
-var client = new WeatherClient(
-    new Uri("https://api.example.com"),
-    new()
-    {
-        AuthSchemes = { new HttpApiKeyAuthScheme("X-Api-Key", apiKey) },
-    });
-```
+    var client = new WeatherClient(
+        new Uri("https://api.example.com"),
+        new()
+        {
+            AuthSchemes = { new HttpApiKeyAuthScheme("X-Api-Key", apiKey) },
+        });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    open NSmithy.Client
+
+    let config = WeatherClientConfig()
+    config.AuthSchemes.Add(HttpApiKeyAuthScheme("X-Api-Key", apiKey))
+
+    let client = new WeatherClient(Uri "https://api.example.com", config)
+    ```
+  </TabItem>
+</Tabs>
 
 The `simplerestjson` example sends the key with `HttpApiKeyAuthScheme` and
 validates it on the server with
@@ -78,16 +107,24 @@ modeled [endpoint rules](/smithy-dotnet/guides/client-configuration/endpoint-rul
 the resolved endpoint names the signing name and region, so the scheme needs
 only credentials:
 
-```csharp
-using NSmithy.Aws;
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    using NSmithy.Aws;
 
-var credentials = new DefaultAwsCredentialsProvider();
+    var credentials = new DefaultAwsCredentialsProvider();
 
-using var lambda = new LambdaClient(new LambdaClientConfig
-{
-    AuthSchemes = { new AwsSigV4AuthScheme(credentials) },
-});
-```
+    using var lambda = new LambdaClient(new LambdaClientConfig
+    {
+        AuthSchemes = { new AwsSigV4AuthScheme(credentials) },
+    });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    F# clients do not generate endpoint resolvers. Set the endpoint, signing name,
+    and region as shown below for a model without endpoint rules.
+  </TabItem>
+</Tabs>
 
 `Region` defaults to `AWS_REGION`, then `AWS_DEFAULT_REGION`, then the `region`
 of the selected profile in `~/.aws/config` (`AwsRegion.Resolve()`). Set it to
@@ -97,13 +134,25 @@ Lambda, ECS, and App Runner set it for you.
 For a model without endpoint rules, set the endpoint and pass the signing name
 and region:
 
-```csharp
-using var lambda = new LambdaClient(new LambdaClientConfig
-{
-    Endpoint = new Uri("https://lambda.us-east-1.amazonaws.com"),
-    AuthSchemes = { new AwsSigV4AuthScheme("lambda", "us-east-1", credentials) },
-});
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    using var lambda = new LambdaClient(new LambdaClientConfig
+    {
+        Endpoint = new Uri("https://lambda.us-east-1.amazonaws.com"),
+        AuthSchemes = { new AwsSigV4AuthScheme("lambda", "us-east-1", credentials) },
+    });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    let config = LambdaClientConfig(Endpoint = Uri "https://lambda.us-east-1.amazonaws.com")
+    config.AuthSchemes.Add(AwsSigV4AuthScheme("lambda", "us-east-1", credentials))
+
+    use lambda = new LambdaClient(config)
+    ```
+  </TabItem>
+</Tabs>
 
 The signer double-encodes and normalizes the canonical request path as SigV4
 specifies. For S3, it signs the path as sent, as S3's endpoint rules and the
@@ -131,11 +180,21 @@ need an interactive token code.
 
 To presign a request with an absolute URI, sign it with `AwsSigV4Signer.Presign`:
 
-```csharp
-var credentials = await credentialsProvider.GetCredentialsAsync();
-var url = new AwsSigV4Signer("s3", "us-east-1")
-    .Presign(request, credentials, TimeSpan.FromHours(1));
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    var credentials = await credentialsProvider.GetCredentialsAsync();
+    var url = new AwsSigV4Signer("s3", "us-east-1")
+        .Presign(request, credentials, TimeSpan.FromHours(1));
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    let! credentials = credentialsProvider.GetCredentialsAsync()
+    let url = AwsSigV4Signer("s3", "us-east-1").Presign(request, credentials, TimeSpan.FromHours 1.0)
+    ```
+  </TabItem>
+</Tabs>
 
 Durations are limited to AWS's range of one second through seven days.
 

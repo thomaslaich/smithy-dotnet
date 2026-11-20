@@ -3,6 +3,10 @@ title: Smoke tests
 description: Generated smoke tests that call a live service with a real client, for operations with @smokeTests.
 ---
 
+:::note[C# only]
+F# projects do not generate smoke tests. See [F#](/smithy-dotnet/guides/fsharp/).
+:::
+
 Operations modeled with [`@smokeTests`](https://smithy.io/2.0/additional-specs/smoke-tests.html)
 generate runnable smoke tests when `generateSmokeTests` is set in
 `smithy-build.json`. The trait comes from

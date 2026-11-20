@@ -38,6 +38,9 @@ dotnet new install NSmithy.Templates
 
 ## Create the projects
 
+For F#, add `-lang F#` to each `dotnet new nsmithy-*` command below. The
+projects are then `.fsproj` files with a `Program.fs`.
+
 This walkthrough keeps the contracts, the server, and the client in one
 solution, with project references between them. A client in another repository
 consumes the published contracts instead; see
@@ -189,48 +192,95 @@ the model and rebuild to regenerate it.
 
 ### Generated types
 
-Running `dotnet build` invokes the Smithy CLI and generates C# types under
+Running `dotnet build` invokes the Smithy CLI and generates types under
 `obj/`. For the model above you get:
 
-```csharp
-public sealed record SayHelloInput(string Name);
-public sealed record SayHelloOutput(string Message);
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    public sealed record SayHelloInput(string Name);
+    public sealed record SayHelloOutput(string Message);
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    type SayHelloInput = { Name: string }
+    type SayHelloOutput = { Message: string }
+    ```
+  </TabItem>
+</Tabs>
 
 And a handler interface the server must implement:
 
-```csharp
-public interface IHelloServiceHandler
-{
-    Task<SayHelloOutput> SayHelloAsync(
-        SayHelloInput input,
-        CancellationToken cancellationToken = default);
-}
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    public interface IHelloServiceHandler
+    {
+        Task<SayHelloOutput> SayHelloAsync(
+            SayHelloInput input,
+            CancellationToken cancellationToken = default);
+    }
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    type ISayHelloHandler =
+        abstract SayHelloAsync:
+            input: SayHelloInput * cancellationToken: CancellationToken -> Task<SayHelloOutput>
+
+    type IHelloServiceHandler =
+        inherit ISayHelloHandler
+    ```
+  </TabItem>
+</Tabs>
 
 ### The server handler
 
 The generated server uses [ASP.NET Core minimal API](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis).
 `Program.cs` registers your handler and maps the routes:
 
-```csharp title="HelloWorld.Server/Program.cs"
-builder.Services.AddHelloServiceHandler<HelloHandler>();
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="HelloWorld.Server/Program.cs"
+    builder.Services.AddHelloServiceHandler<HelloHandler>();
 
-app.MapHelloService();
-```
+    app.MapHelloService();
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="HelloWorld.Server/Program.fs"
+    builder.Services.AddHelloServiceHandler<HelloHandler>() |> ignore
+
+    app.MapHelloService() |> ignore
+    ```
+  </TabItem>
+</Tabs>
 
 The template supplies `HelloHandler` in `Program.cs`; this is your implementation,
 not a file regenerated during the build:
 
-```csharp title="HelloWorld.Server/Program.cs"
-internal sealed class HelloHandler : IHelloServiceHandler
-{
-    public Task<SayHelloOutput> SayHelloAsync(
-        SayHelloInput input,
-        CancellationToken cancellationToken = default
-    ) => Task.FromResult(new SayHelloOutput($"Hello, {input.Name}!"));
-}
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="HelloWorld.Server/Program.cs"
+    internal sealed class HelloHandler : IHelloServiceHandler
+    {
+        public Task<SayHelloOutput> SayHelloAsync(
+            SayHelloInput input,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(new SayHelloOutput($"Hello, {input.Name}!"));
+    }
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="HelloWorld.Server/Program.fs"
+    type HelloHandler() =
+        interface IHelloServiceHandler with
+            member _.SayHelloAsync(input, _) =
+                Task.FromResult { Message = $"Hello, {input.Name}!" }
+    ```
+  </TabItem>
+</Tabs>
 
 Replace the body with your real logic. The compiler enforces that every
 operation in the model has an implementation. Add an operation to the model and
@@ -238,15 +288,30 @@ the build breaks until you handle it.
 
 ### The generated client
 
-```csharp title="HelloWorld.Client/Program.cs"
-var client = new HelloServiceClient(new Uri("http://localhost:5000"));
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="HelloWorld.Client/Program.cs"
+    var client = new HelloServiceClient(new Uri("http://localhost:5000"));
 
-var response = await client.SayHelloAsync(new SayHelloInput("world"));
-Console.WriteLine(response.Message);
-```
+    var response = await client.SayHelloAsync(new SayHelloInput("world"));
+    Console.WriteLine(response.Message);
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="HelloWorld.Client/Program.fs"
+    use client = new HelloServiceClient(Uri "http://localhost:5000")
+
+    match client.SayHelloAsync({ Name = "world" }).GetAwaiter().GetResult() with
+    | Ok response -> printfn "%s" response.Message
+    | Error(SayHelloError.ValidationException error) -> eprintfn "Rejected: %s" error.Message
+    ```
+  </TabItem>
+</Tabs>
 
 The client and server generate their input/output types independently from the
 same Smithy model. The client handles serialization and HTTP communication.
+In F#, an operation that declares errors returns a `Result` with a union of
+those errors; see [F#](/smithy-dotnet/guides/fsharp/#call-the-service).
 
 ## Template options
 

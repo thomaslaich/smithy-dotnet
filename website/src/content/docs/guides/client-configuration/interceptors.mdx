@@ -3,33 +3,60 @@ title: Interceptors
 description: Observe and modify generated client execution.
 ---
 
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
 Interceptors are the primary extension point for generated clients. Add them to
 `{Service}ClientConfig.Interceptors`:
 
-```csharp
-var client = new WeatherClient(
-    new Uri("https://api.example.com"),
-    new()
-    {
-        Interceptors = { new CorrelationIdInterceptor() },
-    });
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    var client = new WeatherClient(
+        new Uri("https://api.example.com"),
+        new()
+        {
+            Interceptors = { new CorrelationIdInterceptor() },
+        });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    let config = WeatherClientConfig()
+    config.Interceptors.Add(CorrelationIdInterceptor())
+
+    let client = new WeatherClient(Uri "https://api.example.com", config)
+    ```
+  </TabItem>
+</Tabs>
 
 Implement `IClientInterceptor` and override only the hooks you need:
 
-```csharp
-public sealed class CorrelationIdInterceptor : IClientInterceptor
-{
-    public ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
-        SmithyContext context,
-        SmithyHttpRequest request,
-        CancellationToken cancellationToken = default)
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    public sealed class CorrelationIdInterceptor : IClientInterceptor
     {
-        request.Headers["X-Correlation-Id"] = Guid.NewGuid().ToString("N");
-        return ValueTask.FromResult(request);
+        public ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
+            SmithyContext context,
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            request.Headers["X-Correlation-Id"] = [Guid.NewGuid().ToString("N")];
+            return ValueTask.FromResult(request);
+        }
     }
-}
-```
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    type CorrelationIdInterceptor() =
+        interface IClientInterceptor with
+            member _.OnBeforeTransmitAsync(context, request, cancellationToken) =
+                request.Headers["X-Correlation-Id"] <- [ Guid.NewGuid().ToString("N") ]
+                ValueTask.FromResult request
+    ```
+  </TabItem>
+</Tabs>
 
 Available hooks:
 
@@ -59,11 +86,23 @@ a hex dump of the body bytes. It shows exactly what a protocol puts on the
 wire, which is especially handy for binary protocols like rpcv2Cbor and gRPC,
 and makes retries visible as separate attempts.
 
-```csharp
-var client = new WeatherClient(
-    new Uri("http://localhost:5001"),
-    new() { Interceptors = { new DebugInterceptor() } });
-```
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    var client = new WeatherClient(
+        new Uri("http://localhost:5001"),
+        new() { Interceptors = { new DebugInterceptor() } });
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    let config = WeatherClientConfig()
+    config.Interceptors.Add(DebugInterceptor())
+
+    let client = new WeatherClient(Uri "http://localhost:5001", config)
+    ```
+  </TabItem>
+</Tabs>
 
 Output goes to standard output by default; set `Output` to any `TextWriter` to
 redirect it. `MaxBodyBytes` caps each hex dump (1024 bytes by default), and
