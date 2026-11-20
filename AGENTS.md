@@ -30,6 +30,7 @@ list recipes. Key ones:
 | `just test` | `gradle test` (codegen) then `dotnet test` (runtime + conformance). |
 | `just codegen` | Build the codegen JARs and stage the bundled Maven repo used by `NSmithy.MSBuild`. |
 | `just fmt` / `just check-format` | Run / verify `treefmt` formatting. |
+| `just golden` | Regenerate the checked-in generator output under `codegen/golden` (see below). |
 | `just pack` | Pack NuGet packages to `artifacts/packages` (used by examples). |
 | `just refresh-examples` | Re-restore/rebuild the `examples/` against freshly packed packages. |
 | `just ci` | `check-format build test pack refresh-examples` — the full CI pipeline locally. |
@@ -86,6 +87,11 @@ stale or missing staged JAR produces confusing codegen errors.
   the change — a plain `dotnet build` of an example will use the old `.nupkg`.
 - **gRPC examples need two build passes** (the first emits the `.proto`, the
   second compiles it); `just refresh-examples` handles this.
+- **Golden codegen output.** `codegen/golden/<fixture>/` holds small models and
+  the C# and F# the generators write for them, checked in so a pull request shows
+  how generated code changes. `gradle test` fails when the output differs; after an
+  intended generator change, run `just golden` and commit the result. These files
+  are excluded from formatting, so they stay exactly what the generators emit.
 - **Conformance numbers** on the docs Protocol Status page come from the
   `ConformanceRateTests.ReportConformanceRate` test output in each
   `tests/Conformance/*` project; regenerate them from there rather than editing by

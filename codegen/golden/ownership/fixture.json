@@ -1,0 +1,10 @@
+{
+  "runs": [
+    { "name": "orders", "settings": { "ownedSources": ["orders.smithy"] } },
+    {
+      "name": "api",
+      "settings": { "service": "acme.shop#Shop", "ownedSources": ["api.smithy"] },
+      "provided": ["orders"]
+    }
+  ]
+}

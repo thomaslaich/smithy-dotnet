@@ -1,0 +1,64 @@
+{
+    "version": 1,
+    "generator": "smithy-fsharp-codegen",
+    "generatorVersion": "<version>",
+    "shapes": {
+        "example.kitchen#Closed": {
+            "schema": "Example.Kitchen.Schemas.ClosedSchema",
+            "type": "Example.Kitchen.Closed"
+        },
+        "example.kitchen#GetOrder": {
+            "errors": "Example.Kitchen.GetOrderError",
+            "handler": "Example.Kitchen.IGetOrderHandler",
+            "schema": "Example.Kitchen.Schemas.GetOrderSchema"
+        },
+        "example.kitchen#GetOrderInput": {
+            "schema": "Example.Kitchen.Schemas.GetOrderInputSchema",
+            "type": "Example.Kitchen.GetOrderInput"
+        },
+        "example.kitchen#GetOrderOutput": {
+            "schema": "Example.Kitchen.Schemas.GetOrderOutputSchema",
+            "type": "Example.Kitchen.GetOrderOutput"
+        },
+        "example.kitchen#Kitchen": {
+            "schema": "Example.Kitchen.Schemas.KitchenSchema"
+        },
+        "example.kitchen#NoSuchOrder": {
+            "schema": "Example.Kitchen.Schemas.NoSuchOrderSchema",
+            "type": "Example.Kitchen.NoSuchOrder"
+        },
+        "example.kitchen#OrderStatus": {
+            "schema": "Example.Kitchen.Schemas.OrderStatusSchema",
+            "type": "Example.Kitchen.OrderStatus"
+        },
+        "example.kitchen#Ping": {
+            "handler": "Example.Kitchen.IPingHandler",
+            "schema": "Example.Kitchen.Schemas.PingSchema"
+        },
+        "example.kitchen#PingInput": {
+            "schema": "Example.Kitchen.Schemas.PingInputSchema",
+            "type": "Example.Kitchen.PingInput"
+        },
+        "example.kitchen#PingOutput": {
+            "schema": "Example.Kitchen.Schemas.PingOutputSchema",
+            "type": "Example.Kitchen.PingOutput"
+        },
+        "example.kitchen#PlaceOrder": {
+            "errors": "Example.Kitchen.PlaceOrderError",
+            "handler": "Example.Kitchen.IPlaceOrderHandler",
+            "schema": "Example.Kitchen.Schemas.PlaceOrderSchema"
+        },
+        "example.kitchen#PlaceOrderInput": {
+            "schema": "Example.Kitchen.Schemas.PlaceOrderInputSchema",
+            "type": "Example.Kitchen.PlaceOrderInput"
+        },
+        "example.kitchen#PlaceOrderOutput": {
+            "schema": "Example.Kitchen.Schemas.PlaceOrderOutputSchema",
+            "type": "Example.Kitchen.PlaceOrderOutput"
+        },
+        "example.kitchen#SoldOut": {
+            "schema": "Example.Kitchen.Schemas.SoldOutSchema",
+            "type": "Example.Kitchen.SoldOut"
+        }
+    }
+}

@@ -1,0 +1,5 @@
+{
+  "runs": [
+    { "name": "contracts", "settings": { "ownedSources": ["types.smithy"] } }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+    "version": 1,
+    "generator": "smithy-fsharp-codegen",
+    "generatorVersion": "<version>",
+    "shapes": {
+        "example.types#Allergen": {
+            "schema": "Example.Types.Schemas.AllergenSchema",
+            "type": "Example.Types.Allergen"
+        },
+        "example.types#Allergens": {
+            "schema": "Example.Types.Schemas.AllergensSchema"
+        },
+        "example.types#Busy": {
+            "schema": "Example.Types.Schemas.BusySchema",
+            "type": "Example.Types.Busy"
+        },
+        "example.types#Course": {
+            "schema": "Example.Types.Schemas.CourseSchema",
+            "type": "Example.Types.Course"
+        },
+        "example.types#Dish": {
+            "schema": "Example.Types.Schemas.DishSchema",
+            "type": "Example.Types.Dish"
+        },
+        "example.types#Empty": {
+            "schema": "Example.Types.Schemas.EmptySchema",
+            "type": "Example.Types.Empty"
+        },
+        "example.types#MainCourse": {
+            "schema": "Example.Types.Schemas.MainCourseSchema",
+            "type": "Example.Types.MainCourse"
+        },
+        "example.types#Price": {
+            "schema": "Example.Types.Schemas.PriceSchema",
+            "type": "Example.Types.Price"
+        },
+        "example.types#SoldOut": {
+            "schema": "Example.Types.Schemas.SoldOutSchema",
+            "type": "Example.Types.SoldOut"
+        },
+        "example.types#SpiceLevel": {
+            "schema": "Example.Types.Schemas.SpiceLevelSchema",
+            "type": "Example.Types.SpiceLevel"
+        },
+        "example.types#Tags": {
+            "schema": "Example.Types.Schemas.TagsSchema"
+        }
+    }
+}

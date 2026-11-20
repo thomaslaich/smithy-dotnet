@@ -21,6 +21,10 @@ clean:
 check-format:
     treefmt --ci
 
+# Regenerate the golden codegen output under codegen/golden after an intended generator change.
+golden:
+    cd codegen && gradle :golden:test -PupdateGolden
+
 # Stage the bundled Maven repo consumed by NSmithy.MSBuild during `dotnet build`.
 codegen:
     # bundleMavenRepo builds the plugins and assembles the offline Maven bundle
