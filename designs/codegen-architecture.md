@@ -334,15 +334,17 @@ over as a pair of functions. A sparse collection's `option` elements go through
 The client is `I{Service}Client`, `{Service}ClientConfig`, and `{Service}Client`,
 as in C#. Each operation is a method that takes the input record and an optional
 `CancellationToken` and returns a `Task`. An operation whose model declares
-errors returns `Task<Result<Output, {Operation}Error>>`: the union has one case
-per error the operation declares and, when the service declares errors, a
-`Service` case holding `{Service}Error`, one union for the whole service, so a
-caller handles the service's errors once. The client catches the error
-exceptions the runtime raises and returns them as those cases; every other
-failure stays an exception, including a modeled error the operation does not
-declare. Server handlers raise modeled errors as in C#: a handler produces one
-error per call and the runtime writes it to the wire either way. The client
-binds each operation to the service's default
+errors has a `{Operation}Error` union, one case per error, declared next to its
+handler interface in `Operations.g.fs` and recorded in the shape manifest, so
+the project that owns the operation declares it for every client and server
+built on it. The service's errors are `{Service}Error`, one union for the whole
+service, so a caller handles them once. A client operation returns
+`Task<Result<Output, E>>`, where `E` is the operation's union, the service's
+when the operation declares none, or `{Service}CallError<{Operation}Error>`,
+with an `Operation` and a `Service` case, when both declare errors. The client
+catches the error exceptions the runtime raises and returns them as those
+cases; every other failure stays an exception, including a modeled error the
+operation does not declare. The client binds each operation to the service's default
 protocol when it is constructed and calls `SmithyClientRuntime`, so transport,
 retries, auth, and serialization are the C# client's. It fills in a missing
 `@idempotencyToken` member and expands `@endpoint` host prefixes. It has no
@@ -353,9 +355,13 @@ The server is the C# server's: `I{Operation}Handler` and
 `I{Service}ServiceHandler` interfaces, a `{Service}ServiceProtocols` flags enum,
 a `{Service}ServiceDefinition` operation table, and `Add{Service}ServiceHandler`
 and `Map{Service}Service` extension methods. A handler method takes the input
-record and a `CancellationToken` and returns a `Task`; `SmithyServerRuntime`
-reads requests, validates input, calls it, and writes the response or modeled
-error. Fake handlers and MCP prompts beyond the definition's `Prompts` are not
+record and a `CancellationToken` and returns a `Task`, of a
+`Result<Output, {Operation}Error>` when the operation declares errors;
+`SmithyServerRuntime` reads requests, validates input, calls it, and writes the
+response or modeled error. The definition turns an `Error` case into a faulted
+task through the union's `ToException`, which the runtime reads off the task
+without throwing, as it does for an error a handler raises. Errors the service
+declares are not in the operation's union, so a handler raises them. Fake handlers and MCP prompts beyond the definition's `Prompts` are not
 generated.
 
 ## MSBuild Integration

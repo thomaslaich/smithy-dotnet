@@ -99,31 +99,34 @@ class ValidationExceptionTest {
 
   @Test
   void aConstrainedOperationReturnsTheErrorAsACase() {
-    String client = generate(settings()).expectFileString(CLIENT);
+    MockManifest manifest = generate(settings());
+    String operations = manifest.expectFileString(OPERATIONS);
+    String client = manifest.expectFileString(CLIENT);
 
     assertTrue(
-        client.contains(
+        operations.contains(
             "type OrderError =\n"
                 + "    | SoldOut of global.Example.Cafe.SoldOut\n"
                 + "    | ValidationException of "
                 + VALIDATION_EXCEPTION),
-        client);
+        operations);
     assertTrue(
         client.contains(
             "| :? "
                 + VALIDATION_EXCEPTION
                 + " as error -> return"
-                + " global.Microsoft.FSharp.Core.Result.Error(OrderError.ValidationException"
-                + " error)"),
+                + " global.Microsoft.FSharp.Core.Result.Error(global.Example.Cafe.OrderError"
+                + ".ValidationException error)"),
         client);
   }
 
   @Test
   void anOperationTheServerDoesNotValidateIsLeftAlone() {
-    String client = generate(settings()).expectFileString(CLIENT);
+    MockManifest manifest = generate(settings());
+    String client = manifest.expectFileString(CLIENT);
 
-    assertFalse(client.contains("type BrowseError"), client);
-    assertFalse(client.contains("type PingError"), client);
+    assertFalse(manifest.expectFileString(OPERATIONS).contains("type BrowseError"));
+    assertFalse(manifest.expectFileString(OPERATIONS).contains("type PingError"));
     assertTrue(
         client.contains(
             "abstract BrowseAsync: input: global.Example.Cafe.BrowseInput * ?cancellationToken:"
@@ -158,14 +161,14 @@ class ValidationExceptionTest {
 
   @Test
   void aClientFollowsAModelThatDoesNotDeclareTheError() {
-    String client =
-        generate(UNDECLARED, settings().withMember("generateServer", false))
-            .expectFileString(CLIENT);
+    MockManifest manifest = generate(UNDECLARED, settings().withMember("generateServer", false));
+    String operations = manifest.expectFileString(OPERATIONS);
 
     assertTrue(
-        client.contains("type OrderError =\n    | SoldOut of global.Example.Cafe.SoldOut\n"),
-        client);
-    assertFalse(client.contains("ValidationException"), client);
+        operations.contains("type OrderError =\n    | SoldOut of global.Example.Cafe.SoldOut\n"),
+        operations);
+    assertFalse(operations.contains("ValidationException of"), operations);
+    assertFalse(manifest.expectFileString(CLIENT).contains("ValidationException"));
   }
 
   @Test
@@ -180,12 +183,12 @@ class ValidationExceptionTest {
 
   @Test
   void attachingDeclaresTheErrorForAModelThatDoesNot() {
-    String client =
+    String operations =
         generate(UNDECLARED, settings().withMember("attachValidationException", true))
-            .expectFileString(CLIENT);
+            .expectFileString(OPERATIONS);
 
-    assertTrue(client.contains("type OrderError =\n    | SoldOut of"), client);
-    assertTrue(client.contains("| ValidationException of"), client);
+    assertTrue(operations.contains("type OrderError =\n    | SoldOut of"), operations);
+    assertTrue(operations.contains("| ValidationException of"), operations);
   }
 
   private static ObjectNode.Builder settings() {

@@ -165,6 +165,11 @@ public final class ProvidedShapes {
     return symbol(id, ShapeManifest.HANDLER);
   }
 
+  /** The union of the errors operation {@code id} declares. */
+  public Optional<Symbol> errors(ShapeId id) {
+    return symbol(id, ShapeManifest.ERRORS);
+  }
+
   /**
    * Fails when a manifest of the other generator lists {@code id}: generating it would declare a
    * type that a referenced assembly already declares, since C# and F# projects do not share

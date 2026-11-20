@@ -12,8 +12,8 @@ type BookshelfHandler() =
 
     let find id =
         match books.TryGetValue id with
-        | true, book -> book
-        | false, _ -> raise (NoSuchBook(id))
+        | true, book -> Ok book
+        | false, _ -> Error(NoSuchBook(id))
 
     interface IBookshelfServiceHandler with
         member _.AddBookAsync(input, _) =
@@ -26,10 +26,13 @@ type BookshelfHandler() =
                   Status = Status.OnShelf }
 
             books[book.Id] <- book
-            Task.FromResult { Book = book }
+            Task.FromResult(Ok { Book = book })
 
         member _.GetBookAsync(input, _) =
-            Task.FromResult { Book = find input.Id }
+            find input.Id
+            |> Result.map (fun book -> ({ Book = book }: GetBookOutput))
+            |> Result.mapError GetBookError.NoSuchBook
+            |> Task.FromResult
 
         member _.ListBooksAsync(input, _) =
             let shelf =
@@ -38,17 +41,21 @@ type BookshelfHandler() =
                 |> Seq.sortBy _.Title
                 |> List.ofSeq
 
-            Task.FromResult { Books = shelf }
+            Task.FromResult(Ok { Books = shelf })
 
         member _.LendBookAsync(input, _) =
-            let book = find input.Id
+            let lend book =
+                match book.Status with
+                | Status.LentTo reader -> Error(LendBookError.AlreadyLent(AlreadyLent(reader)))
+                | _ ->
+                    let lent =
+                        { book with
+                            Status = Status.LentTo input.Reader }
 
-            match book.Status with
-            | Status.LentTo reader -> raise (AlreadyLent(reader))
-            | _ ->
-                let lent =
-                    { book with
-                        Status = Status.LentTo input.Reader }
+                    books[lent.Id] <- lent
+                    Ok { Book = lent }
 
-                books[lent.Id] <- lent
-                Task.FromResult { Book = lent }
+            find input.Id
+            |> Result.mapError LendBookError.NoSuchBook
+            |> Result.bind lend
+            |> Task.FromResult

@@ -81,6 +81,31 @@ class ServerGeneratorTest {
   }
 
   @Test
+  void aHandlerReturnsTheOperationsErrorsInAResult() {
+    String model =
+        MODEL.replace(
+                "        id: String\n    }\n}",
+                "        id: String\n    }\n    errors: [SoldOut]\n}")
+            + "\n@error(\"client\")\n@httpError(409)\nstructure SoldOut {}\n";
+    MockManifest manifest = generate(model, true);
+    String operations = manifest.expectFileString(OPERATIONS);
+    String server = manifest.expectFileString(SERVER);
+
+    assertTrue(
+        operations.contains(
+            " global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<"
+                + "global.Example.Cafe.OrderOutput, OrderError>>"),
+        operations);
+    // The Error case becomes a faulted task, which the runtime writes without throwing.
+    assertTrue(
+        server.contains(
+            "settle (handler.OrderAsync(input, cancellationToken))"
+                + " global.Microsoft.FSharp.Core.Operators.id"
+                + " (fun (error: global.Example.Cafe.OrderError) -> error.ToException())"),
+        server);
+  }
+
+  @Test
   void selectsProtocolsAsFlags() {
     String server = generate(MODEL, true).expectFileString(SERVER);
 

@@ -256,6 +256,25 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
                 .build());
   }
 
+  /**
+   * The union of the errors an operation declares: {@code {Operation}Error} in the operation's
+   * namespace, or the one its manifest records when another project generated the operation. Empty
+   * when the operation declares no errors.
+   */
+  public Optional<Symbol> errorsSymbol(OperationShape operation) {
+    if (settings.providedShapes().contains(operation.getId())) {
+      return settings.providedShapes().errors(operation.getId());
+    }
+    if (operation.getErrors().isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        Symbol.builder()
+            .name(FSharpNaming.typeName(operation.getId().getName()) + "Error")
+            .namespace(settings.fsharpNamespace(operation.getId().getNamespace()), ".")
+            .build());
+  }
+
   /** The F# namespace of a Smithy namespace's schemas. */
   public String schemaNamespace(String smithyNamespace) {
     return settings.fsharpNamespace(smithyNamespace) + "." + SCHEMAS_NAMESPACE;

@@ -116,7 +116,7 @@ let ``A modeled error is returned as its case`` () : Task =
         let! result = client.OrderAsync order
 
         match result with
-        | Error(OrderError.OutOfStock error) ->
+        | Error(KitchenCallError.Operation(OrderError.OutOfStock error)) ->
             Assert.Equal(Ingredient.CHEESE, error.Item)
             Assert.Equal(Some "gone", error.ErrorMessage)
         | other -> failwith $"Unexpected result: {other}"
@@ -140,14 +140,14 @@ let ``The server's validation error is a case of a constrained operation's Resul
         let! result = client.OrderAsync order
 
         match result with
-        | Error(OrderError.ValidationException error) ->
+        | Error(KitchenCallError.Operation(OrderError.ValidationException error)) ->
             Assert.StartsWith("1 validation error detected.", error.Message)
             Assert.Equal("/table", (Seq.exactlyOne error.FieldList).Path)
         | other -> failwith $"Unexpected result: {other}"
     }
 
 [<Fact>]
-let ``A service-level error is the Service case of every operation`` () : Task =
+let ``A service-level error is the Service case of an operation with its own errors`` () : Task =
     task {
         let handler =
             new StubHandler(fun _ _ ->
@@ -160,7 +160,7 @@ let ``A service-level error is the Service case of every operation`` () : Task =
         let! result = client.OrderAsync order
 
         match result with
-        | Error(OrderError.Service(KitchenError.KitchenClosed _)) -> ()
+        | Error(KitchenCallError.Service(KitchenError.KitchenClosed _)) -> ()
         | other -> failwith $"Unexpected result: {other}"
     }
 

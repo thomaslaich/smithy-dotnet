@@ -83,7 +83,7 @@ class ClientGeneratorTest {
             "abstract OrderAsync: input: global.Example.Cafe.OrderInput * ?cancellationToken:"
                 + " global.System.Threading.CancellationToken ->"
                 + " global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<"
-                + "global.Example.Cafe.OrderOutput, OrderError>>"),
+                + "global.Example.Cafe.OrderOutput, global.Example.Cafe.OrderError>>"),
         client);
     assertTrue(client.contains("type CafeClientConfig ="), client);
     assertTrue(client.contains("global.NSmithy.Protocols.RestJson.RestJson1Protocol()"), client);
@@ -146,20 +146,27 @@ class ClientGeneratorTest {
   }
 
   @Test
-  void anOperationThatDeclaresErrorsReturnsAResult() {
-    String client = generate(MODEL, true).expectFileString(CLIENT);
+  void anOperationThatDeclaresErrorsReturnsItsUnion() {
+    MockManifest manifest = generate(MODEL, true);
+    String operations = manifest.expectFileString(OPERATIONS);
+    String client = manifest.expectFileString(CLIENT);
 
     assertTrue(
-        client.contains(
+        operations.contains(
             "[<RequireQualifiedAccess>]\ntype OrderError =\n"
-                + "    | SoldOut of global.Example.Cafe.SoldOut"),
-        client);
+                + "    | SoldOut of global.Example.Cafe.SoldOut\n"),
+        operations);
+    assertTrue(
+        operations.contains("| OrderError.SoldOut error -> error :> global.System.Exception"),
+        operations);
     assertTrue(
         client.contains(
             "| :? global.Example.Cafe.SoldOut as error -> return"
-                + " global.Microsoft.FSharp.Core.Result.Error(OrderError.SoldOut error)"),
+                + " global.Microsoft.FSharp.Core.Result.Error(global.Example.Cafe.OrderError.SoldOut"
+                + " error)"),
         client);
-    assertFalse(client.contains("type PingError"), client);
+    assertFalse(client.contains("type OrderError"), client);
+    assertFalse(operations.contains("type PingError"), operations);
   }
 
   private static final String SERVICE_ERRORS =
@@ -169,7 +176,7 @@ class ClientGeneratorTest {
           + "\n@error(\"server\")\n@httpError(503)\nstructure Busy {}\n";
 
   @Test
-  void aServiceErrorIsTheServiceCaseOfEveryOperation() {
+  void aServiceErrorIsACaseOfTheServicesUnion() {
     MockManifest manifest = generate(SERVICE_ERRORS, true);
     String client = manifest.expectFileString(CLIENT);
 
@@ -177,19 +184,29 @@ class ClientGeneratorTest {
         client.contains(
             "[<RequireQualifiedAccess>]\ntype CafeError =\n    | Busy of global.Example.Cafe.Busy"),
         client);
-    assertTrue(client.contains("type PingError =\n    | Service of CafeError"), client);
     assertTrue(
         client.contains(
-            "type OrderError =\n    | SoldOut of global.Example.Cafe.SoldOut\n"
+            "type CafeCallError<'Operation> =\n    | Operation of 'Operation\n"
                 + "    | Service of CafeError"),
         client);
     assertTrue(
         client.contains(
             "| :? global.Example.Cafe.Busy as error -> return"
-                + " global.Microsoft.FSharp.Core.Result.Error(OrderError.Service(CafeError.Busy"
+                + " global.Microsoft.FSharp.Core.Result.Error(CafeCallError.Service(CafeError.Busy"
                 + " error))"),
         client);
-    assertTrue(client.contains("global.Example.Cafe.PingOutput, PingError>>"), client);
+    assertTrue(
+        client.contains(
+            "Result.Error(CafeCallError.Operation(global.Example.Cafe.OrderError.SoldOut error))"),
+        client);
+    assertTrue(
+        client.contains(
+            "global.Example.Cafe.OrderOutput,"
+                + " CafeCallError<global.Example.Cafe.OrderError>>>"),
+        client);
+    // An operation without errors of its own returns the service's union.
+    assertTrue(client.contains("global.Example.Cafe.PingOutput, CafeError>>"), client);
+    assertTrue(client.contains("Result.Error(CafeError.Busy error)"), client);
     // The service schema lists the service's errors once; the protocols add them to every
     // operation (ServiceSchema.ErrorsOf), so operation schemas list only their own.
     String schemas = manifest.expectFileString(SCHEMAS);
@@ -200,19 +217,33 @@ class ClientGeneratorTest {
   }
 
   @Test
-  void anErrorOnBothTheOperationAndTheServiceIsTheOperations() {
-    String model = SERVICE_ERRORS.replace("errors: [SoldOut]", "errors: [SoldOut, Busy]");
+  void aServiceWithoutOperationErrorsHasNoCallError() {
+    String model = SERVICE_ERRORS.replace("    errors: [SoldOut]\n", "");
 
     String client = generate(model, true).expectFileString(CLIENT);
 
+    assertFalse(client.contains("CafeCallError"), client);
+    assertTrue(client.contains("global.Example.Cafe.OrderOutput, CafeError>>"), client);
+  }
+
+  @Test
+  void anErrorOnBothTheOperationAndTheServiceIsTheOperations() {
+    String model = SERVICE_ERRORS.replace("errors: [SoldOut]", "errors: [SoldOut, Busy]");
+
+    MockManifest manifest = generate(model, true);
+    String client = manifest.expectFileString(CLIENT);
+
     assertTrue(
-        client.contains(
-            "type OrderError =\n    | Busy of global.Example.Cafe.Busy\n"
-                + "    | SoldOut of global.Example.Cafe.SoldOut\n"
-                + "    | Service of CafeError"),
+        manifest
+            .expectFileString(OPERATIONS)
+            .contains(
+                "type OrderError =\n    | Busy of global.Example.Cafe.Busy\n"
+                    + "    | SoldOut of global.Example.Cafe.SoldOut\n"),
         client);
-    assertTrue(client.contains("Result.Error(OrderError.Busy error)"), client);
-    assertFalse(client.contains("OrderError.Service(CafeError.Busy"), client);
+    assertTrue(
+        client.contains("Result.Error(CafeCallError.Operation(global.Example.Cafe.OrderError.Busy"),
+        client);
+    assertFalse(client.contains("CafeCallError.Service(CafeError.Busy"), client);
   }
 
   @Test
@@ -232,13 +263,13 @@ class ClientGeneratorTest {
   }
 
   @Test
-  void anErrorNamedServiceFails() {
+  void anErrorNamedToExceptionFails() {
     String model =
-        SERVICE_ERRORS.replace("errors: [SoldOut]", "errors: [SoldOut, Service]")
-            + "\n@error(\"client\")\nstructure Service {}\n";
+        MODEL.replace("errors: [SoldOut]", "errors: [SoldOut, ToException]")
+            + "\n@error(\"client\")\nstructure ToException {}\n";
 
     CodegenException error = assertThrows(CodegenException.class, () -> generate(model, true));
-    assertTrue(error.getMessage().contains("example.cafe#Service"), error.getMessage());
+    assertTrue(error.getMessage().contains("example.cafe#ToException"), error.getMessage());
   }
 
   @Test

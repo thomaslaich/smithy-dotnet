@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.ServiceIndex.AuthSchemeMode;
@@ -142,6 +143,23 @@ final class ServerGenerator {
         /// <summary>The service's operation table, shared by every host adapter.</summary>
         [<Sealed>]
         type ${contract:L}Definition() =
+            /// A handler's Result as the runtime expects it: the output, or a faulted task that
+            /// carries the error's exception, which the runtime writes without throwing it.
+            static let settle
+                (pending: global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<'Value, 'Error>>)
+                (output: 'Value -> 'Output)
+                (error: 'Error -> global.System.Exception)
+                : global.System.Threading.Tasks.Task<'Output> =
+                let complete result =
+                    match result with
+                    | global.Microsoft.FSharp.Core.Result.Ok value -> global.System.Threading.Tasks.Task.FromResult(output value)
+                    | global.Microsoft.FSharp.Core.Result.Error failure -> global.System.Threading.Tasks.Task.FromException<'Output>(error failure)
+
+                if pending.IsCompletedSuccessfully then
+                    complete pending.Result
+                else
+                    global.System.Threading.Tasks.TaskExtensions.Unwrap(task { let! result = pending in return complete result })
+
             static let catalog =
                 global.NSmithy.Server.ServiceOperationCatalog(
                     ${catalog:L|})
@@ -212,13 +230,35 @@ final class ServerGenerator {
             "inputName",
             hasInput ? "input" : "_",
             "body",
-            ShapeSupport.isUnit(operation.getOutputShape())
-                ? "task { do! " + call + "; return global.NSmithy.Core.SmithyUnit.Value }"
-                : call,
+            body(operation, call),
             "jsonSchemas",
             isStreaming(operation) ? "" : jsonSchemas(operation),
             "authSchemes",
             authSchemes(operation).orElse("")));
+  }
+
+  /**
+   * The call to the handler, as the runtime's delegate returns it: a Unit output as the runtime's
+   * SmithyUnit, and a Result settled into the output or the error's exception, without throwing it.
+   */
+  private String body(OperationShape operation, String call) {
+    boolean unit = ShapeSupport.isUnit(operation.getOutputShape());
+    Optional<Symbol> errors = symbols.errorsSymbol(operation);
+    if (errors.isPresent()) {
+      return "settle "
+          + "("
+          + call
+          + ") "
+          + (unit
+              ? "(fun () -> global.NSmithy.Core.SmithyUnit.Value)"
+              : "global.Microsoft.FSharp.Core.Operators.id")
+          + " (fun (error: "
+          + FSharpSymbolProvider.render(errors.get())
+          + ") -> error."
+          + OperationHandlerGenerator.toExceptionMethod()
+          + "())";
+    }
+    return unit ? "task { do! " + call + "; return global.NSmithy.Core.SmithyUnit.Value }" : call;
   }
 
   private String jsonSchemas(OperationShape operation) {

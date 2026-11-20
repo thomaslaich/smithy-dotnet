@@ -251,14 +251,16 @@ ahead of the project's own:
 | --- | --- | --- |
 | `Types.g.fs` | Types | Always |
 | `Schemas.g.fs` | Schemas of the types | Always |
-| `Operations.g.fs` | Each operation's schema and `I{Operation}Handler` | Always |
+| `Operations.g.fs` | Each operation's schema, its `{Operation}Error` union, and `I{Operation}Handler` | Always |
 | `Client.g.fs` | The service's client | With `SmithyGenerateClient` |
 | `Server.g.fs` | `I{Service}ServiceHandler`, the operation table, and the ASP.NET Core extensions | With `SmithyGenerateServer` |
 
-Each file holds one `namespace rec` section per Smithy namespace, so the
-declarations of one namespace can refer to each other. A project that owns an
-operation compiles its handler interface whatever `SmithyGenerateServer` says,
-as in C#. Provided types and schemas come from referenced assemblies, which F#
+Each file holds one section per Smithy namespace; those of types and schemas
+are `namespace rec`, so the declarations of one namespace can refer to each
+other. A project that owns an operation compiles its handler interface whatever
+`SmithyGenerateServer` says, as in C#. An operation's error union is generated
+with the operation, and its manifest entry names it as `errors`, so clients and
+servers built on the owning project return that project's union. Provided types and schemas come from referenced assemblies, which F#
 sees before any file of the project, so the file order does not constrain them.
 
 ### Mixed languages

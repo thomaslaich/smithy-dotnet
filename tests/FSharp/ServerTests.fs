@@ -12,24 +12,27 @@ open NSmithy.Protocols.RpcV2Cbor
 open NSmithy.Protocols.RpcV2Json
 open Xunit
 
-/// Serves orders, and is out of stock of any dish named "sold out".
+/// Serves orders, is out of stock of any dish named "sold out", and closed for one named "closed".
 type private Kitchen() =
     interface IKitchenServiceHandler with
         member _.OrderAsync(input, _) =
             task {
-                if input.Dish.Name = "sold out" then
-                    raise (OutOfStock(Ingredient.CHEESE, errorMessage = "gone"))
-
-                return
-                    { Receipt =
-                        Receipt.Paid
-                            { Amount = decimal input.Dish.Price * decimal input.Guests
-                              Currency = "CHF" } }
+                match input.Dish.Name with
+                | "sold out" ->
+                    return Error(OrderError.OutOfStock(OutOfStock(Ingredient.CHEESE, errorMessage = "gone")))
+                | "closed" -> return raise (Example.Staff.KitchenClosed(errorMessage = "closed"))
+                | _ ->
+                    return
+                        Ok
+                            { Receipt =
+                                Receipt.Paid
+                                    { Amount = decimal input.Dish.Price * decimal input.Guests
+                                      Currency = "CHF" } }
             }
 
         member _.PingAsync(_, _) = Task.FromResult(PingOutput())
 
-        member _.CloseTableAsync(_, _) = Task.FromResult(CloseTableOutput())
+        member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
 
 /// Serves the kitchen over one protocol. RPC v2 CBOR and RPC v2 JSON share their routes, so one
 /// endpoint builder cannot serve both.
@@ -92,7 +95,7 @@ let ``An F# client calls an F# server`` (served: KitchenServiceProtocols, protoc
 
 [<Theory>]
 [<MemberData(nameof protocols)>]
-let ``A modeled error a handler raises reaches the client``
+let ``A modeled error a handler returns reaches the client``
     (served: KitchenServiceProtocols, protocol: IProtocol)
     : Task =
     task {
@@ -102,9 +105,26 @@ let ``A modeled error a handler raises reaches the client``
         let! result = client.OrderAsync(order "sold out")
 
         match result with
-        | Error(OrderError.OutOfStock error) ->
+        | Error(KitchenCallError.Operation(OrderError.OutOfStock error)) ->
             Assert.Equal(Ingredient.CHEESE, error.Item)
             Assert.Equal(Some "gone", error.ErrorMessage)
+        | other -> failwith $"Unexpected result: {other}"
+    }
+
+[<Theory>]
+[<MemberData(nameof protocols)>]
+let ``A service error a handler raises reaches the client``
+    (served: KitchenServiceProtocols, protocol: IProtocol)
+    : Task =
+    task {
+        use app = startServer served
+        use client = client app protocol
+
+        let! result = client.OrderAsync(order "closed")
+
+        match result with
+        | Error(KitchenCallError.Service(KitchenError.KitchenClosed error)) ->
+            Assert.Equal(Some "closed", error.ErrorMessage)
         | other -> failwith $"Unexpected result: {other}"
     }
 
@@ -121,7 +141,7 @@ let ``The server validates input before the handler runs`` () : Task =
         let! result = client.OrderAsync { order "pizza" with Dish = unknownKey }
 
         match result with
-        | Error(OrderError.ValidationException error) ->
+        | Error(KitchenCallError.Operation(OrderError.ValidationException error)) ->
             Assert.Contains("/dish/tags", error.Message)
             Assert.Equal("/dish/tags", (Seq.exactlyOne error.FieldList).Path)
         | other -> failwith $"Unexpected result: {other}"

@@ -42,6 +42,9 @@ public final class ShapeManifest {
   /** An operation's server handler interface. */
   public static final String HANDLER = "handler";
 
+  /** The union of the errors an operation declares, which F# handlers and clients return. */
+  public static final String ERRORS = "errors";
+
   private final String generator;
   private final Map<ShapeId, Map<String, String>> shapes = new TreeMap<>();
 

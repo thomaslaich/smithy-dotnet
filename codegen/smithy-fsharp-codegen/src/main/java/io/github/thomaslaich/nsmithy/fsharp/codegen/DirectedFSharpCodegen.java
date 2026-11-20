@@ -83,8 +83,14 @@ final class DirectedFSharpCodegen
     }
     new SchemaGenerator(context).operation(operation);
     recordSchema(context, operation);
+    OperationHandlerGenerator handlers = new OperationHandlerGenerator(context);
+    handlers.errors(operation);
+    context
+        .symbolProvider()
+        .errorsSymbol(operation)
+        .ifPresent(symbol -> shapeManifest.add(operation.getId(), ShapeManifest.ERRORS, symbol));
     if (generatesHandler(context, operation)) {
-      new OperationHandlerGenerator(context).run(operation);
+      handlers.run(operation);
       shapeManifest.add(
           operation.getId(),
           ShapeManifest.HANDLER,
