@@ -65,6 +65,16 @@ final class ClientGenerator {
     this.schemas = new SchemaGenerator(context);
   }
 
+  /** Reserves the names of types the service's generated code declares in its namespace. */
+  static void reserve(FSharpContext context, ServiceShape service, List<String> names) {
+    String namespace = context.settings().fsharpNamespace(service.getId().getNamespace());
+    for (String name : names) {
+      context
+          .generatedNames()
+          .reserve(namespace, name, "the generated code for " + service.getId() + " declares");
+    }
+  }
+
   /** The protocols a client can use: the built-in ones, then each integration's. */
   static List<ProtocolInfo> registeredProtocols(FSharpContext context) {
     List<ProtocolInfo> protocols = new ArrayList<>(Protocols.BUILT_IN);
@@ -92,7 +102,7 @@ final class ClientGenerator {
     if (callErrors) {
       generatedNames.add(callErrorTypeName());
     }
-    GeneratedNames.check(context, service, generatedNames.toArray(String[]::new));
+    reserve(context, service, generatedNames);
 
     FSharpWriter writer = context.files().client(service);
     writeServiceErrorType(writer);

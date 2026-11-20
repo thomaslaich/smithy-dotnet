@@ -46,7 +46,9 @@ final class OperationHandlerGenerator {
       return;
     }
     String type = symbol.get().getName();
-    checkName(operation, symbol.get());
+    context
+        .generatedNames()
+        .reserve(symbol.get().getNamespace(), type, "holds the errors of " + operation.getId());
     List<String> cases = new ArrayList<>();
     List<String> clauses = new ArrayList<>();
     List<String> fromClauses = new ArrayList<>();
@@ -207,20 +209,5 @@ final class OperationHandlerGenerator {
         .sorted()
         .map(error -> model.expectShape(error, StructureShape.class))
         .toList();
-  }
-
-  /** Fails when a model shape's F# type would have the union's name. */
-  private void checkName(OperationShape operation, Symbol union) {
-    GeneratedNames.declaring(context, union.getNamespace(), union.getName())
-        .ifPresent(shape -> {
-          throw new CodegenException(
-              "Shape "
-                  + shape.getId()
-                  + " would generate an F# type named "
-                  + union.getName()
-                  + ", which holds the errors of "
-                  + operation.getId()
-                  + ". Rename the shape, for example with the renameShapes build transform.");
-        });
   }
 }

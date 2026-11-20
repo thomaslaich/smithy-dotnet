@@ -251,10 +251,21 @@ class ClientGeneratorTest {
 
   @Test
   void aShapeNamedLikeAnErrorTypeFails() {
-    String model = MODEL + "\nstructure OrderError {}\n";
+    String model = referencing(MODEL, "OrderError");
 
     CodegenException error = assertThrows(CodegenException.class, () -> generate(model, true));
     assertTrue(error.getMessage().contains("example.cafe#OrderError"), error.getMessage());
+  }
+
+  @Test
+  void aShapeTheRunDoesNotGenerateIsNoCollision() {
+    // Neither shape is in the service's closure, so neither declares a type, and resolving their
+    // names (Schemas is reserved) must not fail either.
+    String model = MODEL + "\nstructure OrderError {}\nstructure Schemas {}\n";
+
+    MockManifest manifest = generate(model, true);
+
+    assertTrue(manifest.expectFileString(OPERATIONS).contains("type OrderError ="));
   }
 
   @Test
@@ -269,7 +280,7 @@ class ClientGeneratorTest {
 
   @Test
   void aShapeNamedLikeTheServiceErrorTypeFails() {
-    String model = SERVICE_ERRORS + "\nstructure CafeError {}\n";
+    String model = referencing(SERVICE_ERRORS, "CafeError");
 
     CodegenException error = assertThrows(CodegenException.class, () -> generate(model, true));
     assertTrue(error.getMessage().contains("example.cafe#CafeError"), error.getMessage());
@@ -313,10 +324,19 @@ class ClientGeneratorTest {
 
   @Test
   void aShapeNamedLikeTheClientFails() {
-    String model = MODEL + "\nstructure CafeClient {}\n";
+    String model = referencing(MODEL, "CafeClient");
 
     CodegenException error = assertThrows(CodegenException.class, () -> generate(model, true));
     assertTrue(error.getMessage().contains("example.cafe#CafeClient"), error.getMessage());
+  }
+
+  /** The model with structure {@code name}, which the Order operation's output targets. */
+  private static String referencing(String model, String name) {
+    return model.replace(
+            "        id: String\n", "        id: String\n        value: " + name + "\n")
+        + "\nstructure "
+        + name
+        + " {}\n";
   }
 
   private static MockManifest generate(String model, boolean generateClient) {

@@ -81,7 +81,7 @@ final class ServerGenerator {
                 contract + "Protocols",
                 contract + "Definition",
                 contract + "ServerExtensions"));
-    GeneratedNames.check(context, service, names.toArray(String[]::new));
+    ClientGenerator.reserve(context, service, names);
 
     FSharpWriter writer = context.files().server(service);
     writeServiceHandler(writer, contract, operations);
