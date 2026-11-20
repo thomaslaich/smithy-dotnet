@@ -1,0 +1,5 @@
+{
+  "runs": [
+    { "name": "kitchen", "settings": { "service": "example.kitchen#Kitchen" } }
+  ]
+}

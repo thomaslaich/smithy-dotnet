@@ -59,6 +59,9 @@ in
           "obj/**"
           "**/bin/**"
           "**/obj/**"
+          # Golden codegen output, checked in exactly as the generators write it.
+          "codegen/golden/*/csharp/**"
+          "codegen/golden/*/fsharp/**"
         ];
 
         formatter.csharpier.includes = [

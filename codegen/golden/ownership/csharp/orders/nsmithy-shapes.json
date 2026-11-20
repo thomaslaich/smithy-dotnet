@@ -1,0 +1,27 @@
+{
+    "version": 1,
+    "generator": "smithy-csharp-codegen",
+    "generatorVersion": "<version>",
+    "shapes": {
+        "acme.shop#Money": {
+            "schema": "Acme.Shop.Schemas.MoneySchema",
+            "type": "Acme.Shop.Money"
+        },
+        "acme.shop#OutOfStock": {
+            "schema": "Acme.Shop.Schemas.OutOfStockSchema",
+            "type": "Acme.Shop.OutOfStock"
+        },
+        "acme.shop#PlaceOrder": {
+            "handler": "Acme.Shop.IPlaceOrderHandler",
+            "schema": "Acme.Shop.Schemas.PlaceOrderSchema"
+        },
+        "acme.shop#PlaceOrderInput": {
+            "schema": "Acme.Shop.Schemas.PlaceOrderInputSchema",
+            "type": "Acme.Shop.PlaceOrderInput"
+        },
+        "acme.shop#PlaceOrderOutput": {
+            "schema": "Acme.Shop.Schemas.PlaceOrderOutputSchema",
+            "type": "Acme.Shop.PlaceOrderOutput"
+        }
+    }
+}

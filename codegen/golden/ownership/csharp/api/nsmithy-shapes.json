@@ -1,0 +1,10 @@
+{
+    "version": 1,
+    "generator": "smithy-csharp-codegen",
+    "generatorVersion": "<version>",
+    "shapes": {
+        "acme.shop#Shop": {
+            "schema": "Acme.Shop.Schemas.ShopSchema"
+        }
+    }
+}
