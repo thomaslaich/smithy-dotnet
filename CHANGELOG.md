@@ -11,6 +11,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **F# client template uses `task { match! }`.** The `nsmithy-client -lang F#` template blocked
+  on `SayHelloAsync(...).GetAwaiter().GetResult()` inside `match`. It now awaits the call with
+  `match!` in a `task` and blocks once, in `main`. The quick start's F# snippet follows suit.
+
 ## [0.20.1]
 
 Clients of IAM, Route53, and other global AWS services now sign their requests.

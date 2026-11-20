@@ -4,6 +4,18 @@ open Example.Hello
 open NSmithy.Protocols.Grpc
 //#endif
 
+// The model declares ValidationException on SayHello, so the operation returns a Result.
+let run (client: HelloServiceClient) =
+    task {
+        match! client.SayHelloAsync({ Name = "world" }) with
+        | Ok response ->
+            printfn "%s" response.Message
+            return 0
+        | Error(SayHelloError.ValidationException error) ->
+            eprintfn "Rejected: %s" error.Message
+            return 1
+    }
+
 [<EntryPoint>]
 let main args =
     //#if (IsGrpc)
@@ -17,11 +29,4 @@ let main args =
     use client = new HelloServiceClient(Uri endpoint)
     //#endif
 
-    // The model declares ValidationException on SayHello, so the operation returns a Result.
-    match client.SayHelloAsync({ Name = "world" }).GetAwaiter().GetResult() with
-    | Ok response ->
-        printfn "%s" response.Message
-        0
-    | Error(SayHelloError.ValidationException error) ->
-        eprintfn "Rejected: %s" error.Message
-        1
+    (run client).GetAwaiter().GetResult()
