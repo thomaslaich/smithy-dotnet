@@ -6,6 +6,7 @@ open Example.Kitchen
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.TestHost
+open Microsoft.Extensions.DependencyInjection
 open NSmithy.Http
 open NSmithy.Protocols.RestJson
 open NSmithy.Protocols.RpcV2Cbor
@@ -147,29 +148,67 @@ let ``The server validates input before the handler runs`` () : Task =
         | other -> failwith $"Unexpected result: {other}"
     }
 
-[<Fact>]
-let ``An object expression registered as the handler serves requests`` () : Task =
+/// A handler that charges 1 CHF for any order.
+let private paidHandler () =
+    { new IKitchenServiceHandler with
+        member _.OrderAsync(_, _) =
+            Task.FromResult(Ok { Receipt = Receipt.Paid { Amount = 1M; Currency = "CHF" } })
+
+        member _.PingAsync(_, _) = Task.FromResult(PingOutput())
+        member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput())) }
+
+/// Serves the kitchen over RestJson1 with the handler `register` adds, and orders twice.
+let private orderTwice (register: IServiceCollection -> unit) : Task =
     task {
         let builder = WebApplication.CreateBuilder()
         builder.WebHost.UseTestServer() |> ignore
-
-        builder.Services.AddKitchenServiceHandler
-            { new IKitchenServiceHandler with
-                member _.OrderAsync(_, _) =
-                    Task.FromResult(Ok { Receipt = Receipt.Paid { Amount = 1M; Currency = "CHF" } })
-
-                member _.PingAsync(_, _) = Task.FromResult(PingOutput())
-                member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput())) }
-        |> ignore
-
+        register builder.Services
         use app = builder.Build()
         app.MapKitchenService(KitchenServiceProtocols.RestJson1) |> ignore
         do! app.StartAsync()
         use client = client app (RestJson1Protocol())
 
-        let! result = client.OrderAsync(order "pizza")
+        for _ in 1..2 do
+            let! result = client.OrderAsync(order "pizza")
 
-        match result with
-        | Ok output -> Assert.Equal(Receipt.Paid { Amount = 1M; Currency = "CHF" }, output.Receipt)
-        | Error error -> failwith $"Unexpected error: {error}"
+            match result with
+            | Ok output -> Assert.Equal(Receipt.Paid { Amount = 1M; Currency = "CHF" }, output.Receipt)
+            | Error error -> failwith $"Unexpected error: {error}"
+    }
+
+[<Fact>]
+let ``An object expression registered as the handler serves requests`` () : Task =
+    orderTwice (fun services -> services.AddKitchenServiceHandler(paidHandler ()) |> ignore)
+
+[<Fact>]
+let ``A handler factory runs once by default`` () : Task =
+    task {
+        let created = ref 0
+
+        do!
+            orderTwice (fun services ->
+                services.AddKitchenServiceHandler(fun _ ->
+                    created.Value <- created.Value + 1
+                    paidHandler ())
+                |> ignore)
+
+        Assert.Equal(1, created.Value)
+    }
+
+[<Fact>]
+let ``A scoped handler factory runs once per request`` () : Task =
+    task {
+        let created = ref 0
+
+        do!
+            orderTwice (fun services ->
+                services.AddKitchenServiceHandler(
+                    (fun _ ->
+                        created.Value <- created.Value + 1
+                        paidHandler ()),
+                    ServiceLifetime.Scoped
+                )
+                |> ignore)
+
+        Assert.Equal(2, created.Value)
     }

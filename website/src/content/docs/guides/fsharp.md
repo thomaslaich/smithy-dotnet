@@ -137,6 +137,18 @@ builder.Services.AddWeatherServiceHandler
 |> ignore
 ```
 
+A handler that needs services from the container takes a factory instead. It
+runs once by default, or once per request with `ServiceLifetime.Scoped`, which
+a handler using a `DbContext` needs:
+
+```fsharp
+builder.Services.AddWeatherServiceHandler(
+    (fun services -> Weather.create (services.GetRequiredService<WeatherDb>())),
+    ServiceLifetime.Scoped
+)
+|> ignore
+```
+
 ## Call the service
 
 Each operation is a method that takes the input record and an optional

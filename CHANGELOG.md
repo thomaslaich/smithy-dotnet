@@ -13,8 +13,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
-- **F# handlers register as an instance.** `Add{Service}Handler` has an overload that takes a
-  handler, such as an object expression, and registers it as every operation's handler.
+- **F# handlers register as an instance or a factory.** `Add{Service}Handler` has an overload that takes a
+  handler, such as an object expression, and one that takes a factory over the container with an
+  optional `ServiceLifetime`, by default a singleton. Either registers the handler as every
+  operation's handler.
 
 ### Changed
 
