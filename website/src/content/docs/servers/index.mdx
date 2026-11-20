@@ -129,6 +129,10 @@ request then shares one handler, which the container disposes once:
 
 ## Separate operation handlers
 
+We recommend one handler per operation for production services: each handler
+stays small, takes only the dependencies its operation needs, and can have its
+own lifetime. A single service handler suits small services and prototypes.
+
 The service interface inherits one interface per operation:
 
 <Tabs syncKey="lang">
@@ -173,8 +177,9 @@ each one, with or without the aggregate helper:
   </TabItem>
 </Tabs>
 
-Register a handler for every mapped operation. `GetBookHandler` implements
-`IGetBookHandler` with the same method shown above.
+`GetBookHandler` implements `IGetBookHandler` with the same method shown above.
+`Map{Service}` fails at startup if an operation has neither its own handler nor
+the service handler, and names the operations that are missing.
 
 ## Request validation
 

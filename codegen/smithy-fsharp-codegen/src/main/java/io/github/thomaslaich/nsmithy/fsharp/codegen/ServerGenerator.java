@@ -209,7 +209,8 @@ final class ServerGenerator {
                     | _ -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<I${contract:L}Handler>(services) :> ${handler:L}
                 ${delegate:L}(fun ${inputName:L} cancellationToken -> ${body:L}))${?jsonSchemas},
             jsonSchemas = ${jsonSchemas:L}${/jsonSchemas}${?authSchemes},
-            authSchemes = ${authSchemes:L}${/authSchemes}) :> global.NSmithy.Server.IServerOperation\
+            authSchemes = ${authSchemes:L}${/authSchemes},
+            handlerTypes = [| global.Microsoft.FSharp.Core.Operators.typeof<${handler:L}>; global.Microsoft.FSharp.Core.Operators.typeof<I${contract:L}Handler> |]) :> global.NSmithy.Server.IServerOperation\
         """,
         Map.of(
             "input",

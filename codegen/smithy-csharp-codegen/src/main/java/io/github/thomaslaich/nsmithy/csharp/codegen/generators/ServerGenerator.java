@@ -219,13 +219,17 @@ public final class ServerGenerator implements Runnable {
                       aggInterface));
       String separator = i + 1 == ops.size() ? "" : ",";
       String jsonSchemas = isStreaming(op) ? "" : ", " + operationJsonSchemasClass(op) + ".Value";
+      String handlerTypes =
+          writer.format(
+              ", handlerTypes: [typeof($L), typeof($L)]", opHandlerName(op), aggInterface);
       writer.write(
-          "$T.Create($L, $L$L$L)$L",
+          "$T.Create($L, $L$L$L$L)$L",
           RuntimeTypes.SERVER_OPERATION,
           SchemaGenerator.operationSchemaAccessor(writer, context, op),
           resolver,
           jsonSchemas,
           authSchemesArgument(op),
+          handlerTypes,
           separator);
     }
   }
