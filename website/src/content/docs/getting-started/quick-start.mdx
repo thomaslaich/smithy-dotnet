@@ -308,7 +308,7 @@ the build breaks until you handle it.
             | Error(SayHelloError.ValidationException error) -> eprintfn "Rejected: %s" error.Message
         }
 
-    run().Wait()
+    (run ()).GetAwaiter().GetResult()
     ```
   </TabItem>
 </Tabs>
