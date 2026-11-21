@@ -134,7 +134,7 @@ model package.
    ```json
    "plugins": {
      "contracts-jar": {
-       "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"]
+       "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.75.0"]
      }
    }
    ```
@@ -212,7 +212,7 @@ CLI:
   "sources": ["model"],
   "maven": {
     "dependencies": [
-      "software.amazon.smithy:smithy-aws-traits:1.74.1",
+      "software.amazon.smithy:smithy-aws-traits:1.75.0",
       "io.github.thomaslaich.nsmithy:smithy-contracts-jar:NSMITHY_VERSION"
     ]
   },
@@ -221,7 +221,7 @@ CLI:
       "groupId": "io.github.acme",
       "artifactId": "my-service-contracts",
       "version": "${CONTRACTS_VERSION}",
-      "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"]
+      "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.75.0"]
     }
   }
 }
@@ -273,7 +273,7 @@ shapes tagged `internal`.
 
    <ItemGroup>
      <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
-     <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
+     <PackageReference Include="NSmithy.SmithyCli" Version="1.75.0" />
      <PackageReference Include="MyService.Contracts" Version="1.0.0" />
    </ItemGroup>
    ```

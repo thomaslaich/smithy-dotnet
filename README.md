@@ -5,7 +5,7 @@
 [![NuGet](https://img.shields.io/nuget/v/NSmithy.Client)](https://www.nuget.org/packages/NSmithy.Client)
 [![.NET 10](https://img.shields.io/badge/.NET-net10.0-512BD4)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/github/license/thomaslaich/smithy-dotnet)](https://github.com/thomaslaich/smithy-dotnet/blob/main/LICENSE)
-[![Smithy CLI](https://img.shields.io/badge/smithy--cli-1.74.1-orange)](https://github.com/smithy-lang/smithy/releases/tag/1.74.1)
+[![Smithy CLI](https://img.shields.io/badge/smithy--cli-1.75.0-orange)](https://github.com/smithy-lang/smithy/releases/tag/1.75.0)
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Quick start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)** · **[Examples](examples/README.md)** · **[Design docs](designs/README.md)** · **[Changelog](CHANGELOG.md)**
 

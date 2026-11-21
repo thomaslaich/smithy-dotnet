@@ -3,11 +3,11 @@
   "sources": ["model"],
   "maven": {
     "dependencies": [
-      "software.amazon.smithy:smithy-validation-model:1.74.1",
+      "software.amazon.smithy:smithy-validation-model:1.75.0",
       //#if (IsRestJson1)
-      "software.amazon.smithy:smithy-aws-traits:1.74.1"
+      "software.amazon.smithy:smithy-aws-traits:1.75.0"
       //#elseif (IsRpcv2Cbor)
-      "software.amazon.smithy:smithy-protocol-traits:1.74.1"
+      "software.amazon.smithy:smithy-protocol-traits:1.75.0"
       //#elseif (IsSimpleRestJson || IsGrpc)
       "com.disneystreaming.alloy:alloy-core:0.3.40"
       //#endif
@@ -16,11 +16,11 @@
   "plugins": {
     "contracts-jar": {
       "dependencies": [
-        "software.amazon.smithy:smithy-validation-model:1.74.1",
+        "software.amazon.smithy:smithy-validation-model:1.75.0",
         //#if (IsRestJson1)
-        "software.amazon.smithy:smithy-aws-traits:1.74.1"
+        "software.amazon.smithy:smithy-aws-traits:1.75.0"
         //#elseif (IsRpcv2Cbor)
-        "software.amazon.smithy:smithy-protocol-traits:1.74.1"
+        "software.amazon.smithy:smithy-protocol-traits:1.75.0"
         //#elseif (IsSimpleRestJson || IsGrpc)
         "com.disneystreaming.alloy:alloy-core:0.3.40"
         //#endif

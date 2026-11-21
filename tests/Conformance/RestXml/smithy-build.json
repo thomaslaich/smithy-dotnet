@@ -7,10 +7,10 @@
       }
     ],
     "dependencies": [
-      "software.amazon.smithy:smithy-validation-model:1.74.1",
+      "software.amazon.smithy:smithy-validation-model:1.75.0",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
-      "software.amazon.smithy:smithy-aws-traits:1.74.1",
-      "software.amazon.smithy:smithy-aws-protocol-tests:1.74.1"
+      "software.amazon.smithy:smithy-aws-traits:1.75.0",
+      "software.amazon.smithy:smithy-aws-protocol-tests:1.75.0"
     ]
   },
   "projections": {

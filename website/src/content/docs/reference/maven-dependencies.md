@@ -32,7 +32,7 @@ assumes it:
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-aws-iam-traits:1.74.1"]
+    "dependencies": ["software.amazon.smithy:smithy-aws-iam-traits:1.75.0"]
   }
 }
 ```

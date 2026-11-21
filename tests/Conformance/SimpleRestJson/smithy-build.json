@@ -5,7 +5,7 @@
       { "url": "https://repo.maven.apache.org/maven2/" }
     ],
     "dependencies": [
-      "software.amazon.smithy:smithy-validation-model:1.74.1",
+      "software.amazon.smithy:smithy-validation-model:1.75.0",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "com.disneystreaming.alloy:alloy-core:0.3.40",
       "com.disneystreaming.alloy:alloy-protocol-tests:0.3.40"

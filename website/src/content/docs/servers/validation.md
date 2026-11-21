@@ -163,7 +163,7 @@ from the Maven dependency `software.amazon.smithy:smithy-validation-model`:
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-validation-model:1.74.1"]
+    "dependencies": ["software.amazon.smithy:smithy-validation-model:1.75.0"]
   }
 }
 ```
@@ -200,7 +200,7 @@ operation of the model it generates from. Other plugins in the build, such as
 {
   "version": "1.0",
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-validation-model:1.74.1"]
+    "dependencies": ["software.amazon.smithy:smithy-validation-model:1.75.0"]
   },
   "plugins": {
     "csharp-codegen": { "attachValidationException": true }

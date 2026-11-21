@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.75.0" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
   </ItemGroup>
 </Project>

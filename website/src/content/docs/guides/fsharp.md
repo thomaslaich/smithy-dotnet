@@ -40,7 +40,7 @@ package of the service's protocol:
   <ItemGroup>
     <PackageReference Include="NSmithy.Client" Version="NSMITHY_VERSION" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="NSMITHY_VERSION" />
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.75.0" />
   </ItemGroup>
 </Project>
 ```
@@ -63,7 +63,7 @@ instead:
   <ItemGroup>
     <PackageReference Include="NSmithy.Server.AspNetCore" Version="NSMITHY_VERSION" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="NSMITHY_VERSION" />
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.75.0" />
   </ItemGroup>
 </Project>
 ```
@@ -75,7 +75,7 @@ Both read the model through a `smithy-build.json`:
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.74.1"]
+    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.75.0"]
   }
 }
 ```

@@ -31,7 +31,7 @@ class ContractsJarPluginTest {
           .withMember("artifactId", "hello-contracts")
           .withMember("version", "1.2.3")
           .withMember(
-              "dependencies", Node.fromStrings("software.amazon.smithy:smithy-aws-traits:1.74.1"))
+              "dependencies", Node.fromStrings("software.amazon.smithy:smithy-aws-traits:1.75.0"))
           .build();
 
   @Test
@@ -80,7 +80,7 @@ class ContractsJarPluginTest {
         COORDINATES.withMember(
             "dependencies",
             Node.fromStrings(
-                "software.amazon.smithy:smithy-aws-traits:1.74.1", "com.example:a&b:1.0"));
+                "software.amazon.smithy:smithy-aws-traits:1.75.0", "com.example:a&b:1.0"));
     String pom = run(settings).getFileString("hello-contracts-1.2.3.pom").orElseThrow();
 
     assertEquals(
@@ -104,7 +104,7 @@ class ContractsJarPluginTest {
             <dependency>
               <groupId>software.amazon.smithy</groupId>
               <artifactId>smithy-aws-traits</artifactId>
-              <version>1.74.1</version>
+              <version>1.75.0</version>
             </dependency>
           </dependencies>
         </project>

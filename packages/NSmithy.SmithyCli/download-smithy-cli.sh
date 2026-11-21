@@ -9,18 +9,18 @@
 # Usage: bash packages/NSmithy.SmithyCli/download-smithy-cli.sh
 set -euo pipefail
 
-SMITHY_VERSION="1.74.1"
+SMITHY_VERSION="1.75.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLI_DIR="$SCRIPT_DIR/cli"
 BASE_URL="https://github.com/smithy-lang/smithy/releases/download/${SMITHY_VERSION}"
 
 # SHA256 hashes for smithy-cli-{platform}.zip — update when bumping SMITHY_VERSION.
 declare -A PLATFORM_SHA256=(
-  ["darwin-aarch64"]="ebb5e931936aa503055b4620c4981319f2b060656482553ada0151235ff0f1ac"
-  ["darwin-x86_64"]="06b5fa6660fd3ab0281511af1d04f3128e10fa6220c552bc2b94ff18d660886d"
-  ["linux-aarch64"]="c563b5387c66fe04b8c459178dfcc08316798bc107c03fd92474dd8a0c028850"
-  ["linux-x86_64"]="6b50c0b9f2443400bb7115b9badb54b3609816ec5fb4f625954eadd2f6b2f52a"
-  ["windows-x64"]="b6c4c7b83f5520b8872f24248ef1c96dac4a78f0fa92a6f9b1bdb4636166595f"
+  ["darwin-aarch64"]="c6d32931b8eaf5e93c159c870387b4e6d8c97363c8c6bb09061291c93cdc9181"
+  ["darwin-x86_64"]="a89ca22c941f92476fef804ac54e4d3886204da1f0554a18abd8c66073b7519e"
+  ["linux-aarch64"]="8561f72386464ac8cfb0ccd3e864a59199e134f26d8ebf6bd264eebe1aa58098"
+  ["linux-x86_64"]="c8d448426061586a0afb93830151838cb92a73e45d9d3733c3367ca905eb32c1"
+  ["windows-x64"]="78c6d20843da5656e099012bde966af1d1591a8b1380dd73e628c0a3ef29f633"
 )
 
 all_platforms=(

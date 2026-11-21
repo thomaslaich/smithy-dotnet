@@ -17,6 +17,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `QUEUED` becomes `Queued` and `IN_PROGRESS` becomes `InProgress`, while wire values stay as
   modeled. Two members of one enum that would get the same name fail generation. **Breaking:**
   code that refers to enum members by their old names must use the new ones.
+- **Smithy 1.75.0.** Updated the bundled CLI, `SmithyVersion`, and Smithy dependencies. With the
+  default exact version check, projects that reference `NSmithy.SmithyCli` must update it to
+  1.75.0, and `software.amazon.smithy` Maven dependencies should use 1.75.0.
 
 ## [0.21.0]
 
