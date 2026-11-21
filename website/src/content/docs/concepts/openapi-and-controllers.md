@@ -135,8 +135,8 @@ NSmithy generates code from these traits:
 | [`@smokeTests`](/smithy-dotnet/guides/client-configuration/smoke-tests/) | Smoke tests against a running service |
 | [`@endpointRuleSet`](/smithy-dotnet/guides/client-configuration/endpoint-rules/) | Endpoint resolution from client parameters |
 
-Paginators, waiters, fake clients, smoke tests, and endpoint resolvers are
-generated for C# only so far; see [F#](/smithy-dotnet/guides/fsharp/).
+Waiters, fake clients, smoke tests, and endpoint resolvers are generated for
+C# only so far; see [F#](/smithy-dotnet/guides/fsharp/).
 
 OpenAPI's schema keywords cover the constraints. The rest has no standard
 OpenAPI equivalent and is usually expressed through vendor extensions, which
