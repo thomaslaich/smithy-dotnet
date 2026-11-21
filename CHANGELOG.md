@@ -11,6 +11,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.22.0]
+
+Servers describe calls in OpenTelemetry, enum members are Pascal case, and Smithy is updated to
+1.75.0.
+
 ### Added
 
 - **Server telemetry.** A request's server span, ASP.NET Core's or the MCP SDK's, carries
@@ -1123,7 +1128,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.19.0...v0.20.0
