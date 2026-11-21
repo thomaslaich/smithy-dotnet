@@ -361,9 +361,16 @@ failure stays an exception, including a modeled error the operation does not
 declare. The client binds each operation to the service's default
 protocol when it is constructed and calls `SmithyClientRuntime`, so transport,
 retries, auth, and serialization are the C# client's. It fills in a missing
-`@idempotencyToken` member and expands `@endpoint` host prefixes. It has no
-paginators, waiters, or generated endpoint resolver: a service with endpoint
-rules needs `Endpoint` or `EndpointResolver` set in its config.
+`@idempotencyToken` member and expands `@endpoint` host prefixes. Paginators
+are extension members of `I{Service}Client`, so every implementation of the
+interface has them. F# cannot write an async iterator, so the pages paginator
+passes the call and the token accessors to `SmithyPaginator.PagesAsync`, and the
+items paginator flattens the pages with `AsyncEnumerable.SelectMany`. When the
+operation returns a `Result`, each element is one, and an `Error` is the last.
+Both languages take the paginated operations and their item lists from
+`Paginators` in the codegen core. The client has no waiters or generated
+endpoint resolver: a service with endpoint rules needs `Endpoint` or
+`EndpointResolver` set in its config.
 
 The server is the C# server's: `I{Operation}Handler` and
 `I{Service}ServiceHandler` interfaces, a `{Service}ServiceProtocols` flags enum,

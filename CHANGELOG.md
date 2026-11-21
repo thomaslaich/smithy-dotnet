@@ -11,6 +11,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **F# paginators.** F# clients get pages and items paginators for `@paginated` operations, as
+  `IAsyncEnumerable` extensions of `I{Service}Client`. When the operation returns a `Result`, so
+  does each element, and a modeled error is the last one.
+
 ## [0.22.0]
 
 Servers describe calls in OpenTelemetry, enum members are Pascal case, and Smithy is updated to

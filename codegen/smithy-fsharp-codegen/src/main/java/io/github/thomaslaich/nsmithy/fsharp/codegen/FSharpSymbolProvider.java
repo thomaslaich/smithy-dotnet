@@ -355,6 +355,11 @@ public final class FSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
     return settings.fsharpNamespace(smithyNamespace) + "." + SCHEMAS_NAMESPACE;
   }
 
+  /** The type of a list's elements. */
+  public String elementOf(ListShape list) {
+    return element(list.getMember(), ShapeSupport.isSparse(list));
+  }
+
   private String element(MemberShape member, boolean sparse) {
     String type = typeOf(model.expectShape(member.getTarget()));
     return sparse ? type + " option" : type;
