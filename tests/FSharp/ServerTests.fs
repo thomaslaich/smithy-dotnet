@@ -25,7 +25,7 @@ type private Kitchen() =
                         Error(
                             OrderError.OutOfStock
                                 { Message = Some "gone"
-                                  Item = Ingredient.CHEESE
+                                  Item = Ingredient.Cheese
                                   RestockDays = 5
                                   Data = None }
                         )
@@ -63,10 +63,10 @@ let private order name =
       ClientToken = None
       Dish =
         { Name = name
-          Ingredients = [ Ingredient.CHEESE ]
+          Ingredients = [ Ingredient.Cheese ]
           Sides = None
           Price = 9.5f
-          Spice = Some Spice.HOT
+          Spice = Some Spice.Hot
           Tags = Some(Map [ "BACON", Some 1; "cheese", None ])
           Extras = []
           Blob = None
@@ -77,7 +77,7 @@ let private order name =
           Type = None
           ToStringValue = None }
       Notes = Some [ Some "n"; None ]
-      Seating = Seating.BAR
+      Seating = Seating.Bar
       Guests = 2
       Tip = None }
 
@@ -115,7 +115,7 @@ let ``A modeled error a handler returns reaches the client``
 
         match result with
         | Error(OrderError.OutOfStock error) ->
-            Assert.Equal(Ingredient.CHEESE, error.Item)
+            Assert.Equal(Ingredient.Cheese, error.Item)
             Assert.Equal(Some "gone", error.Message)
         | other -> failwith $"Unexpected result: {other}"
     }

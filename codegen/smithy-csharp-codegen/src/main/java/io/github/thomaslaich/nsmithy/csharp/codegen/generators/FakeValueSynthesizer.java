@@ -182,7 +182,7 @@ final class FakeValueSynthesizer {
       return "(" + typeName + ")" + node.expectNumberNode().getValue().longValue();
     }
     List<MemberShape> members = ShapeSupport.sortedMembers(target);
-    return typeName + "." + CSharpNaming.memberName(members.get(0));
+    return typeName + "." + CSharpNaming.intEnumValueName(members.get(0));
   }
 
   String blobBytesExpr(Node node, String hint) {

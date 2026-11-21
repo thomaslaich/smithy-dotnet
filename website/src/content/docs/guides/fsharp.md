@@ -101,6 +101,7 @@ C# and F# projects do not share generated types.
 | Unions | Discriminated unions with an `Unknown of tag * value` case for a variant this model does not define. |
 | Enums | Discriminated unions with an `Unknown of string` case. `FromValue` and `.Value` convert to and from the wire value. |
 | Int enums | F# enums. |
+| Enum members | Cases in Pascal case: `IN_PROGRESS` becomes `InProgress`. |
 | Lists and maps | `'T list` and `Map<string, 'T>`, with `option` elements when `@sparse`. |
 | Operations | A union such as `GetCityError` of the errors each operation can return, which its handler and clients return. |
 | The service, when `SmithyGenerateClient` is on | `IWeatherClient`, `WeatherClient`, and `WeatherClientConfig`. |

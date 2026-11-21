@@ -478,7 +478,7 @@ public sealed class JsonCodecTests
     [Fact]
     public void JsonCodecRoundTripsStringEnumMember()
     {
-        var input = new Deployment(Name: "deploy-api", Status: Status.ACTIVE);
+        var input = new Deployment(Name: "deploy-api", Status: Status.Active);
         var codec = JsonCodecFactory.Default.FromSchema(DeploymentSchema.Schema);
 
         var json = codec.SerializeText(input);
@@ -491,7 +491,7 @@ public sealed class JsonCodecTests
     [Fact]
     public void JsonCodecRoundTripsIntEnumMember()
     {
-        var input = new WorkItem(Title: "rollback", Priority: Priority.HIGH);
+        var input = new WorkItem(Title: "rollback", Priority: Priority.High);
         var codec = JsonCodecFactory.Default.FromSchema(WorkItemSchema.Schema);
 
         var json = codec.SerializeText(input);

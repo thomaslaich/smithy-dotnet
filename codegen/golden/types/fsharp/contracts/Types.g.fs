@@ -5,23 +5,23 @@ namespace rec Example.Types
 
 [<RequireQualifiedAccess>]
 type Allergen =
-    | GLUTEN
-    | NUTS
+    | Gluten
+    | Nuts
     /// <summary>A value this model does not define.</summary>
     | Unknown of value: string
 
     /// <summary>The value this case stands for on the wire.</summary>
     member this.Value =
         match this with
-        | Allergen.GLUTEN -> "gluten"
-        | Allergen.NUTS -> "nuts"
+        | Allergen.Gluten -> "gluten"
+        | Allergen.Nuts -> "nuts"
         | Allergen.Unknown value -> value
 
     /// <summary>The case for a value, or <c>Unknown</c> for one this model does not define.</summary>
     static member FromValue(value: string) =
         match value with
-        | "gluten" -> Allergen.GLUTEN
-        | "nuts" -> Allergen.NUTS
+        | "gluten" -> Allergen.Gluten
+        | "nuts" -> Allergen.Nuts
         | value -> Allergen.Unknown value
 
     override this.ToString() = this.Value
@@ -59,8 +59,8 @@ type Price =
     }
 
 type SpiceLevel =
-    | MILD = 1
-    | HOT = 2
+    | Mild = 1
+    | Hot = 2
 
 /// <summary>
 /// A dish on the menu.

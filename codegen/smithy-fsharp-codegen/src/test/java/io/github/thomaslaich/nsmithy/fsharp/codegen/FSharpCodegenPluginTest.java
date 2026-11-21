@@ -151,7 +151,7 @@ class FSharpCodegenPluginTest {
     assertTrue(types.contains("| UnknownCase of string"), types);
     assertTrue(
         types.contains("| Unknown of tag: string * value: global.NSmithy.Core.Document"), types);
-    assertTrue(types.contains("| VALUE\n"), types);
+    assertTrue(types.contains("| ValueCase\n"), types);
   }
 
   @Test

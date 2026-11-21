@@ -130,19 +130,27 @@ public final class FSharpNaming {
     return escape(avoid(Naming.pascal(member.getMemberName()), INHERITED_MEMBERS));
   }
 
-  /** A union case or string enum case. */
+  /** A union case. */
   public static String caseName(MemberShape member) {
-    String name = caseIdentifier(member.getMemberName());
+    return avoidCaseCollision(member, caseIdentifier(Naming.pascal(member.getMemberName())));
+  }
+
+  /** A string enum case, in Pascal case. */
+  public static String enumCaseName(MemberShape member) {
+    return avoidCaseCollision(member, intEnumValueName(member));
+  }
+
+  /** An int enum's named value, in Pascal case. */
+  public static String intEnumValueName(MemberShape member) {
+    return caseIdentifier(Naming.enumValue(member.getMemberName()));
+  }
+
+  private static String avoidCaseCollision(MemberShape member, String name) {
     boolean collides =
         INHERITED_MEMBERS.contains(name)
             || CASE_RESERVED.contains(name)
             || name.equals(typeName(member.getContainer().getName()));
     return collides ? name + CASE_COLLISION_SUFFIX : name;
-  }
-
-  /** An int enum's named value. */
-  public static String intEnumValueName(MemberShape member) {
-    return caseIdentifier(member.getMemberName());
   }
 
   /** Spells {@code value} as an F# string literal, including the quotes. */
@@ -174,8 +182,7 @@ public final class FSharpNaming {
    * A case identifier: union cases must start with an upper-case letter, so a name that starts with
    * a digit gets a letter in front of it.
    */
-  private static String caseIdentifier(String value) {
-    String name = Naming.pascal(value);
+  private static String caseIdentifier(String name) {
     if (name.startsWith("_")) {
       name = "N" + name.substring(1);
     }

@@ -2,8 +2,12 @@ package io.github.thomaslaich.nsmithy.codegen.core;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.OperationShape;
@@ -92,6 +96,20 @@ public final class ShapeSupport {
   }
 
   /** Members of a structure/error/union, sorted by member name. */
+  /** Fails generation when two members of an enum would get the same generated name. */
+  public static void requireDistinctEnumNames(Shape shape, Function<MemberShape, String> name) {
+    Map<String, MemberShape> seen = new HashMap<>();
+    for (MemberShape member : shape.members()) {
+      MemberShape other = seen.putIfAbsent(name.apply(member), member);
+      if (other != null) {
+        throw new CodegenException(
+            String.format(
+                "Enum members %s and %s of %s both generate the name %s; rename one of them.",
+                other.getMemberName(), member.getMemberName(), shape.getId(), name.apply(member)));
+      }
+    }
+  }
+
   public static List<MemberShape> sortedMembers(Shape shape) {
     return sortedMembers(shape, null);
   }

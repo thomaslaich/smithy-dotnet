@@ -106,7 +106,7 @@ public sealed class ProtoCodecTests
 
     private static Book EmptyBook(string id, DateTimeOffset? publishedAt) =>
         new(
-            Cat: Category.UNSPECIFIED,
+            Cat: Category.Unspecified,
             Id: id,
             Metadata: new Dictionary<string, string>(),
             Tags: [],
@@ -124,7 +124,7 @@ public sealed class ProtoCodecTests
             Tags: ["fp", "scala"],
             Metadata: new Dictionary<string, string> { ["publisher"] = "Manning" },
             Detail: new Nested(42),
-            Cat: Category.SCIENCE,
+            Cat: Category.Science,
             PublishedAt: new DateTimeOffset(2023, 8, 29, 0, 0, 0, TimeSpan.Zero)
         );
 
@@ -205,10 +205,10 @@ public sealed class ProtoCodecTests
 
         // UNSPECIFIED=0, RED=1, GREEN=2, BLUE=3 → field 1 varint 2 for GREEN.
         byte[] expected = [0x08, 0x02];
-        Assert.Equal(expected, codec.Serialize(new Painting(Color.GREEN)));
+        Assert.Equal(expected, codec.Serialize(new Painting(Color.Green)));
         Assert.Equal(
-            new Painting(Color.BLUE),
-            codec.Deserialize(codec.Serialize(new Painting(Color.BLUE)))
+            new Painting(Color.Blue),
+            codec.Deserialize(codec.Serialize(new Painting(Color.Blue)))
         );
     }
 

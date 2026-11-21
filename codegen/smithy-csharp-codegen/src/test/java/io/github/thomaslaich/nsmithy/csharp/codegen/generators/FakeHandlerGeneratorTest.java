@@ -208,7 +208,7 @@ final class FakeHandlerGeneratorTest {
             "new GetStatusOutput(Label: \"label\","
                 + " Attrs: new Dictionary<string, string> { { \"key\", \"value\" }"
                 + " }, Choice: Choice.FromNum(0), Code: \"codexx\","
-                + " Count: 5, Mood: Mood.HAPPY,"
+                + " Count: 5, Mood: Mood.Happy,"
                 + " When: DateTimeOffset.FromUnixTimeSeconds(1704067200))"),
         generated);
   }

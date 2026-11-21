@@ -20,23 +20,23 @@ type GetOrderInput =
 
 [<RequireQualifiedAccess>]
 type OrderStatus =
-    | QUEUED
-    | SERVED
+    | Queued
+    | Served
     /// <summary>A value this model does not define.</summary>
     | Unknown of value: string
 
     /// <summary>The value this case stands for on the wire.</summary>
     member this.Value =
         match this with
-        | OrderStatus.QUEUED -> "QUEUED"
-        | OrderStatus.SERVED -> "SERVED"
+        | OrderStatus.Queued -> "QUEUED"
+        | OrderStatus.Served -> "SERVED"
         | OrderStatus.Unknown value -> value
 
     /// <summary>The case for a value, or <c>Unknown</c> for one this model does not define.</summary>
     static member FromValue(value: string) =
         match value with
-        | "QUEUED" -> OrderStatus.QUEUED
-        | "SERVED" -> OrderStatus.SERVED
+        | "QUEUED" -> OrderStatus.Queued
+        | "SERVED" -> OrderStatus.Served
         | value -> OrderStatus.Unknown value
 
     override this.ToString() = this.Value

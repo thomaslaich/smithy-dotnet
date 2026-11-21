@@ -13,14 +13,14 @@ open Xunit
 
 let private dish =
     { Name = "pizza"
-      Ingredients = [ Ingredient.BACON; Ingredient.FromValue "pineapple" ]
+      Ingredients = [ Ingredient.Bacon; Ingredient.FromValue "pineapple" ]
       Sides =
         Some
             { Name = "salad"
               Ingredients = []
               Sides = None
               Price = 2.0f
-              Spice = Some Spice.HOT
+              Spice = Some Spice.Hot
               Tags = None
               Extras = []
               Blob = None
@@ -47,7 +47,7 @@ let private input =
       ClientToken = None
       Dish = dish
       Notes = Some [ Some "n"; None ]
-      Seating = Seating.BAR
+      Seating = Seating.Bar
       Guests = 4
       Tip = Some { Amount = 2.5M; Currency = "EUR" } }
 
@@ -79,7 +79,7 @@ let ``Every union case round-trips, including a Unit case`` (factory: ICodecFact
 let ``Errors round-trip`` (factory: ICodecFactory) =
     let error: OutOfStock =
         { Message = Some "gone"
-          Item = Ingredient.CHEESE
+          Item = Ingredient.Cheese
           RestockDays = 5
           Data = None }
 
@@ -100,7 +100,7 @@ let ``A member that targets an error round-trips its record`` (factory: ICodecFa
         { Shortage =
             Some
                 { Message = None
-                  Item = Ingredient.BACON
+                  Item = Ingredient.Bacon
                   RestockDays = 2
                   Data = None } }
 
@@ -122,13 +122,13 @@ let ``Reading fills in modeled defaults`` () =
             Encoding.UTF8.GetBytes """{"table":"7","dish":{"name":"x","ingredients":["cheese","secret"]}}"""
         )
 
-    Assert.Equal(Seating.TABLE, read.Seating)
+    Assert.Equal(Seating.Table, read.Seating)
     Assert.Equal(2, read.Guests)
     Assert.Equal(1.5f, read.Dish.Price)
     Assert.Equal(-3L, read.Dish.Offset)
     Assert.Equal<string list>([], read.Dish.Extras)
     Assert.Equal(None, read.Tip)
-    Assert.Equal<Ingredient list>([ Ingredient.CHEESE; Ingredient.SECRETSAUCE ], read.Dish.Ingredients)
+    Assert.Equal<Ingredient list>([ Ingredient.Cheese; Ingredient.SecretSauce ], read.Dish.Ingredients)
 
 [<Fact>]
 let ``Reading a structure without a required member fails`` () =
