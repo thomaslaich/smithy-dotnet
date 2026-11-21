@@ -29,8 +29,8 @@ internal sealed class LibraryHandler : ILibraryServiceHandler
             Author: "Michael Pilquist, Rúnar Bjarnason & Paul Chiusano",
             PageCount: 534,
             Checksum: unchecked((long)0xF05CA1A5CA1A5CA1UL),
-            Format: BookFormat.PAPERBACK,
-            Category: BookCategory.SCIENCE,
+            Format: BookFormat.Paperback,
+            Category: BookCategory.Science,
             Tags: ["functional programming", "scala", "fp"],
             Metadata: new Dictionary<string, string>
             {
@@ -50,8 +50,8 @@ internal sealed class LibraryHandler : ILibraryServiceHandler
             Author: "Martin Kleppmann",
             PageCount: 611,
             Checksum: unchecked((long)0xDA7A1A7E51BEDA7AUL),
-            Format: BookFormat.PAPERBACK,
-            Category: BookCategory.SCIENCE,
+            Format: BookFormat.Paperback,
+            Category: BookCategory.Science,
             Tags: ["distributed systems", "databases", "data engineering"],
             Metadata: new Dictionary<string, string> { ["publisher"] = "O'Reilly" },
             NullableAttributes: new Dictionary<string, string?>
@@ -67,8 +67,8 @@ internal sealed class LibraryHandler : ILibraryServiceHandler
             Author: "Erich Gamma, Richard Helm, Ralph Johnson & John Vlissides",
             PageCount: 395,
             Checksum: unchecked((long)0x9A09F04C0DE51B0FUL),
-            Format: BookFormat.HARDCOVER,
-            Category: BookCategory.SCIENCE,
+            Format: BookFormat.Hardcover,
+            Category: BookCategory.Science,
             Tags: ["design patterns", "object-oriented", "gang of four"],
             Metadata: new Dictionary<string, string>
             {
@@ -87,8 +87,8 @@ internal sealed class LibraryHandler : ILibraryServiceHandler
             Author: "Mark J. Price",
             PageCount: 837,
             Checksum: unchecked((long)0xC51300D07E9D07E9UL),
-            Format: BookFormat.EBOOK,
-            Category: BookCategory.SCIENCE,
+            Format: BookFormat.Ebook,
+            Category: BookCategory.Science,
             Tags: ["csharp", "dotnet", "microsoft"],
             Metadata: new Dictionary<string, string>
             {

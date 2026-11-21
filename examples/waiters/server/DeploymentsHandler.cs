@@ -18,7 +18,7 @@ internal sealed class DeploymentsHandler(TimeProvider time) : IDeploymentsServic
     {
         var id = $"dep-{Guid.NewGuid().ToString("N")[..8]}";
         Store[id] = new Deployment(input.Release, input.Fail ?? false, time.GetUtcNow());
-        return Task.FromResult(new CreateDeploymentOutput(id, DeploymentStatus.PENDING));
+        return Task.FromResult(new CreateDeploymentOutput(id, DeploymentStatus.Pending));
     }
 
     public Task<GetDeploymentOutput> GetDeploymentAsync(
@@ -35,10 +35,10 @@ internal sealed class DeploymentsHandler(TimeProvider time) : IDeploymentsServic
         var build = StepStatus(elapsed - StepDuration, failed: false);
         var rollout = StepStatus(elapsed - 2 * StepDuration, deployment.Fail);
         var status =
-            elapsed < StepDuration ? DeploymentStatus.PENDING
-            : rollout == DeploymentStatus.SUCCEEDED ? DeploymentStatus.SUCCEEDED
-            : rollout == DeploymentStatus.FAILED ? DeploymentStatus.FAILED
-            : DeploymentStatus.RUNNING;
+            elapsed < StepDuration ? DeploymentStatus.Pending
+            : rollout == DeploymentStatus.Succeeded ? DeploymentStatus.Succeeded
+            : rollout == DeploymentStatus.Failed ? DeploymentStatus.Failed
+            : DeploymentStatus.Running;
 
         return Task.FromResult(
             new GetDeploymentOutput(
@@ -51,10 +51,10 @@ internal sealed class DeploymentsHandler(TimeProvider time) : IDeploymentsServic
 
     /// <summary>The status of a step that started <paramref name="running"/> ago.</summary>
     private static DeploymentStatus StepStatus(TimeSpan running, bool failed) =>
-        running < TimeSpan.Zero ? DeploymentStatus.PENDING
-        : running < StepDuration ? DeploymentStatus.RUNNING
-        : failed ? DeploymentStatus.FAILED
-        : DeploymentStatus.SUCCEEDED;
+        running < TimeSpan.Zero ? DeploymentStatus.Pending
+        : running < StepDuration ? DeploymentStatus.Running
+        : failed ? DeploymentStatus.Failed
+        : DeploymentStatus.Succeeded;
 
     private sealed record Deployment(string Release, bool Fail, DateTimeOffset Created);
 }

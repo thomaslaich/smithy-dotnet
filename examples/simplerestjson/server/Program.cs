@@ -59,22 +59,22 @@ internal sealed class PizzaHandler : IPizzaAdminServiceHandler
     {
         ["margherita"] = new MenuItem(
             Food.FromPizza(
-                new Pizza(PizzaBase.TOMATO, "Margherita", [Ingredient.TOMATO, Ingredient.CHEESE])
+                new Pizza(PizzaBase.Tomato, "Margherita", [Ingredient.Tomato, Ingredient.Cheese])
             ),
             8.50f
         ),
         ["pepperoni"] = new MenuItem(
             Food.FromPizza(
                 new Pizza(
-                    PizzaBase.TOMATO,
+                    PizzaBase.Tomato,
                     "Pepperoni",
-                    [Ingredient.TOMATO, Ingredient.CHEESE, Ingredient.PEPPERONI]
+                    [Ingredient.Tomato, Ingredient.Cheese, Ingredient.Pepperoni]
                 )
             ),
             10.00f
         ),
         ["caesar"] = new MenuItem(
-            Food.FromSalad(new Salad([Ingredient.SALAD, Ingredient.CHEESE], "Caesar")),
+            Food.FromSalad(new Salad([Ingredient.Salad, Ingredient.Cheese], "Caesar")),
             7.00f
         ),
     };
