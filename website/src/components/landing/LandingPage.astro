@@ -7,6 +7,7 @@
  * `html.nsmithy-landing` rules below. The marker class is added in <head> via
  * index.mdx frontmatter so there is no flash.
  */
+import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
 import LandingTree from './LandingTree.astro';
 
 // Base-relative so it works on the local dev server and the deployed site
@@ -56,7 +57,7 @@ const repo = 'https://github.com/thomaslaich/smithy-dotnet';
         <span>NSmithy</span>
       </a>
       <div class="nsl-header-actions">
-        <button type="button" class="nsl-theme" aria-label="Toggle theme"></button>
+        <div class="nsl-theme"><ThemeSelect /></div>
         <a class="nsl-btn nsl-btn-primary nsl-btn-sm" href={intro}>Get Started</a>
       </div>
     </div>
@@ -247,23 +248,28 @@ const repo = 'https://github.com/thomaslaich/smithy-dotnet';
     align-items: center;
     gap: 12px;
   }
+  /* Starlight's theme select, in the landing's pill style. */
   .nsl-theme {
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 36px;
     height: 36px;
+    padding: 0 12px;
     background: var(--pill);
     border: 1px solid var(--border);
-    color: var(--dim);
     border-radius: 9px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: color 0.15s ease, border-color 0.15s ease;
+    transition: border-color 0.15s ease;
   }
   .nsl-theme:hover {
-    color: var(--text);
     border-color: var(--accent);
+  }
+  .nsl-theme label {
+    color: var(--dim);
+  }
+  .nsl-theme label:hover {
+    color: var(--text);
+  }
+  .nsl-theme select {
+    font-size: 14px;
   }
 
   /* ── Buttons ─────────────────────────────────────────────────────────────── */
@@ -453,27 +459,4 @@ const repo = 'https://github.com/thomaslaich/smithy-dotnet';
       window.removeEventListener('pageshow', updateHeader);
     }, { once: true });
   }
-
-  // Theme toggle — drives Starlight's theme (data-theme + localStorage) so the
-  // landing and the docs pages stay in sync.
-  (function () {
-    const btn = document.querySelector<HTMLButtonElement>('.nsl-theme');
-    if (!btn) return;
-    const sun = '☀︎';
-    const moon = '☾︎';
-    const current = () =>
-      document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-    const paint = () => {
-      btn.textContent = current() === 'dark' ? moon : sun;
-    };
-    paint();
-    btn.addEventListener('click', () => {
-      const next = current() === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      try {
-        localStorage.setItem('starlight-theme', next);
-      } catch {}
-      paint();
-    });
-  })();
 </script>

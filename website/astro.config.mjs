@@ -64,10 +64,8 @@ export default defineConfig({
 			editLink: {
 				baseUrl: 'https://github.com/thomaslaich/smithy-dotnet/edit/main/website/',
 			},
-			// Replace the default theme dropdown with the landing's sun/moon toggle, and
-			// append the current version to the site title.
+			// Append the current version to the site title.
 			components: {
-				ThemeSelect: './src/components/StarlightThemeToggle.astro',
 				SiteTitle: './src/components/SiteTitle.astro',
 			},
 			// Shared code-block styling (src/styles/code.css), plus landing/docs theme
