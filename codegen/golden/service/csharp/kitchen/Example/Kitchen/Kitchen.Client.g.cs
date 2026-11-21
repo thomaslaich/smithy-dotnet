@@ -7,6 +7,7 @@ using NSmithy.Protocols.RestJson;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -19,6 +20,18 @@ public interface IKitchenClient : IDisposable
 {
 
     Task<GetOrderOutput> GetOrderAsync(GetOrderInput input, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    Task<ListOrdersOutput> ListOrdersAsync(ListOrdersInput input, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    IAsyncEnumerable<ListOrdersOutput> ListOrdersPagesAsync(ListOrdersInput input, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    IAsyncEnumerable<string> ListOrdersItemsAsync(ListOrdersInput input, CancellationToken cancellationToken = default);
     Task<PingOutput> PingAsync(PingInput input, CancellationToken cancellationToken = default);
     /// <summary>
     /// Places an order for a table.
@@ -31,6 +44,33 @@ public interface IKitchenClient : IDisposable
 /// </summary>
 public static class KitchenClientExtensions
 {
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    public static Task<ListOrdersOutput> ListOrdersAsync(this IKitchenClient client, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        return client.ListOrdersAsync(new ListOrdersInput(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    public static IAsyncEnumerable<ListOrdersOutput> ListOrdersPagesAsync(this IKitchenClient client, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        return client.ListOrdersPagesAsync(new ListOrdersInput(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    public static IAsyncEnumerable<string> ListOrdersItemsAsync(this IKitchenClient client, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        return client.ListOrdersItemsAsync(new ListOrdersInput(), cancellationToken);
+    }
+
     public static Task<PingOutput> PingAsync(this IKitchenClient client, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -48,6 +88,7 @@ public sealed class KitchenClient : IKitchenClient
     private readonly SmithyHttpClientEnvironment environment;
     private readonly Func<string> idempotencyTokenProvider;
     private readonly SmithyOperationBinding<GetOrderInput, GetOrderOutput> GetOrderBinding;
+    private readonly SmithyOperationBinding<ListOrdersInput, ListOrdersOutput> ListOrdersBinding;
     private readonly SmithyOperationBinding<PingInput, PingOutput> PingBinding;
     private readonly SmithyOperationBinding<PlaceOrderInput, PlaceOrderOutput> PlaceOrderBinding;
 
@@ -71,6 +112,10 @@ public sealed class KitchenClient : IKitchenClient
                 global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.GetOrderSchema.Schema.Id,
                 serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.GetOrderSchema.Schema),
                 Array.Empty<string>(), null, global::Example.Kitchen.Schemas.GetOrderSchema.Schema);
+            this.ListOrdersBinding = new SmithyOperationBinding<ListOrdersInput, ListOrdersOutput>(
+                global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.ListOrdersSchema.Schema.Id,
+                serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.ListOrdersSchema.Schema),
+                Array.Empty<string>(), null, global::Example.Kitchen.Schemas.ListOrdersSchema.Schema);
             this.PingBinding = new SmithyOperationBinding<PingInput, PingOutput>(
                 global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.PingSchema.Schema.Id,
                 serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.PingSchema.Schema),
@@ -103,6 +148,10 @@ public sealed class KitchenClient : IKitchenClient
                 global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.GetOrderSchema.Schema.Id,
                 serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.GetOrderSchema.Schema),
                 Array.Empty<string>(), null, global::Example.Kitchen.Schemas.GetOrderSchema.Schema);
+            this.ListOrdersBinding = new SmithyOperationBinding<ListOrdersInput, ListOrdersOutput>(
+                global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.ListOrdersSchema.Schema.Id,
+                serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.ListOrdersSchema.Schema),
+                Array.Empty<string>(), null, global::Example.Kitchen.Schemas.ListOrdersSchema.Schema);
             this.PingBinding = new SmithyOperationBinding<PingInput, PingOutput>(
                 global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.PingSchema.Schema.Id,
                 serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.PingSchema.Schema),
@@ -133,6 +182,10 @@ public sealed class KitchenClient : IKitchenClient
                 global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.GetOrderSchema.Schema.Id,
                 serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.GetOrderSchema.Schema),
                 Array.Empty<string>(), null, global::Example.Kitchen.Schemas.GetOrderSchema.Schema);
+            this.ListOrdersBinding = new SmithyOperationBinding<ListOrdersInput, ListOrdersOutput>(
+                global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.ListOrdersSchema.Schema.Id,
+                serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.ListOrdersSchema.Schema),
+                Array.Empty<string>(), null, global::Example.Kitchen.Schemas.ListOrdersSchema.Schema);
             this.PingBinding = new SmithyOperationBinding<PingInput, PingOutput>(
                 global::Example.Kitchen.Schemas.KitchenSchema.Schema.Id, global::Example.Kitchen.Schemas.PingSchema.Schema.Id,
                 serviceProtocol.ForClientOperation(global::Example.Kitchen.Schemas.PingSchema.Schema),
@@ -168,6 +221,53 @@ public sealed class KitchenClient : IKitchenClient
         ArgumentNullException.ThrowIfNull(input);
         return runtime.InvokeAsync(GetOrderBinding, input, cancellationToken);
     }
+
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    public Task<ListOrdersOutput> ListOrdersAsync(ListOrdersInput input, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return runtime.InvokeAsync(ListOrdersBinding, input, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    public async IAsyncEnumerable<ListOrdersOutput> ListOrdersPagesAsync(ListOrdersInput input, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        var output = await ListOrdersAsync(input, cancellationToken).ConfigureAwait(false);
+        yield return output;
+        var token = output.NextToken;
+        while (token is not null)
+        {
+            input = input with { NextToken = token };
+            output = await ListOrdersAsync(input, cancellationToken).ConfigureAwait(false);
+            yield return output;
+            token = output.NextToken;
+        }
+    }
+
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+      public async IAsyncEnumerable<string> ListOrdersItemsAsync(ListOrdersInput input, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+      {
+          await foreach (var page in ListOrdersPagesAsync(input, cancellationToken)
+    .ConfigureAwait(false))
+          {
+              var items = page.Orders;
+              if (items is null)
+              {
+                  continue;
+              }
+              foreach (var item in items)
+              {
+                  yield return item;
+              }
+          }
+      }
 
     public Task<PingOutput> PingAsync(PingInput input, CancellationToken cancellationToken = default)
     {

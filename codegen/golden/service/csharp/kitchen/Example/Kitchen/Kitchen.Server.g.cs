@@ -18,7 +18,7 @@ namespace Example.Kitchen;
 /// <summary>
 /// A kitchen that takes orders.
 /// </summary>
-public interface IKitchenServiceHandler : IGetOrderHandler, IPingHandler, IPlaceOrderHandler { }
+public interface IKitchenServiceHandler : IGetOrderHandler, IListOrdersHandler, IPingHandler, IPlaceOrderHandler { }
 
 [Flags]
 public enum KitchenServiceProtocols
@@ -41,6 +41,7 @@ public sealed class KitchenServiceDefinition : IServiceDefinition
     internal static ServiceOperationCatalog Catalog { get; } = new(
         global::Example.Kitchen.Schemas.KitchenSchema.Schema,
         ServerOperation.Create(global::Example.Kitchen.Schemas.GetOrderSchema.Schema, services => (services.GetService<IGetOrderHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).GetOrderAsync, GetOrderJsonSchemas.Value, handlerTypes: [typeof(IGetOrderHandler), typeof(IKitchenServiceHandler)]),
+        ServerOperation.Create(global::Example.Kitchen.Schemas.ListOrdersSchema.Schema, services => (services.GetService<IListOrdersHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).ListOrdersAsync, ListOrdersJsonSchemas.Value, handlerTypes: [typeof(IListOrdersHandler), typeof(IKitchenServiceHandler)]),
         ServerOperation.Create(global::Example.Kitchen.Schemas.PingSchema.Schema, services => (services.GetService<IPingHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).PingAsync, PingJsonSchemas.Value, handlerTypes: [typeof(IPingHandler), typeof(IKitchenServiceHandler)]),
         ServerOperation.Create(global::Example.Kitchen.Schemas.PlaceOrderSchema.Schema, services => (services.GetService<IPlaceOrderHandler>() ?? services.GetRequiredService<IKitchenServiceHandler>()).PlaceOrderAsync, PlaceOrderJsonSchemas.Value, handlerTypes: [typeof(IPlaceOrderHandler), typeof(IKitchenServiceHandler)])
     );
@@ -52,6 +53,15 @@ public sealed class KitchenServiceDefinition : IServiceDefinition
         public static OperationJsonSchemas Value { get; } = new(
             "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"required\":[\"orderId\"],\"properties\":{\"orderId\":{\"type\":\"string\"},\"verbose\":{\"type\":\"boolean\"}},\"additionalProperties\":false}",
             "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"required\":[\"dish\"],\"properties\":{\"dish\":{\"type\":\"string\"},\"status\":{\"$ref\":\"#/$defs/N6578616d706c652e6b69746368656e_OrderStatus\"}},\"additionalProperties\":false,\"$defs\":{\"N6578616d706c652e6b69746368656e_OrderStatus\":{\"type\":\"string\",\"enum\":[\"QUEUED\",\"SERVED\"]}}}"
+        );
+    }
+
+    private static class ListOrdersJsonSchemas
+    {
+        public static OperationJsonSchemas Value { get; } = new(
+            "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"properties\":{\"nextToken\":{\"type\":\"string\"},\"pageSize\":{\"type\":\"integer\",\"maximum\":2147483647,\"minimum\":-2147483648}},\"additionalProperties\":false}",
+            "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"required\":[\"orders\"],\"properties\":{\"nextToken\":{\"type\":\"string\"},\"orders\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"additionalProperties\":false}",
+            "Lists the orders, a page at a time."
         );
     }
 

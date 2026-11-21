@@ -17,6 +17,16 @@ type GetOrderSchema =
             traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#http"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("method", global.NSmithy.Core.Document.From("GET")); ("uri", global.NSmithy.Core.Document.From("/orders/{orderId}")) ]))); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#readonly"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
 
 [<AbstractClass; Sealed>]
+type ListOrdersSchema =
+    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<global.Example.Kitchen.ListOrdersInput, global.Example.Kitchen.ListOrdersOutput> =
+        global.NSmithy.Core.Serde.Schemas.Operation<global.Example.Kitchen.ListOrdersInput, global.Example.Kitchen.ListOrdersOutput>(
+            global.NSmithy.Core.ShapeId.Parse("example.kitchen#ListOrders"),
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.ListOrdersInput>(fun () -> global.Example.Kitchen.Schemas.ListOrdersInputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.ListOrdersInput>),
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.ListOrdersOutput>(fun () -> global.Example.Kitchen.Schemas.ListOrdersOutputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.ListOrdersOutput>),
+            ([||]: global.NSmithy.Core.Serde.IOperationErrorSchema[]),
+            traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#http"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("method", global.NSmithy.Core.Document.From("GET")); ("uri", global.NSmithy.Core.Document.From("/orders")) ]))); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#paginated"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("inputToken", global.NSmithy.Core.Document.From("nextToken")); ("outputToken", global.NSmithy.Core.Document.From("nextToken")); ("items", global.NSmithy.Core.Document.From("orders")); ("pageSize", global.NSmithy.Core.Document.From("pageSize")) ]))); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#readonly"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
+
+[<AbstractClass; Sealed>]
 type PingSchema =
     static member val Schema: global.NSmithy.Core.Serde.OperationSchema<global.Example.Kitchen.PingInput, global.Example.Kitchen.PingOutput> =
         global.NSmithy.Core.Serde.Schemas.Operation<global.Example.Kitchen.PingInput, global.Example.Kitchen.PingOutput>(
@@ -65,6 +75,31 @@ type GetOrderError =
 
 type IGetOrderHandler =
     abstract GetOrderAsync: input: global.Example.Kitchen.GetOrderInput * cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, GetOrderError>>
+
+/// <summary>The errors <c>ListOrders</c> can return: its own and its service's.</summary>
+[<RequireQualifiedAccess>]
+type ListOrdersError =
+    | Closed of global.Example.Kitchen.Closed
+
+    /// <summary>The error as the exception the runtime writes.</summary>
+    member this.ToException() : global.System.Exception =
+        match this with
+        | ListOrdersError.Closed error -> global.Example.Kitchen.Exceptions.Closed(error) :> global.System.Exception
+
+    /// <summary>The case that holds <c>error</c>, or None when it is not one of these errors.</summary>
+    static member FromException(error: global.System.Exception) : ListOrdersError option =
+        match error with
+        | :? global.Example.Kitchen.Exceptions.Closed as error -> global.Microsoft.FSharp.Core.Option.Some(ListOrdersError.Closed error.Error)
+        | _ -> global.Microsoft.FSharp.Core.Option.None
+
+/// <summary>
+/// Lists the orders, a page at a time.
+/// </summary>
+type IListOrdersHandler =
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    abstract ListOrdersAsync: input: global.Example.Kitchen.ListOrdersInput * cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, ListOrdersError>>
 
 /// <summary>The errors <c>Ping</c> can return: its own and its service's.</summary>
 [<RequireQualifiedAccess>]

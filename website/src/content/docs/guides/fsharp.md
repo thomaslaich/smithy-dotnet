@@ -9,8 +9,8 @@ and server. Generation runs during `dotnet build`, as it does for C#, and the
 generated code uses the same runtime packages.
 
 :::caution[Experimental]
-Paginators, waiters, endpoint-rule resolvers, fake clients and handlers, smoke
-tests, and client dependency-injection registration are C# only.
+Waiters, endpoint-rule resolvers, fake clients and handlers, smoke tests, and
+client dependency-injection registration are C# only.
 :::
 
 The [F# example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/fsharp)
