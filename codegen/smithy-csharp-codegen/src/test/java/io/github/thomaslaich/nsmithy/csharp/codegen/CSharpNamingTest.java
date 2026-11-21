@@ -26,6 +26,7 @@ final class CSharpNamingTest {
   void membersNamedLikeTheirTypeOrAnInheritedMemberTakeTheValueSuffix() {
     assertEquals("DomainNameValue", CSharpNaming.memberName(member("DomainName", "domainName")));
     assertEquals("EqualsValue", CSharpNaming.memberName(member("Selector", "equals")));
+    assertEquals("CloneValue", CSharpNaming.memberName(member("Selector", "clone")));
     assertEquals("Name", CSharpNaming.memberName(member("DomainName", "name")));
   }
 
@@ -42,6 +43,7 @@ final class CSharpNamingTest {
     assertEquals(
         "FromValueValue", CSharpNaming.stringEnumValueName(member("Operator", "FromValue")));
     assertEquals("EqualsValue", CSharpNaming.stringEnumValueName(member("Operator", "Equals")));
+    assertEquals("CloneValue", CSharpNaming.stringEnumValueName(member("CopyStrategy", "CLONE")));
   }
 
   @Test
