@@ -11,10 +11,6 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-## [0.22.0]
-
-C# and F# enum members are generated in Pascal case.
-
 ### Changed
 
 - **Enum members are Pascal case.** String and int enum members follow .NET naming in C# and F#:
@@ -1110,8 +1106,7 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.22.0...HEAD
-[0.22.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.21.0...v0.22.0
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.21.0...HEAD
 [0.21.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.19.0...v0.20.0
