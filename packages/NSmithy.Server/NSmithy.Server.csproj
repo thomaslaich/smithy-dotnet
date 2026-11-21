@@ -4,11 +4,16 @@
     <PackageTags>$(PackageTags);server</PackageTags>
     <!--
       The dispatch methods are instance members with no instance state yet: the runtime is the
-      seam where server interceptors and telemetry attach later, mirroring SmithyClientRuntime.
+      seam where server interceptors attach later, mirroring SmithyClientRuntime.
       Keeping them instance-based avoids a later breaking change from static to instance.
     -->
     <NoWarn>$(NoWarn);CA1822</NoWarn>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The hosts report a call's telemetry with the runtime's operation identity. -->
+    <InternalsVisibleTo Include="NSmithy.Server.AspNetCore" />
+    <InternalsVisibleTo Include="NSmithy.Server.Mcp" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
   </ItemGroup>

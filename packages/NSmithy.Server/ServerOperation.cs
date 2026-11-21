@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Core.Validation;
@@ -7,8 +8,8 @@ namespace NSmithy.Server;
 
 /// <summary>
 /// An operation a generated server exposes: its schema and how to resolve its handler for a
-/// request. HTTP routing binds it to each protocol a service is mapped over; adapters that hold the
-/// input as an object, such as MCP, invoke it directly.
+/// request. Hosts bind it to each protocol a service is mapped over, or invoke it with decoded
+/// input, through the service's <see cref="ServiceOperationCatalog"/>.
 /// </summary>
 public interface IServerOperation
 {
@@ -37,15 +38,14 @@ public interface IServerOperation
     /// </summary>
     IReadOnlyList<Type> HandlerTypes => [];
 
-    /// <summary>Binds the operation to <paramref name="protocol"/>, once per mapped protocol.</summary>
-    IServerOperationBinding Bind(IServiceProtocol protocol);
+    // Bound and invoked through ServiceOperationCatalog, which knows the service a call is for.
+    internal IServerOperationBinding Bind(
+        ServerOperationIdentity identity,
+        IServiceProtocol protocol
+    );
 
-    /// <summary>
-    /// Invokes the operation with an already-decoded <paramref name="input"/> through
-    /// <paramref name="runtime"/>, which validates it and calls the handler resolved from
-    /// <paramref name="services"/>, the services of the request being served.
-    /// </summary>
-    Task<object?> InvokeAsync(
+    internal Task<object?> InvokeAsync(
+        ServerOperationIdentity identity,
         SmithyServerRuntime runtime,
         object input,
         IServiceProvider services,
@@ -57,6 +57,8 @@ public interface IServerOperation
 public interface IServerOperationBinding
 {
     IOperationSchema Schema { get; }
+
+    internal ServerOperationIdentity Identity { get; }
 
     /// <inheritdoc cref="IServerOperationProtocol{TInput, TOutput}.StreamsRequestBody"/>
     bool StreamsRequestBody { get; }
@@ -141,17 +143,21 @@ public sealed class ServerOperation<TInput, TOutput>(
             _ => [.. authSchemes],
         };
 
-    public IServerOperationBinding Bind(IServiceProtocol protocol)
+    IServerOperationBinding IServerOperation.Bind(
+        ServerOperationIdentity identity,
+        IServiceProtocol protocol
+    )
     {
         ArgumentNullException.ThrowIfNull(protocol);
-        return new Binding(Schema, protocol.ForServerOperation(Schema), resolveHandler);
+        return new Binding(this, identity, protocol.ForServerOperation(Schema));
     }
 
-    public async Task<object?> InvokeAsync(
+    async Task<object?> IServerOperation.InvokeAsync(
+        ServerOperationIdentity identity,
         SmithyServerRuntime runtime,
         object input,
         IServiceProvider services,
-        CancellationToken cancellationToken = default
+        CancellationToken cancellationToken
     )
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -167,17 +173,88 @@ public sealed class ServerOperation<TInput, TOutput>(
         }
 
         return await runtime
-            .InvokeAsync(inputValidator, typedInput, resolveHandler(services), cancellationToken)
+            .InvokeAsync(inputValidator, typedInput, Handler(identity, services), cancellationToken)
             .ConfigureAwait(false);
     }
 
+    // The handler for one call, in a span when an application subscribes to the source.
+    private Func<TInput, CancellationToken, Task<TOutput>> Handler(
+        ServerOperationIdentity identity,
+        IServiceProvider services
+    )
+    {
+        var handler = resolveHandler(services);
+        return SmithyServerTelemetry.ActivitySource.HasListeners()
+            ? (input, cancellationToken) =>
+                ObserveAsync(identity, handler, input, cancellationToken)
+            : handler;
+    }
+
+    private static async Task<TOutput> ObserveAsync(
+        ServerOperationIdentity identity,
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
+        TInput input,
+        CancellationToken cancellationToken
+    )
+    {
+        using var activity = SmithyServerTelemetry.ActivitySource.StartActivity(
+            identity.ActivityName,
+            ActivityKind.Internal
+        );
+        if (activity is { IsAllDataRequested: true })
+        {
+            SmithyServerTelemetry.Describe(activity, identity);
+        }
+
+        Task<TOutput> invocation;
+        try
+        {
+            invocation = handler(input, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            Fail(activity, identity, exception);
+            throw;
+        }
+
+        // Read off the task, as the runtime does, so a modeled error is not thrown twice here.
+        await ((Task)invocation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        if (invocation.Exception?.InnerExceptions is [var raised])
+        {
+            Fail(activity, identity, raised);
+        }
+
+        return await invocation.ConfigureAwait(false);
+    }
+
+    // A modeled client error is the caller's mistake, so only a fault marks the span.
+    private static void Fail(
+        Activity? activity,
+        ServerOperationIdentity identity,
+        Exception exception
+    )
+    {
+        if (activity is null)
+        {
+            return;
+        }
+
+        activity.SetTag("error.type", SmithyServerTelemetry.ErrorType(exception));
+        if (identity.IsFault(exception))
+        {
+            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+        }
+    }
+
     private sealed class Binding(
-        OperationSchema<TInput, TOutput> schema,
-        IServerOperationProtocol<TInput, TOutput> protocol,
-        Func<IServiceProvider, Func<TInput, CancellationToken, Task<TOutput>>> resolveHandler
+        ServerOperation<TInput, TOutput> operation,
+        ServerOperationIdentity identity,
+        IServerOperationProtocol<TInput, TOutput> protocol
     ) : IServerOperationBinding
     {
-        public IOperationSchema Schema => schema;
+        public IOperationSchema Schema => operation.Schema;
+
+        ServerOperationIdentity IServerOperationBinding.Identity => identity;
 
         public bool StreamsRequestBody => protocol.StreamsRequestBody;
 
@@ -193,7 +270,7 @@ public sealed class ServerOperation<TInput, TOutput>(
             return runtime.DispatchAsync(
                 protocol,
                 request,
-                resolveHandler(services),
+                operation.Handler(identity, services),
                 cancellationToken
             );
         }

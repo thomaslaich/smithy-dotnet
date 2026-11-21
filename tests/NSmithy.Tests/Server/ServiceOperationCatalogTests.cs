@@ -14,6 +14,9 @@ public sealed class ServiceOperationCatalogTests
     private static readonly IServiceProvider Services =
         new ServiceCollection().BuildServiceProvider();
 
+    private static ServiceOperationCatalog Catalog(IServerOperation operation) =>
+        new(Schemas.Service(new ShapeId("example", "TextService"), "2026-08-30"), operation);
+
     [Fact]
     public async Task CatalogEnumeratesLooksUpAndInvokesTypedOperations()
     {
@@ -32,9 +35,13 @@ public sealed class ServiceOperationCatalogTests
         var catalog = new ServiceOperationCatalog(serviceSchema, operation);
         using var cancellation = new CancellationTokenSource();
 
-        var result = await catalog
-            .GetOperation(OperationId)
-            .InvokeAsync(Runtime, "Smithy", Services, cancellation.Token);
+        var result = await catalog.InvokeAsync(
+            OperationId,
+            Runtime,
+            "Smithy",
+            Services,
+            cancellation.Token
+        );
 
         var untypedSchema = Assert.IsAssignableFrom<IOperationSchema>(operationSchema);
         Assert.Same(serviceSchema, catalog.Schema);
@@ -56,7 +63,7 @@ public sealed class ServiceOperationCatalogTests
         );
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            operation.InvokeAsync(Runtime, 42, Services)
+            Catalog(operation).InvokeAsync(OperationId, Runtime, 42, Services)
         );
 
         Assert.Equal("input", exception.ParamName);
@@ -89,7 +96,7 @@ public sealed class ServiceOperationCatalogTests
         );
 
         await Assert.ThrowsAsync<NSmithy.Core.Validation.ValidationException>(() =>
-            operation.InvokeAsync(Runtime, "no", Services)
+            Catalog(operation).InvokeAsync(OperationId, Runtime, "no", Services)
         );
 
         Assert.False(invoked);

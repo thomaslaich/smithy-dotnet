@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
@@ -63,43 +64,97 @@ public static class SmithyAspNetCoreHost
     {
         ArgumentNullException.ThrowIfNull(httpContext);
         ArgumentNullException.ThrowIfNull(operation);
+        var startTimestamp = Stopwatch.GetTimestamp();
         if (operation.StreamsRequestBody)
         {
             RelaxRequestBodyRate(httpContext);
         }
 
-        var request = await ToSmithyRequestAsync(
+        SmithyHttpRequest request;
+        try
+        {
+            request = await ToSmithyRequestAsync(
+                    httpContext,
+                    operation.StreamsRequestBody,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            SmithyServerTelemetry.Complete(
+                operation.Identity,
+                Describe(httpContext, operation),
+                startTimestamp,
+                exception
+            );
+            throw;
+        }
+
+        await DispatchBuiltRequestAsync(
                 httpContext,
-                operation.StreamsRequestBody,
+                operation,
+                request,
+                startTimestamp,
                 cancellationToken
             )
-            .ConfigureAwait(false);
-        await DispatchBuiltRequestAsync(httpContext, operation, request, cancellationToken)
             .ConfigureAwait(false);
     }
 
     // For callers that already built the request, such as dispatch routing, which reads the
-    // request to resolve the operation before it can dispatch.
+    // request to resolve the operation before it can dispatch. The call is measured from
+    // startTimestamp, taken before the request was read, to the response's last byte.
     internal static async Task DispatchBuiltRequestAsync(
         HttpContext httpContext,
         IServerOperationBinding operation,
         SmithyHttpRequest request,
+        long startTimestamp,
         CancellationToken cancellationToken
     )
     {
-        var services = httpContext.RequestServices;
-        var response = await operation
-            .DispatchAsync(
-                services.GetService<SmithyServerRuntime>() ?? SmithyServerRuntime.Default,
-                request,
-                services,
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-        using (response)
+        var activity = Describe(httpContext, operation);
+        Exception? error = null;
+        try
         {
-            await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+            var services = httpContext.RequestServices;
+            var response = await operation
+                .DispatchAsync(
+                    services.GetService<SmithyServerRuntime>() ?? SmithyServerRuntime.Default,
+                    request,
+                    services,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            using (response)
+            {
+                await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+                error = response.Error;
+            }
         }
+        catch (Exception exception)
+        {
+            error = exception;
+            throw;
+        }
+        finally
+        {
+            SmithyServerTelemetry.Complete(operation.Identity, activity, startTimestamp, error);
+        }
+    }
+
+    // The request's own span, the one ASP.NET Core records, whatever middleware started inside it.
+    private static Activity? Describe(HttpContext httpContext, IServerOperationBinding operation)
+    {
+        if (
+            httpContext.Features.Get<IHttpActivityFeature>()?.Activity
+            is not { IsAllDataRequested: true } activity
+        )
+        {
+            return null;
+        }
+
+        SmithyServerTelemetry.Describe(activity, operation.Identity);
+        return activity;
     }
 
     internal static Task WriteResponseAsync(
@@ -303,6 +358,7 @@ public static class SmithyAspNetCoreHost
             // Reflected into the trailers below; without trailer support the exception propagates
             // and aborts the response so the peer sees a broken stream, not a clean completion.
             streamError = ex;
+            response.Error = ex;
         }
 
         if (supportsTrailers)

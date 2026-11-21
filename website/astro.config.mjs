@@ -123,6 +123,7 @@ export default defineConfig({
 						{ label: 'Authorization', slug: 'servers/authorization' },
 						{ label: 'Hosting multiple protocols', slug: 'servers/hosting' },
 						{ label: 'Fake handlers', slug: 'servers/fake-handlers' },
+						{ label: 'Observability', slug: 'servers/observability' },
 						{ label: 'MCP', slug: 'servers/mcp' },
 						{ label: 'Endpoint documentation', slug: 'guides/endpoint-documentation' },
 					],

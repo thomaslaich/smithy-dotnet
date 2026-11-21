@@ -1,0 +1,90 @@
+---
+title: Observability
+description: OpenTelemetry attributes, handler spans, and metrics for generated servers.
+---
+
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
+Servers emit OpenTelemetry-friendly telemetry through the standard .NET
+primitives, like the [client runtime](/smithy-dotnet/guides/client-configuration/observability/):
+no NSmithy-specific setup, no extra packages. What is recorded depends on what
+the application subscribes to:
+
+| The application records | NSmithy adds |
+| --- | --- |
+| nothing | nothing |
+| the request's span, ASP.NET Core's or the MCP SDK's | the call's attributes on that span |
+| the `NSmithy.Server` source | an internal span around each handler call |
+| the `NSmithy.Server` meter | `smithy.server.operation.duration` |
+
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp title="Program.cs"
+    using OpenTelemetry.Metrics;
+    using OpenTelemetry.Trace;
+
+    builder.Services.AddOpenTelemetry()
+        .WithTracing(tracing => tracing
+            .AddAspNetCoreInstrumentation()
+            .AddSource("NSmithy.Server"))
+        .WithMetrics(metrics => metrics.AddMeter("NSmithy.Server"));
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp title="Program.fs"
+    open OpenTelemetry.Metrics
+    open OpenTelemetry.Trace
+
+    builder.Services
+        .AddOpenTelemetry()
+        .WithTracing(fun tracing ->
+            tracing.AddAspNetCoreInstrumentation().AddSource("NSmithy.Server") |> ignore)
+        .WithMetrics(fun metrics -> metrics.AddMeter("NSmithy.Server") |> ignore)
+    |> ignore
+    ```
+  </TabItem>
+</Tabs>
+
+The source and meter names are also available as constants:
+`SmithyServerTelemetry.ActivitySourceName` and
+`SmithyServerTelemetry.MeterName`.
+
+## Traces
+
+The request's span belongs to the host: ASP.NET Core's `POST /users`, found
+through the request rather than `Activity.Current`, so a span your middleware
+starts does not hide it; or, for an MCP tool call, the MCP SDK's span. NSmithy
+keeps its name and describes the call on it, so a caller's client span and the
+server span it reaches carry the same attributes. A .NET caller connects to it
+with HttpClient's instrumentation, as the
+[client guide](/smithy-dotnet/guides/client-configuration/observability/)
+describes.
+
+| Attribute | Value |
+| --- | --- |
+| `rpc.system` | `smithy` |
+| `rpc.service` | The service shape id (e.g. `example.weather#Weather`). |
+| `rpc.method` | The operation name. |
+| `error.type` | The exception type of a failed call: a modeled error, a rejected request, or a failure reading the request or writing the response. |
+
+With the `NSmithy.Server` source subscribed, each handler call runs in an
+internal span named `{Service}.{Operation}` (e.g. `Weather.GetForecast`) with
+the same attributes, under whatever span is current. The gap between it and the
+request's span is the time spent reading and writing the request. A request
+rejected before the handler runs, such as one that fails validation, has no
+handler span.
+
+A modeled client error is the caller's mistake: the handler span names its
+`error.type` but leaves the status unset. A modeled server error, or an
+unmodeled exception, marks the span `Error`. The model decides, not the
+response, so a gRPC fault, which is answered with HTTP 200, still marks it.
+
+## Metrics
+
+| Instrument | Type | Unit | Meaning |
+| --- | --- | --- | --- |
+| `smithy.server.operation.duration` | Histogram | `s` | Call duration, from reading the request to writing the last byte of the response. |
+
+It carries `rpc.system`, `rpc.service`, and `rpc.method`, and `error.type` for
+a failed call. A streamed response is measured until it ends, and a stream that
+fails partway records its failure.

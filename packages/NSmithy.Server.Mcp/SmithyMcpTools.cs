@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
@@ -29,7 +30,7 @@ public static class SmithyMcpTools
             SmithyMcpTool tool;
             try
             {
-                tool = new SmithyMcpTool(catalog.Schema, operation);
+                tool = new SmithyMcpTool(catalog, operation);
             }
             catch (McpStreamingNotSupportedException)
             {
@@ -56,15 +57,17 @@ internal sealed class SmithyMcpTool : McpServerTool
     private static readonly ShapeId IdempotentTrait = ShapeId.Parse("smithy.api#idempotent");
     private static readonly ShapeId ReadonlyTrait = ShapeId.Parse("smithy.api#readonly");
 
-    private readonly ServiceSchema service;
+    private readonly ServiceOperationCatalog catalog;
     private readonly IServerOperation operation;
+    private readonly ServerOperationIdentity identity;
     private readonly IBoxedJsonCodec inputCodec;
     private readonly IBoxedJsonCodec outputCodec;
 
-    public SmithyMcpTool(ServiceSchema service, IServerOperation operation)
+    public SmithyMcpTool(ServiceOperationCatalog catalog, IServerOperation operation)
     {
-        this.service = service ?? throw new ArgumentNullException(nameof(service));
+        this.catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         this.operation = operation ?? throw new ArgumentNullException(nameof(operation));
+        identity = catalog.Identity(operation.Schema.Id);
         var schema = operation.Schema;
         if (schema.IsStreaming)
         {
@@ -124,6 +127,38 @@ internal sealed class SmithyMcpTool : McpServerTool
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // The MCP SDK records the request's span; the call is described there, as on ASP.NET Core's.
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var activity = SmithyServerTelemetry.ServerSpan(Activity.Current);
+        if (activity is not null)
+        {
+            SmithyServerTelemetry.Describe(activity, identity);
+        }
+
+        Exception? error = null;
+        try
+        {
+            return await CallAsync(request, failure => error = failure, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            error = exception;
+            throw;
+        }
+        finally
+        {
+            SmithyServerTelemetry.Complete(identity, activity, startTimestamp, error);
+        }
+    }
+
+    // A failure answered as a tool error, rather than thrown, is reported through failed.
+    private async ValueTask<CallToolResult> CallAsync(
+        RequestContext<CallToolRequestParams> request,
+        Action<Exception> failed,
+        CancellationToken cancellationToken
+    )
+    {
         object input;
         try
         {
@@ -131,10 +166,13 @@ internal sealed class SmithyMcpTool : McpServerTool
         }
         catch (MissingRequiredMemberException exception)
         {
-            return Error(ValidationException.FromMissingRequiredMember(exception).Message);
+            var invalid = ValidationException.FromMissingRequiredMember(exception);
+            failed(invalid);
+            return Error(invalid.Message);
         }
         catch (MalformedRequestException exception)
         {
+            failed(exception);
             return Error(exception.Message);
         }
 
@@ -146,8 +184,9 @@ internal sealed class SmithyMcpTool : McpServerTool
                 ?? throw new InvalidOperationException(
                     $"The MCP request for '{operation.Schema.Id}' carries no services to resolve its handler from."
                 );
-            output = await operation
+            output = await catalog
                 .InvokeAsync(
+                    operation.Schema.Id,
                     services.GetService<SmithyServerRuntime>() ?? SmithyServerRuntime.Default,
                     input,
                     services,
@@ -157,6 +196,7 @@ internal sealed class SmithyMcpTool : McpServerTool
         }
         catch (Exception exception) when (IsModeledError(exception))
         {
+            failed(exception);
             return Error(exception.Message);
         }
 
@@ -173,7 +213,7 @@ internal sealed class SmithyMcpTool : McpServerTool
     private bool IsModeledError(Exception exception)
     {
         var matcher = new OperationErrorMatcher(exception);
-        return service.ErrorsOf(operation.Schema).Any(error => error.Accept(matcher));
+        return catalog.Schema.ErrorsOf(operation.Schema).Any(error => error.Accept(matcher));
     }
 
     private static byte[] WriteArguments(IDictionary<string, JsonElement>? arguments)

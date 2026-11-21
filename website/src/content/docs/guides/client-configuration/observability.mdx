@@ -16,7 +16,9 @@ your tracer/meter provider:
     using OpenTelemetry.Trace;
 
     builder.Services.AddOpenTelemetry()
-        .WithTracing(tracing => tracing.AddSource("NSmithy.Client"))
+        .WithTracing(tracing => tracing
+            .AddSource("NSmithy.Client")
+            .AddHttpClientInstrumentation())
         .WithMetrics(metrics => metrics.AddMeter("NSmithy.Client"));
     ```
   </TabItem>
@@ -27,7 +29,8 @@ your tracer/meter provider:
 
     builder.Services
         .AddOpenTelemetry()
-        .WithTracing(fun tracing -> tracing.AddSource("NSmithy.Client") |> ignore)
+        .WithTracing(fun tracing ->
+            tracing.AddSource("NSmithy.Client").AddHttpClientInstrumentation() |> ignore)
         .WithMetrics(fun metrics -> metrics.AddMeter("NSmithy.Client") |> ignore)
     |> ignore
     ```
@@ -37,6 +40,13 @@ your tracer/meter provider:
 The source and meter names are also available as constants:
 `SmithyClientTelemetry.ActivitySourceName` and
 `SmithyClientTelemetry.MeterName`.
+
+`AddHttpClientInstrumentation` (from `OpenTelemetry.Instrumentation.Http`)
+records each attempt's HTTP request. Without it, `HttpClient` still sends the
+trace context, but names a span it never exports as the server's parent, so the
+server's spans join the trace without being connected to the call, and tools
+that draw a service graph from parent and child spans, such as Tempo, show no
+edge between the two services.
 
 ## Traces
 
