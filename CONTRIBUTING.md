@@ -24,6 +24,7 @@ just ci       # run the full CI pipeline locally
 
 - **[Development](https://thomaslaich.github.io/smithy-dotnet/contributing/development/)** — full environment setup, recipe reference, and local package consumption.
 - **[Releasing](https://thomaslaich.github.io/smithy-dotnet/contributing/releasing/)** — how releases are cut.
+- **[AI use](https://thomaslaich.github.io/smithy-dotnet/contributing/ai/)**: how AI coding agents are used here; AI-assisted contributions are welcome if you understand your change.
 - **[Roadmap](https://thomaslaich.github.io/smithy-dotnet/contributing/roadmap/)** — current direction and near-term priorities.
 
 The sources for these pages are under
