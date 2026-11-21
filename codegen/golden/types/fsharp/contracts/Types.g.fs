@@ -31,15 +31,9 @@ type Allergen =
         static member FromValue(value) = Allergen.FromValue(value)
 
 [<RequireQualifiedAccess>]
-type Busy =
-    {
-        Message: string
-    }
+type Busy = { Message: string }
 
-type MainCourse =
-    {
-        Side: string option
-    }
+type MainCourse = { Side: string option }
 
 /// <summary>
 /// How a dish is served.
@@ -52,11 +46,7 @@ type Course =
     /// <summary>A case this model does not define, as it was read.</summary>
     | Unknown of tag: string * value: global.NSmithy.Core.Document
 
-type Price =
-    {
-        Amount: decimal
-        Currency: string
-    }
+type Price = { Amount: decimal; Currency: string }
 
 type SpiceLevel =
     | Mild = 1
@@ -92,10 +82,7 @@ type Empty() =
 /// </summary>
 [<RequireQualifiedAccess>]
 type SoldOut =
-    {
-        Message: string option
-        Dish: string
-    }
+    { Message: string option; Dish: string }
 
 namespace rec Example.Types.Exceptions
 

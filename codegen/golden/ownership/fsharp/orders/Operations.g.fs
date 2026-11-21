@@ -5,16 +5,45 @@ namespace rec Acme.Shop.Schemas
 
 [<AbstractClass; Sealed>]
 type PlaceOrderSchema =
-    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<global.Acme.Shop.PlaceOrderInput, global.Acme.Shop.PlaceOrderOutput> =
+    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<
+        global.Acme.Shop.PlaceOrderInput,
+        global.Acme.Shop.PlaceOrderOutput
+     > =
         global.NSmithy.Core.Serde.Schemas.Operation<global.Acme.Shop.PlaceOrderInput, global.Acme.Shop.PlaceOrderOutput>(
             global.NSmithy.Core.ShapeId.Parse("acme.shop#PlaceOrder"),
-            global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.PlaceOrderInput>(fun () -> global.Acme.Shop.Schemas.PlaceOrderInputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.PlaceOrderInput>),
-            global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.PlaceOrderOutput>(fun () -> global.Acme.Shop.Schemas.PlaceOrderOutputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.PlaceOrderOutput>),
-            [|
-                global.NSmithy.Core.Serde.Schemas.OperationError<global.Acme.Shop.Exceptions.OutOfStock>(global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"), global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.Exceptions.OutOfStock>(fun () -> global.Acme.Shop.Exceptions.Schemas.OutOfStockSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.Exceptions.OutOfStock>), 409) :> global.NSmithy.Core.Serde.IOperationErrorSchema
-                global.NSmithy.Core.Serde.Schemas.OperationError<global.NSmithy.Core.Validation.ValidationException>(global.NSmithy.Core.ShapeId.Parse("smithy.framework#ValidationException"), global.NSmithy.Core.Validation.ValidationExceptionSchema.Schema, 400) :> global.NSmithy.Core.Serde.IOperationErrorSchema
-            |],
-            traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#http"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("method", global.NSmithy.Core.Document.From("POST")); ("uri", global.NSmithy.Core.Document.From("/orders")); ("code", global.NSmithy.Core.Document.From(201M)) ]))) |])
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.PlaceOrderInput>(fun () ->
+                global.Acme.Shop.Schemas.PlaceOrderInputSchema.Schema
+                :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.PlaceOrderInput>),
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.PlaceOrderOutput>(fun () ->
+                global.Acme.Shop.Schemas.PlaceOrderOutputSchema.Schema
+                :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.PlaceOrderOutput>),
+            [| global.NSmithy.Core.Serde.Schemas.OperationError<global.Acme.Shop.Exceptions.OutOfStock>(
+                   global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"),
+                   global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.Exceptions.OutOfStock>(fun () ->
+                       global.Acme.Shop.Exceptions.Schemas.OutOfStockSchema.Schema
+                       :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.Exceptions.OutOfStock>),
+                   409
+               )
+               :> global.NSmithy.Core.Serde.IOperationErrorSchema
+               global.NSmithy.Core.Serde.Schemas.OperationError<global.NSmithy.Core.Validation.ValidationException>(
+                   global.NSmithy.Core.ShapeId.Parse("smithy.framework#ValidationException"),
+                   global.NSmithy.Core.Validation.ValidationExceptionSchema.Schema,
+                   400
+               )
+               :> global.NSmithy.Core.Serde.IOperationErrorSchema |],
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#http"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(
+                               dict
+                                   [ ("method", global.NSmithy.Core.Document.From("POST"))
+                                     ("uri", global.NSmithy.Core.Document.From("/orders"))
+                                     ("code", global.NSmithy.Core.Document.From(201M)) ]
+                           )
+                       )
+                   ) |]
+        )
 
 namespace Acme.Shop
 
@@ -33,8 +62,10 @@ type PlaceOrderError =
     /// <summary>The case that holds <c>error</c>, or None when it is not one of these errors.</summary>
     static member FromException(error: global.System.Exception) : PlaceOrderError option =
         match error with
-        | :? global.Acme.Shop.Exceptions.OutOfStock as error -> global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.OutOfStock error.Error)
-        | :? global.NSmithy.Core.Validation.ValidationException as error -> global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.ValidationException error)
+        | :? global.Acme.Shop.Exceptions.OutOfStock as error ->
+            global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.OutOfStock error.Error)
+        | :? global.NSmithy.Core.Validation.ValidationException as error ->
+            global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.ValidationException error)
         | _ -> global.Microsoft.FSharp.Core.Option.None
 
 /// <summary>
@@ -44,4 +75,8 @@ type IPlaceOrderHandler =
     /// <summary>
     /// Places an order.
     /// </summary>
-    abstract PlaceOrderAsync: input: global.Acme.Shop.PlaceOrderInput * cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Acme.Shop.PlaceOrderOutput, PlaceOrderError>>
+    abstract PlaceOrderAsync:
+        input: global.Acme.Shop.PlaceOrderInput * cancellationToken: global.System.Threading.CancellationToken ->
+            global.System.Threading.Tasks.Task<
+                global.Microsoft.FSharp.Core.Result<global.Acme.Shop.PlaceOrderOutput, PlaceOrderError>
+             >

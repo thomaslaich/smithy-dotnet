@@ -9,20 +9,46 @@ namespace Example.Kitchen
 type IKitchenClient =
     inherit global.System.IDisposable
 
-    abstract GetOrderAsync: input: global.Example.Kitchen.GetOrderInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, global.Example.Kitchen.GetOrderError>>
+    abstract GetOrderAsync:
+        input: global.Example.Kitchen.GetOrderInput * ?cancellationToken: global.System.Threading.CancellationToken ->
+            global.System.Threading.Tasks.Task<
+                global.Microsoft.FSharp.Core.Result<
+                    global.Example.Kitchen.GetOrderOutput,
+                    global.Example.Kitchen.GetOrderError
+                 >
+             >
 
-    abstract PingAsync: input: global.Example.Kitchen.PingInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>>
+    abstract PingAsync:
+        input: global.Example.Kitchen.PingInput * ?cancellationToken: global.System.Threading.CancellationToken ->
+            global.System.Threading.Tasks.Task<
+                global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>
+             >
 
     /// <summary>
     /// Places an order for a table.
     /// </summary>
-    abstract PlaceOrderAsync: input: global.Example.Kitchen.PlaceOrderInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, global.Example.Kitchen.PlaceOrderError>>
+    abstract PlaceOrderAsync:
+        input: global.Example.Kitchen.PlaceOrderInput * ?cancellationToken: global.System.Threading.CancellationToken ->
+            global.System.Threading.Tasks.Task<
+                global.Microsoft.FSharp.Core.Result<
+                    global.Example.Kitchen.PlaceOrderOutput,
+                    global.Example.Kitchen.PlaceOrderError
+                 >
+             >
 
 /// <summary>Overloads of <c>IKitchenClient</c> for the operations whose input may be left out.</summary>
 [<AutoOpen>]
 module IKitchenClientExtensions =
     type IKitchenClient with
-        member this.PingAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>> =
+        member this.PingAsync
+            (?cancellationToken: global.System.Threading.CancellationToken)
+            : global.System.Threading.Tasks.Task<
+                  global.Microsoft.FSharp.Core.Result<
+                      global.Example.Kitchen.PingOutput,
+                      global.Example.Kitchen.PingError
+                   >
+               >
+            =
             this.PingAsync(global.Example.Kitchen.PingInput(), ?cancellationToken = cancellationToken)
 
 /// <summary>Options for the client. It copies them when it is constructed.</summary>
@@ -36,46 +62,63 @@ type KitchenClientConfig =
 /// A kitchen that takes orders.
 /// </summary>
 [<Sealed>]
-type KitchenClient private (parts: global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig) =
-    static let modeledAuthSchemes: global.System.Collections.Generic.IReadOnlyList<string> = global.System.Array.Empty<string>()
+type KitchenClient
+    private (parts: global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig) =
+    static let modeledAuthSchemes: global.System.Collections.Generic.IReadOnlyList<string> =
+        global.System.Array.Empty<string>()
+
     let environment, config = parts
     let runtime = environment.Runtime
+
     let idempotencyToken =
         match global.Microsoft.FSharp.Core.Option.ofObj config.IdempotencyTokenProvider with
         | Some provider -> fun () -> provider.Invoke()
         | None -> fun () -> global.System.Guid.NewGuid().ToString()
+
     let serviceProtocol = environment.ServiceProtocol
+
     let bindings =
         try
-            {|
-                GetOrder =
-                    global.NSmithy.Client.SmithyOperationBinding<global.Example.Kitchen.GetOrderInput, global.Example.Kitchen.GetOrderOutput>(
-                        global.Example.Kitchen.Schemas.KitchenSchema.Schema.Id,
-                        global.Example.Kitchen.Schemas.GetOrderSchema.Schema.Id,
-                        serviceProtocol.ForClientOperation(global.Example.Kitchen.Schemas.GetOrderSchema.Schema),
-                        authSchemeIds = global.System.Array.Empty<string>(),
-                        operation = global.Example.Kitchen.Schemas.GetOrderSchema.Schema)
-                Ping =
-                    global.NSmithy.Client.SmithyOperationBinding<global.Example.Kitchen.PingInput, global.Example.Kitchen.PingOutput>(
-                        global.Example.Kitchen.Schemas.KitchenSchema.Schema.Id,
-                        global.Example.Kitchen.Schemas.PingSchema.Schema.Id,
-                        serviceProtocol.ForClientOperation(global.Example.Kitchen.Schemas.PingSchema.Schema),
-                        authSchemeIds = global.System.Array.Empty<string>(),
-                        operation = global.Example.Kitchen.Schemas.PingSchema.Schema)
-                PlaceOrder =
-                    global.NSmithy.Client.SmithyOperationBinding<global.Example.Kitchen.PlaceOrderInput, global.Example.Kitchen.PlaceOrderOutput>(
-                        global.Example.Kitchen.Schemas.KitchenSchema.Schema.Id,
-                        global.Example.Kitchen.Schemas.PlaceOrderSchema.Schema.Id,
-                        serviceProtocol.ForClientOperation(global.Example.Kitchen.Schemas.PlaceOrderSchema.Schema),
-                        authSchemeIds = global.System.Array.Empty<string>(),
-                        operation = global.Example.Kitchen.Schemas.PlaceOrderSchema.Schema)
-            |}
+            {| GetOrder =
+                global.NSmithy.Client.SmithyOperationBinding<
+                    global.Example.Kitchen.GetOrderInput,
+                    global.Example.Kitchen.GetOrderOutput
+                 >(
+                    global.Example.Kitchen.Schemas.KitchenSchema.Schema.Id,
+                    global.Example.Kitchen.Schemas.GetOrderSchema.Schema.Id,
+                    serviceProtocol.ForClientOperation(global.Example.Kitchen.Schemas.GetOrderSchema.Schema),
+                    authSchemeIds = global.System.Array.Empty<string>(),
+                    operation = global.Example.Kitchen.Schemas.GetOrderSchema.Schema
+                )
+               Ping =
+                global.NSmithy.Client.SmithyOperationBinding<
+                    global.Example.Kitchen.PingInput,
+                    global.Example.Kitchen.PingOutput
+                 >(
+                    global.Example.Kitchen.Schemas.KitchenSchema.Schema.Id,
+                    global.Example.Kitchen.Schemas.PingSchema.Schema.Id,
+                    serviceProtocol.ForClientOperation(global.Example.Kitchen.Schemas.PingSchema.Schema),
+                    authSchemeIds = global.System.Array.Empty<string>(),
+                    operation = global.Example.Kitchen.Schemas.PingSchema.Schema
+                )
+               PlaceOrder =
+                global.NSmithy.Client.SmithyOperationBinding<
+                    global.Example.Kitchen.PlaceOrderInput,
+                    global.Example.Kitchen.PlaceOrderOutput
+                 >(
+                    global.Example.Kitchen.Schemas.KitchenSchema.Schema.Id,
+                    global.Example.Kitchen.Schemas.PlaceOrderSchema.Schema.Id,
+                    serviceProtocol.ForClientOperation(global.Example.Kitchen.Schemas.PlaceOrderSchema.Schema),
+                    authSchemeIds = global.System.Array.Empty<string>(),
+                    operation = global.Example.Kitchen.Schemas.PlaceOrderSchema.Schema
+                ) |}
         with _ ->
             environment.Dispose()
             reraise ()
 
     /// <summary>A client that sends requests to <c>endpoint</c>.</summary>
-    new(endpoint: global.System.Uri, ?config: KitchenClientConfig) = new KitchenClient(KitchenClient.WithEndpoint(endpoint, config))
+    new(endpoint: global.System.Uri, ?config: KitchenClientConfig) =
+        new KitchenClient(KitchenClient.WithEndpoint(endpoint, config))
 
     /// <summary>A client that owns its HTTP client, configured by <c>config</c>.</summary>
     new(config: KitchenClientConfig) = new KitchenClient(KitchenClient.Owned(config))
@@ -88,73 +131,181 @@ type KitchenClient private (parts: global.NSmithy.Client.SmithyHttpClientEnviron
     new(runtime: global.NSmithy.Client.SmithyClientRuntime, ?config: KitchenClientConfig) =
         new KitchenClient(KitchenClient.WithRuntime(runtime, config))
 
-    static member private Owned(config: KitchenClientConfig) : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
+    static member private Owned
+        (config: KitchenClientConfig)
+        : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
         global.System.ArgumentNullException.ThrowIfNull(config)
-        global.NSmithy.Client.SmithyHttpClientEnvironment.Create(global.Example.Kitchen.Schemas.KitchenSchema.Schema, config, global.System.Func<global.NSmithy.Http.IProtocol>(fun () -> global.NSmithy.Protocols.RestJson.RestJson1Protocol() :> global.NSmithy.Http.IProtocol), modeledAuthSchemes), config :> global.NSmithy.Client.SmithyClientConfig
 
-    static member private WithEndpoint(endpoint: global.System.Uri, config: KitchenClientConfig option) : KitchenClientConfig =
+        global.NSmithy.Client.SmithyHttpClientEnvironment.Create(
+            global.Example.Kitchen.Schemas.KitchenSchema.Schema,
+            config,
+            global.System.Func<global.NSmithy.Http.IProtocol>(fun () ->
+                global.NSmithy.Protocols.RestJson.RestJson1Protocol() :> global.NSmithy.Http.IProtocol),
+            modeledAuthSchemes
+        ),
+        config :> global.NSmithy.Client.SmithyClientConfig
+
+    static member private WithEndpoint
+        (endpoint: global.System.Uri, config: KitchenClientConfig option)
+        : KitchenClientConfig =
         global.System.ArgumentNullException.ThrowIfNull(endpoint)
+
         let copy =
             match config with
             | Some config -> KitchenClientConfig(config)
             | None -> KitchenClientConfig()
+
         copy.Endpoint <- endpoint
         copy
 
-    static member private WithHttpClient(httpClient: global.System.Net.Http.HttpClient, config: KitchenClientConfig option) : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
+    static member private WithHttpClient
+        (httpClient: global.System.Net.Http.HttpClient, config: KitchenClientConfig option)
+        : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
         global.System.ArgumentNullException.ThrowIfNull(httpClient)
-        let config = global.Microsoft.FSharp.Core.Option.defaultWith (fun () -> KitchenClientConfig()) config
-        global.NSmithy.Client.SmithyHttpClientEnvironment.Create(global.Example.Kitchen.Schemas.KitchenSchema.Schema, config, global.System.Func<global.NSmithy.Http.IProtocol>(fun () -> global.NSmithy.Protocols.RestJson.RestJson1Protocol() :> global.NSmithy.Http.IProtocol), modeledAuthSchemes, httpClient = httpClient), config :> global.NSmithy.Client.SmithyClientConfig
 
-    static member private WithRuntime(runtime: global.NSmithy.Client.SmithyClientRuntime, config: KitchenClientConfig option) : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
-        let config = global.Microsoft.FSharp.Core.Option.defaultWith (fun () -> KitchenClientConfig()) config
-        global.NSmithy.Client.SmithyHttpClientEnvironment.FromRuntime(global.Example.Kitchen.Schemas.KitchenSchema.Schema, runtime, config, global.System.Func<global.NSmithy.Http.IProtocol>(fun () -> global.NSmithy.Protocols.RestJson.RestJson1Protocol() :> global.NSmithy.Http.IProtocol)),
+        let config =
+            global.Microsoft.FSharp.Core.Option.defaultWith (fun () -> KitchenClientConfig()) config
+
+        global.NSmithy.Client.SmithyHttpClientEnvironment.Create(
+            global.Example.Kitchen.Schemas.KitchenSchema.Schema,
+            config,
+            global.System.Func<global.NSmithy.Http.IProtocol>(fun () ->
+                global.NSmithy.Protocols.RestJson.RestJson1Protocol() :> global.NSmithy.Http.IProtocol),
+            modeledAuthSchemes,
+            httpClient = httpClient
+        ),
         config :> global.NSmithy.Client.SmithyClientConfig
 
-    member _.GetOrderAsync(input: global.Example.Kitchen.GetOrderInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, global.Example.Kitchen.GetOrderError>> =
+    static member private WithRuntime
+        (runtime: global.NSmithy.Client.SmithyClientRuntime, config: KitchenClientConfig option)
+        : global.NSmithy.Client.SmithyHttpClientEnvironment * global.NSmithy.Client.SmithyClientConfig =
+        let config =
+            global.Microsoft.FSharp.Core.Option.defaultWith (fun () -> KitchenClientConfig()) config
+
+        global.NSmithy.Client.SmithyHttpClientEnvironment.FromRuntime(
+            global.Example.Kitchen.Schemas.KitchenSchema.Schema,
+            runtime,
+            config,
+            global.System.Func<global.NSmithy.Http.IProtocol>(fun () ->
+                global.NSmithy.Protocols.RestJson.RestJson1Protocol() :> global.NSmithy.Http.IProtocol)
+        ),
+        config :> global.NSmithy.Client.SmithyClientConfig
+
+    member _.GetOrderAsync
+        (input: global.Example.Kitchen.GetOrderInput, ?cancellationToken: global.System.Threading.CancellationToken)
+        : global.System.Threading.Tasks.Task<
+              global.Microsoft.FSharp.Core.Result<
+                  global.Example.Kitchen.GetOrderOutput,
+                  global.Example.Kitchen.GetOrderError
+               >
+           >
+        =
         global.System.ArgumentNullException.ThrowIfNull(input)
+
         task {
             try
-                let! output = runtime.InvokeAsync(bindings.GetOrder, input, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
+                let! output =
+                    runtime.InvokeAsync(
+                        bindings.GetOrder,
+                        input,
+                        global.Microsoft.FSharp.Core.Operators.defaultArg
+                            cancellationToken
+                            global.System.Threading.CancellationToken.None
+                    )
+
                 return global.Microsoft.FSharp.Core.Result.Ok output
-            with
-            | error when (global.Example.Kitchen.GetOrderError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error((global.Example.Kitchen.GetOrderError.FromException error).Value)
+            with error when (global.Example.Kitchen.GetOrderError.FromException error).IsSome ->
+                return
+                    global.Microsoft.FSharp.Core.Result.Error(
+                        (global.Example.Kitchen.GetOrderError.FromException error).Value
+                    )
         }
 
-    member _.PingAsync(input: global.Example.Kitchen.PingInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>> =
+    member _.PingAsync
+        (input: global.Example.Kitchen.PingInput, ?cancellationToken: global.System.Threading.CancellationToken)
+        : global.System.Threading.Tasks.Task<
+              global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>
+           >
+        =
         global.System.ArgumentNullException.ThrowIfNull(input)
+
         task {
             try
-                let! output = runtime.InvokeAsync(bindings.Ping, input, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
+                let! output =
+                    runtime.InvokeAsync(
+                        bindings.Ping,
+                        input,
+                        global.Microsoft.FSharp.Core.Operators.defaultArg
+                            cancellationToken
+                            global.System.Threading.CancellationToken.None
+                    )
+
                 return global.Microsoft.FSharp.Core.Result.Ok output
-            with
-            | error when (global.Example.Kitchen.PingError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error((global.Example.Kitchen.PingError.FromException error).Value)
+            with error when (global.Example.Kitchen.PingError.FromException error).IsSome ->
+                return
+                    global.Microsoft.FSharp.Core.Result.Error(
+                        (global.Example.Kitchen.PingError.FromException error).Value
+                    )
         }
 
-    member this.PingAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>> =
+    member this.PingAsync
+        (?cancellationToken: global.System.Threading.CancellationToken)
+        : global.System.Threading.Tasks.Task<
+              global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>
+           >
+        =
         this.PingAsync(global.Example.Kitchen.PingInput(), ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Places an order for a table.
     /// </summary>
-    member _.PlaceOrderAsync(input: global.Example.Kitchen.PlaceOrderInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, global.Example.Kitchen.PlaceOrderError>> =
+    member _.PlaceOrderAsync
+        (input: global.Example.Kitchen.PlaceOrderInput, ?cancellationToken: global.System.Threading.CancellationToken)
+        : global.System.Threading.Tasks.Task<
+              global.Microsoft.FSharp.Core.Result<
+                  global.Example.Kitchen.PlaceOrderOutput,
+                  global.Example.Kitchen.PlaceOrderError
+               >
+           >
+        =
         global.System.ArgumentNullException.ThrowIfNull(input)
+
         let input =
             { input with
-                Token = (match input.Token with Some _ as token -> token | None -> Some(idempotencyToken ()))
-            }
+                Token =
+                    (match input.Token with
+                     | Some _ as token -> token
+                     | None -> Some(idempotencyToken ())) }
+
         task {
             try
-                let! output = runtime.InvokeAsync(bindings.PlaceOrder, input, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
+                let! output =
+                    runtime.InvokeAsync(
+                        bindings.PlaceOrder,
+                        input,
+                        global.Microsoft.FSharp.Core.Operators.defaultArg
+                            cancellationToken
+                            global.System.Threading.CancellationToken.None
+                    )
+
                 return global.Microsoft.FSharp.Core.Result.Ok output
-            with
-            | error when (global.Example.Kitchen.PlaceOrderError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error((global.Example.Kitchen.PlaceOrderError.FromException error).Value)
+            with error when (global.Example.Kitchen.PlaceOrderError.FromException error).IsSome ->
+                return
+                    global.Microsoft.FSharp.Core.Result.Error(
+                        (global.Example.Kitchen.PlaceOrderError.FromException error).Value
+                    )
         }
 
     member _.Dispose() = environment.Dispose()
 
     interface IKitchenClient with
         member _.Dispose() = environment.Dispose()
-        member this.GetOrderAsync(input, ?cancellationToken) = this.GetOrderAsync(input, ?cancellationToken = cancellationToken)
-        member this.PingAsync(input, ?cancellationToken) = this.PingAsync(input, ?cancellationToken = cancellationToken)
-        member this.PlaceOrderAsync(input, ?cancellationToken) = this.PlaceOrderAsync(input, ?cancellationToken = cancellationToken)
+
+        member this.GetOrderAsync(input, ?cancellationToken) =
+            this.GetOrderAsync(input, ?cancellationToken = cancellationToken)
+
+        member this.PingAsync(input, ?cancellationToken) =
+            this.PingAsync(input, ?cancellationToken = cancellationToken)
+
+        member this.PlaceOrderAsync(input, ?cancellationToken) =
+            this.PlaceOrderAsync(input, ?cancellationToken = cancellationToken)

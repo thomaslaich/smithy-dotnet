@@ -8,10 +8,7 @@ namespace Acme.Shop;
 
 public sealed partial class OutOfStock : Exception
 {
-    public OutOfStock(
-        string? message,
-        string item
-    )
+    public OutOfStock(string? message, string item)
         : base(message)
     {
         Item = item ?? throw new ArgumentNullException(nameof(item));

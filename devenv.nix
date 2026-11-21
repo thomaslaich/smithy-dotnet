@@ -59,7 +59,7 @@ in
           "obj/**"
           "**/bin/**"
           "**/obj/**"
-          # Golden codegen output, checked in exactly as the generators write it.
+          # Golden codegen output, formatted by the golden tests with the pinned dotnet tools.
           "codegen/golden/*/csharp/**"
           "codegen/golden/*/fsharp/**"
         ];

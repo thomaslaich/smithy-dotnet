@@ -5,39 +5,138 @@ namespace rec Example.Kitchen.Schemas
 
 [<AbstractClass; Sealed>]
 type GetOrderSchema =
-    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<global.Example.Kitchen.GetOrderInput, global.Example.Kitchen.GetOrderOutput> =
-        global.NSmithy.Core.Serde.Schemas.Operation<global.Example.Kitchen.GetOrderInput, global.Example.Kitchen.GetOrderOutput>(
+    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<
+        global.Example.Kitchen.GetOrderInput,
+        global.Example.Kitchen.GetOrderOutput
+     > =
+        global.NSmithy.Core.Serde.Schemas.Operation<
+            global.Example.Kitchen.GetOrderInput,
+            global.Example.Kitchen.GetOrderOutput
+         >(
             global.NSmithy.Core.ShapeId.Parse("example.kitchen#GetOrder"),
-            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.GetOrderInput>(fun () -> global.Example.Kitchen.Schemas.GetOrderInputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.GetOrderInput>),
-            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.GetOrderOutput>(fun () -> global.Example.Kitchen.Schemas.GetOrderOutputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.GetOrderOutput>),
-            [|
-                global.NSmithy.Core.Serde.Schemas.OperationError<global.Example.Kitchen.Exceptions.NoSuchOrder>(global.NSmithy.Core.ShapeId.Parse("example.kitchen#NoSuchOrder"), global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.Exceptions.NoSuchOrder>(fun () -> global.Example.Kitchen.Exceptions.Schemas.NoSuchOrderSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.Exceptions.NoSuchOrder>), 404) :> global.NSmithy.Core.Serde.IOperationErrorSchema
-                global.NSmithy.Core.Serde.Schemas.OperationError<global.NSmithy.Core.Validation.ValidationException>(global.NSmithy.Core.ShapeId.Parse("smithy.framework#ValidationException"), global.NSmithy.Core.Validation.ValidationExceptionSchema.Schema, 400) :> global.NSmithy.Core.Serde.IOperationErrorSchema
-            |],
-            traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#http"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("method", global.NSmithy.Core.Document.From("GET")); ("uri", global.NSmithy.Core.Document.From("/orders/{orderId}")) ]))); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#readonly"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.GetOrderInput>(fun () ->
+                global.Example.Kitchen.Schemas.GetOrderInputSchema.Schema
+                :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.GetOrderInput>),
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.GetOrderOutput>(fun () ->
+                global.Example.Kitchen.Schemas.GetOrderOutputSchema.Schema
+                :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.GetOrderOutput>),
+            [| global.NSmithy.Core.Serde.Schemas.OperationError<global.Example.Kitchen.Exceptions.NoSuchOrder>(
+                   global.NSmithy.Core.ShapeId.Parse("example.kitchen#NoSuchOrder"),
+                   global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.Exceptions.NoSuchOrder>(fun () ->
+                       global.Example.Kitchen.Exceptions.Schemas.NoSuchOrderSchema.Schema
+                       :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.Exceptions.NoSuchOrder>),
+                   404
+               )
+               :> global.NSmithy.Core.Serde.IOperationErrorSchema
+               global.NSmithy.Core.Serde.Schemas.OperationError<global.NSmithy.Core.Validation.ValidationException>(
+                   global.NSmithy.Core.ShapeId.Parse("smithy.framework#ValidationException"),
+                   global.NSmithy.Core.Validation.ValidationExceptionSchema.Schema,
+                   400
+               )
+               :> global.NSmithy.Core.Serde.IOperationErrorSchema |],
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#http"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(
+                               dict
+                                   [ ("method", global.NSmithy.Core.Document.From("GET"))
+                                     ("uri", global.NSmithy.Core.Document.From("/orders/{orderId}")) ]
+                           )
+                       )
+                   )
+                   global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#readonly"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                       )
+                   ) |]
+        )
 
 [<AbstractClass; Sealed>]
 type PingSchema =
-    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<global.Example.Kitchen.PingInput, global.Example.Kitchen.PingOutput> =
+    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<
+        global.Example.Kitchen.PingInput,
+        global.Example.Kitchen.PingOutput
+     > =
         global.NSmithy.Core.Serde.Schemas.Operation<global.Example.Kitchen.PingInput, global.Example.Kitchen.PingOutput>(
             global.NSmithy.Core.ShapeId.Parse("example.kitchen#Ping"),
-            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.PingInput>(fun () -> global.Example.Kitchen.Schemas.PingInputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.PingInput>),
-            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.PingOutput>(fun () -> global.Example.Kitchen.Schemas.PingOutputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.PingOutput>),
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.PingInput>(fun () ->
+                global.Example.Kitchen.Schemas.PingInputSchema.Schema
+                :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.PingInput>),
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.PingOutput>(fun () ->
+                global.Example.Kitchen.Schemas.PingOutputSchema.Schema
+                :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.PingOutput>),
             ([||]: global.NSmithy.Core.Serde.IOperationErrorSchema[]),
-            traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#http"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("method", global.NSmithy.Core.Document.From("GET")); ("uri", global.NSmithy.Core.Document.From("/ping")) ]))); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#readonly"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#http"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(
+                               dict
+                                   [ ("method", global.NSmithy.Core.Document.From("GET"))
+                                     ("uri", global.NSmithy.Core.Document.From("/ping")) ]
+                           )
+                       )
+                   )
+                   global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#readonly"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                       )
+                   ) |]
+        )
 
 [<AbstractClass; Sealed>]
 type PlaceOrderSchema =
-    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<global.Example.Kitchen.PlaceOrderInput, global.Example.Kitchen.PlaceOrderOutput> =
-        global.NSmithy.Core.Serde.Schemas.Operation<global.Example.Kitchen.PlaceOrderInput, global.Example.Kitchen.PlaceOrderOutput>(
+    static member val Schema: global.NSmithy.Core.Serde.OperationSchema<
+        global.Example.Kitchen.PlaceOrderInput,
+        global.Example.Kitchen.PlaceOrderOutput
+     > =
+        global.NSmithy.Core.Serde.Schemas.Operation<
+            global.Example.Kitchen.PlaceOrderInput,
+            global.Example.Kitchen.PlaceOrderOutput
+         >(
             global.NSmithy.Core.ShapeId.Parse("example.kitchen#PlaceOrder"),
-            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.PlaceOrderInput>(fun () -> global.Example.Kitchen.Schemas.PlaceOrderInputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.PlaceOrderInput>),
-            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.PlaceOrderOutput>(fun () -> global.Example.Kitchen.Schemas.PlaceOrderOutputSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.PlaceOrderOutput>),
-            [|
-                global.NSmithy.Core.Serde.Schemas.OperationError<global.Example.Kitchen.Exceptions.SoldOut>(global.NSmithy.Core.ShapeId.Parse("example.kitchen#SoldOut"), global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.Exceptions.SoldOut>(fun () -> global.Example.Kitchen.Exceptions.Schemas.SoldOutSchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.Exceptions.SoldOut>), 409) :> global.NSmithy.Core.Serde.IOperationErrorSchema
-                global.NSmithy.Core.Serde.Schemas.OperationError<global.NSmithy.Core.Validation.ValidationException>(global.NSmithy.Core.ShapeId.Parse("smithy.framework#ValidationException"), global.NSmithy.Core.Validation.ValidationExceptionSchema.Schema, 400) :> global.NSmithy.Core.Serde.IOperationErrorSchema
-            |],
-            traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#http"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(dict [ ("method", global.NSmithy.Core.Document.From("PUT")); ("uri", global.NSmithy.Core.Document.From("/tables/{table}/orders")); ("code", global.NSmithy.Core.Document.From(201M)) ]))); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#idempotent"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.PlaceOrderInput>(fun () ->
+                global.Example.Kitchen.Schemas.PlaceOrderInputSchema.Schema
+                :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.PlaceOrderInput>),
+            global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.PlaceOrderOutput>(fun () ->
+                global.Example.Kitchen.Schemas.PlaceOrderOutputSchema.Schema
+                :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.PlaceOrderOutput>),
+            [| global.NSmithy.Core.Serde.Schemas.OperationError<global.Example.Kitchen.Exceptions.SoldOut>(
+                   global.NSmithy.Core.ShapeId.Parse("example.kitchen#SoldOut"),
+                   global.NSmithy.Core.Serde.Schemas.Lazy<global.Example.Kitchen.Exceptions.SoldOut>(fun () ->
+                       global.Example.Kitchen.Exceptions.Schemas.SoldOutSchema.Schema
+                       :> global.NSmithy.Core.Serde.Schema<global.Example.Kitchen.Exceptions.SoldOut>),
+                   409
+               )
+               :> global.NSmithy.Core.Serde.IOperationErrorSchema
+               global.NSmithy.Core.Serde.Schemas.OperationError<global.NSmithy.Core.Validation.ValidationException>(
+                   global.NSmithy.Core.ShapeId.Parse("smithy.framework#ValidationException"),
+                   global.NSmithy.Core.Validation.ValidationExceptionSchema.Schema,
+                   400
+               )
+               :> global.NSmithy.Core.Serde.IOperationErrorSchema |],
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#http"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>(
+                               dict
+                                   [ ("method", global.NSmithy.Core.Document.From("PUT"))
+                                     ("uri", global.NSmithy.Core.Document.From("/tables/{table}/orders"))
+                                     ("code", global.NSmithy.Core.Document.From(201M)) ]
+                           )
+                       )
+                   )
+                   global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#idempotent"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                       )
+                   ) |]
+        )
 
 namespace Example.Kitchen
 
@@ -52,19 +151,27 @@ type GetOrderError =
     member this.ToException() : global.System.Exception =
         match this with
         | GetOrderError.Closed error -> global.Example.Kitchen.Exceptions.Closed(error) :> global.System.Exception
-        | GetOrderError.NoSuchOrder error -> global.Example.Kitchen.Exceptions.NoSuchOrder(error) :> global.System.Exception
+        | GetOrderError.NoSuchOrder error ->
+            global.Example.Kitchen.Exceptions.NoSuchOrder(error) :> global.System.Exception
         | GetOrderError.ValidationException error -> error :> global.System.Exception
 
     /// <summary>The case that holds <c>error</c>, or None when it is not one of these errors.</summary>
     static member FromException(error: global.System.Exception) : GetOrderError option =
         match error with
-        | :? global.Example.Kitchen.Exceptions.Closed as error -> global.Microsoft.FSharp.Core.Option.Some(GetOrderError.Closed error.Error)
-        | :? global.Example.Kitchen.Exceptions.NoSuchOrder as error -> global.Microsoft.FSharp.Core.Option.Some(GetOrderError.NoSuchOrder error.Error)
-        | :? global.NSmithy.Core.Validation.ValidationException as error -> global.Microsoft.FSharp.Core.Option.Some(GetOrderError.ValidationException error)
+        | :? global.Example.Kitchen.Exceptions.Closed as error ->
+            global.Microsoft.FSharp.Core.Option.Some(GetOrderError.Closed error.Error)
+        | :? global.Example.Kitchen.Exceptions.NoSuchOrder as error ->
+            global.Microsoft.FSharp.Core.Option.Some(GetOrderError.NoSuchOrder error.Error)
+        | :? global.NSmithy.Core.Validation.ValidationException as error ->
+            global.Microsoft.FSharp.Core.Option.Some(GetOrderError.ValidationException error)
         | _ -> global.Microsoft.FSharp.Core.Option.None
 
 type IGetOrderHandler =
-    abstract GetOrderAsync: input: global.Example.Kitchen.GetOrderInput * cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, GetOrderError>>
+    abstract GetOrderAsync:
+        input: global.Example.Kitchen.GetOrderInput * cancellationToken: global.System.Threading.CancellationToken ->
+            global.System.Threading.Tasks.Task<
+                global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, GetOrderError>
+             >
 
 /// <summary>The errors <c>Ping</c> can return: its own and its service's.</summary>
 [<RequireQualifiedAccess>]
@@ -79,11 +186,16 @@ type PingError =
     /// <summary>The case that holds <c>error</c>, or None when it is not one of these errors.</summary>
     static member FromException(error: global.System.Exception) : PingError option =
         match error with
-        | :? global.Example.Kitchen.Exceptions.Closed as error -> global.Microsoft.FSharp.Core.Option.Some(PingError.Closed error.Error)
+        | :? global.Example.Kitchen.Exceptions.Closed as error ->
+            global.Microsoft.FSharp.Core.Option.Some(PingError.Closed error.Error)
         | _ -> global.Microsoft.FSharp.Core.Option.None
 
 type IPingHandler =
-    abstract PingAsync: input: global.Example.Kitchen.PingInput * cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, PingError>>
+    abstract PingAsync:
+        input: global.Example.Kitchen.PingInput * cancellationToken: global.System.Threading.CancellationToken ->
+            global.System.Threading.Tasks.Task<
+                global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, PingError>
+             >
 
 /// <summary>The errors <c>PlaceOrder</c> can return: its own and its service's.</summary>
 [<RequireQualifiedAccess>]
@@ -102,9 +214,12 @@ type PlaceOrderError =
     /// <summary>The case that holds <c>error</c>, or None when it is not one of these errors.</summary>
     static member FromException(error: global.System.Exception) : PlaceOrderError option =
         match error with
-        | :? global.Example.Kitchen.Exceptions.Closed as error -> global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.Closed error.Error)
-        | :? global.Example.Kitchen.Exceptions.SoldOut as error -> global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.SoldOut error.Error)
-        | :? global.NSmithy.Core.Validation.ValidationException as error -> global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.ValidationException error)
+        | :? global.Example.Kitchen.Exceptions.Closed as error ->
+            global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.Closed error.Error)
+        | :? global.Example.Kitchen.Exceptions.SoldOut as error ->
+            global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.SoldOut error.Error)
+        | :? global.NSmithy.Core.Validation.ValidationException as error ->
+            global.Microsoft.FSharp.Core.Option.Some(PlaceOrderError.ValidationException error)
         | _ -> global.Microsoft.FSharp.Core.Option.None
 
 /// <summary>
@@ -114,4 +229,8 @@ type IPlaceOrderHandler =
     /// <summary>
     /// Places an order for a table.
     /// </summary>
-    abstract PlaceOrderAsync: input: global.Example.Kitchen.PlaceOrderInput * cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, PlaceOrderError>>
+    abstract PlaceOrderAsync:
+        input: global.Example.Kitchen.PlaceOrderInput * cancellationToken: global.System.Threading.CancellationToken ->
+            global.System.Threading.Tasks.Task<
+                global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, PlaceOrderError>
+             >

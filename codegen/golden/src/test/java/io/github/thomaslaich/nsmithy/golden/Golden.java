@@ -44,6 +44,9 @@ import software.amazon.smithy.model.node.StringNode;
  *
  * <p>{@code ownedSources} name files of the model directory. A run's settings are the plugin's
  * settings; {@code csharp} and {@code fsharp} members add settings for one language only.
+ *
+ * <p>The output is formatted the way the plugins format it, with the formatter pinned in the
+ * repository's {@code dotnet-tools.json}, so the checked-in files are what users get.
  */
 public final class Golden {
 
@@ -53,19 +56,29 @@ public final class Golden {
     void generate(Model model, ObjectNode settings, FileManifest manifest);
   }
 
+  /** The {@code dotnet} tool command that formats the generated files in a directory, in place. */
+  @FunctionalInterface
+  public interface Formatter {
+    List<String> command(Path dir);
+  }
+
   private static final String MANIFEST = "nsmithy-shapes.json";
   private static final Path ROOT = Path.of(System.getProperty("nsmithy.golden.dir"));
   private static final boolean UPDATE = Boolean.getBoolean("nsmithy.golden.update");
+  // Holds dotnet-tools.json; `dotnet tool run` finds the manifest from its working directory.
+  private static final Path REPOSITORY = ROOT.getParent().getParent();
 
   private Golden() {}
 
   /** One test per fixture that includes {@code language}. */
-  public static Stream<DynamicTest> tests(String language, Generator generator) {
+  public static Stream<DynamicTest> tests(
+      String language, Generator generator, Formatter formatter) {
     return fixtures().stream()
         .filter(fixture -> languages(fixture).contains(language))
         .map(fixture ->
             DynamicTest.dynamicTest(
-                fixture.getFileName().toString(), () -> run(fixture, language, generator)));
+                fixture.getFileName().toString(),
+                () -> run(fixture, language, generator, formatter)));
   }
 
   private static List<Path> fixtures() {
@@ -90,7 +103,8 @@ public final class Golden {
     return Node.parse(read(fixture.resolve("fixture.json"))).expectObjectNode();
   }
 
-  private static void run(Path fixture, String language, Generator generator) throws IOException {
+  private static void run(Path fixture, String language, Generator generator, Formatter formatter)
+      throws IOException, InterruptedException {
     Path models = fixture.resolve("model");
     ModelAssembler assembler = Model.assembler().discoverModels();
     try (Stream<Path> files = Files.list(models)) {
@@ -122,6 +136,8 @@ public final class Golden {
       }
     }
 
+    actual = format(actual, formatter, scratch);
+
     Path expectedDir = fixture.resolve(language);
     if (UPDATE) {
       write(expectedDir, actual);
@@ -148,7 +164,7 @@ public final class Golden {
               + " for fixture "
               + fixture.getFileName()
               + " differs from "
-              + ROOT.getParent().getParent().relativize(expectedDir)
+              + REPOSITORY.relativize(expectedDir)
               + ":\n  "
               + String.join("\n  ", problems)
               + "\nIf the change is intended, run `just golden` and commit the result.");
@@ -202,6 +218,33 @@ public final class Golden {
         .replace(ROOT.toString(), "<golden>")
         .replaceAll(
             "\"generatorVersion\"\\s*:\\s*\"[^\"]*\"", "\"generatorVersion\": \"<version>\"");
+  }
+
+  /**
+   * Formats the files outside the repository, so no {@code .editorconfig} or ignore file of it
+   * applies, and after normalizing, so machine-specific paths cannot change line breaks.
+   */
+  private static Map<String, String> format(
+      Map<String, String> files, Formatter formatter, Path scratch)
+      throws IOException, InterruptedException {
+    Path dir = scratch.resolve("format");
+    write(dir, files);
+    List<String> command = new ArrayList<>();
+    command.add("dotnet");
+    command.addAll(formatter.command(dir));
+    Process process =
+        new ProcessBuilder(command)
+            .directory(REPOSITORY.toFile())
+            .redirectErrorStream(true)
+            .start();
+    String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    if (process.waitFor() != 0) {
+      throw new AssertionError(
+          String.join(" ", command)
+              + " failed. Run `dotnet tool restore` in the repository first.\n"
+              + output);
+    }
+    return readAll(dir);
   }
 
   private static Map<String, String> readAll(Path dir) throws IOException {

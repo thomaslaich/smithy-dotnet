@@ -6,8 +6,7 @@ using NSmithy.Core.Serde;
 
 namespace Example.Kitchen;
 
-public readonly partial record struct OrderStatus(string Value)
-    : IStringEnumValue<OrderStatus>
+public readonly partial record struct OrderStatus(string Value) : IStringEnumValue<OrderStatus>
 {
     public static OrderStatus FromValue(string value)
     {

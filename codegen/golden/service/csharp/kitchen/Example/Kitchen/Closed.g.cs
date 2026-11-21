@@ -15,9 +15,7 @@ public sealed partial class Closed : Exception
     /// The kitchen does not take orders right now.
     /// </summary>
     public Closed(string? message = null)
-        : base(message)
-    { }
+        : base(message) { }
 
     public override string Message => base.Message!;
-
 }

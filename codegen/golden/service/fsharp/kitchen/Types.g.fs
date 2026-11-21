@@ -7,16 +7,11 @@ namespace rec Example.Kitchen
 /// The kitchen does not take orders right now.
 /// </summary>
 [<RequireQualifiedAccess>]
-type Closed =
-    {
-        Message: string option
-    }
+type Closed = { Message: string option }
 
 type GetOrderInput =
-    {
-        OrderId: string
-        Verbose: bool option
-    }
+    { OrderId: string
+      Verbose: bool option }
 
 [<RequireQualifiedAccess>]
 type OrderStatus =
@@ -46,16 +41,11 @@ type OrderStatus =
         static member FromValue(value) = OrderStatus.FromValue(value)
 
 type GetOrderOutput =
-    {
-        Dish: string
-        Status: global.Example.Kitchen.OrderStatus option
-    }
+    { Dish: string
+      Status: global.Example.Kitchen.OrderStatus option }
 
 [<RequireQualifiedAccess>]
-type NoSuchOrder =
-    {
-        OrderId: string
-    }
+type NoSuchOrder = { OrderId: string }
 
 [<Sealed>]
 type PingInput() =
@@ -68,23 +58,15 @@ type PingOutput() =
     override _.GetHashCode() = 0
 
 type PlaceOrderInput =
-    {
-        Table: string
-        Token: string option
-        Dish: string
-        Portions: int
-    }
+    { Table: string
+      Token: string option
+      Dish: string
+      Portions: int }
 
-type PlaceOrderOutput =
-    {
-        OrderId: string
-    }
+type PlaceOrderOutput = { OrderId: string }
 
 [<RequireQualifiedAccess>]
-type SoldOut =
-    {
-        Dish: string
-    }
+type SoldOut = { Dish: string }
 
 namespace rec Example.Kitchen.Exceptions
 

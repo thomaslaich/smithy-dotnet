@@ -9,4 +9,11 @@ type ShopSchema =
         global.NSmithy.Core.Serde.Schemas.Service(
             global.NSmithy.Core.ShapeId.Parse("acme.shop#Shop"),
             "2026-01-01",
-            traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("aws.protocols#restJson1"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("aws.protocols#restJson1"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                       )
+                   ) |]
+        )

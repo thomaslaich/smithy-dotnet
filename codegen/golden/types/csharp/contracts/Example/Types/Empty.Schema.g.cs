@@ -9,10 +9,7 @@ namespace Example.Types.Schemas;
 
 public static partial class EmptySchema
 {
-    public sealed class Builder : StructBuilder
-    {
-
-    }
+    public sealed class Builder : StructBuilder { }
 
     public static StructSchema<global::Example.Types.Empty, Builder> Schema { get; } =
         new GeneratedSchema();
@@ -20,12 +17,10 @@ public static partial class EmptySchema
     private sealed class GeneratedSchema()
         : StructSchema<global::Example.Types.Empty, Builder>(
             ShapeId.Parse("example.types#Empty"),
-            [
-
-            ],
-            null)
+            [],
+            null
+        )
     {
-
         public override Builder CreateTypedBuilder() => new();
 
         public override global::Example.Types.Empty Build(Builder builder) =>
@@ -33,17 +28,13 @@ public static partial class EmptySchema
 
         public override void SerializeMembers<TSerializer>(
             global::Example.Types.Empty value,
-            ref TSerializer serializer)
-        {
-
-        }
+            ref TSerializer serializer
+        ) { }
 
         protected override void DeserializeMember<TDeserializer>(
             Builder builder,
             int index,
-            ref TDeserializer deserializer)
-        {
-
-        }
+            ref TDeserializer deserializer
+        ) { }
     }
 }

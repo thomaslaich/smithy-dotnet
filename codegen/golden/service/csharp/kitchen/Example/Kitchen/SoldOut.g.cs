@@ -8,10 +8,7 @@ namespace Example.Kitchen;
 
 public sealed partial class SoldOut : Exception
 {
-    public SoldOut(
-        string? message,
-        string dish
-    )
+    public SoldOut(string? message, string dish)
         : base(message)
     {
         Dish = dish ?? throw new ArgumentNullException(nameof(dish));

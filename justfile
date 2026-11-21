@@ -23,6 +23,7 @@ check-format:
 
 # Regenerate the golden codegen output under codegen/golden after an intended generator change.
 golden:
+    dotnet tool restore
     cd codegen && gradle :golden:test -PupdateGolden
 
 # Stage the bundled Maven repo consumed by NSmithy.MSBuild during `dotnet build`.
@@ -46,6 +47,8 @@ build: codegen restore
     dotnet build NSmithy.slnx --configuration Release --no-restore --disable-build-servers ${VERSION:+-p:Version=$VERSION}
 
 test:
+    # The golden tests format their output with the formatters pinned in dotnet-tools.json.
+    dotnet tool restore
     cd codegen && gradle test
     dotnet test NSmithy.slnx --configuration Release --no-build --disable-build-servers
 

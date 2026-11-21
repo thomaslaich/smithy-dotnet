@@ -15,5 +15,8 @@ public interface IPlaceOrderHandler
     /// <summary>
     /// Places an order for a table.
     /// </summary>
-    Task<PlaceOrderOutput> PlaceOrderAsync(PlaceOrderInput input, CancellationToken cancellationToken = default);
+    Task<PlaceOrderOutput> PlaceOrderAsync(
+        PlaceOrderInput input,
+        CancellationToken cancellationToken = default
+    );
 }

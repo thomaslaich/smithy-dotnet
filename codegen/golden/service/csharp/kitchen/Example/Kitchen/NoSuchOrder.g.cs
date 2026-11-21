@@ -8,10 +8,7 @@ namespace Example.Kitchen;
 
 public sealed partial class NoSuchOrder : Exception
 {
-    public NoSuchOrder(
-        string? message,
-        string orderId
-    )
+    public NoSuchOrder(string? message, string orderId)
         : base(message)
     {
         OrderId = orderId ?? throw new ArgumentNullException(nameof(orderId));
