@@ -11,10 +11,12 @@ var endpoint = args.Length > 0 ? args[0] : "http://localhost:5000";
 // Export client telemetry over OTLP (defaults to http://localhost:4317, where
 // grafana/otel-lgtm listens). The NSmithy client runtime emits one span per
 // operation with a child span per transport attempt, plus attempt/error/duration
-// metrics — subscribing to "NSmithy.Client" is all it takes.
+// metrics. HttpClient's instrumentation records each attempt's HTTP request, the
+// span the server's request span is a child of, so the two services connect.
 using var tracerProvider = Sdk.CreateTracerProviderBuilder()
     .ConfigureResource(resource => resource.AddService("weather-client"))
     .AddSource(SmithyClientTelemetry.ActivitySourceName)
+    .AddHttpClientInstrumentation()
     .AddOtlpExporter()
     .Build();
 using var meterProvider = Sdk.CreateMeterProviderBuilder()

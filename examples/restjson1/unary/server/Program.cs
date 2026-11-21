@@ -1,4 +1,5 @@
 using Example.Weather;
+using NSmithy.Server;
 using NSmithy.Server.AspNetCore.Docs;
 using NSmithy.Server.Mcp;
 using OpenTelemetry.Metrics;
@@ -20,8 +21,18 @@ builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 builder
     .Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService("weather-server"))
-    .WithTracing(tracing => tracing.AddAspNetCoreInstrumentation().AddOtlpExporter())
-    .WithMetrics(metrics => metrics.AddAspNetCoreInstrumentation().AddOtlpExporter());
+    .WithTracing(tracing =>
+        tracing
+            .AddAspNetCoreInstrumentation()
+            .AddSource(SmithyServerTelemetry.ActivitySourceName)
+            .AddOtlpExporter()
+    )
+    .WithMetrics(metrics =>
+        metrics
+            .AddAspNetCoreInstrumentation()
+            .AddMeter(SmithyServerTelemetry.MeterName)
+            .AddOtlpExporter()
+    );
 
 var app = builder.Build();
 app.MapSmithyOpenApi();

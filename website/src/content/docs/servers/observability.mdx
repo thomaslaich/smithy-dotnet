@@ -55,7 +55,10 @@ The request's span belongs to the host: ASP.NET Core's `POST /users`, found
 through the request rather than `Activity.Current`, so a span your middleware
 starts does not hide it; or, for an MCP tool call, the MCP SDK's span. NSmithy
 keeps its name and describes the call on it, so a caller's client span and the
-server span it reaches carry the same attributes:
+server span it reaches carry the same attributes. A .NET caller connects to it
+with HttpClient's instrumentation, as the
+[client guide](/smithy-dotnet/guides/client-configuration/observability/)
+describes.
 
 | Attribute | Value |
 | --- | --- |

@@ -214,8 +214,12 @@ Then run the server and client as above and open Grafana at
 [http://localhost:3000](http://localhost:3000) (anonymous admin login).
 
 **Traces** (Explore → Tempo): each client operation is a `weather-client` span
-named `Weather.{Operation}` with one child span per transport attempt; the
-server's ASP.NET Core spans join the same trace via W3C context propagation.
+named `Weather.{Operation}` with one child span per transport attempt, and an
+HTTP client span under each attempt. The server's request span, ASP.NET Core's
+`GET /cities/{cityId}`, is a child of that HTTP span via W3C context
+propagation and carries `rpc.service`, `rpc.method`, and, for a failed call,
+`error.type`; inside it, an internal `Weather.{Operation}` span covers the
+handler.
 The interesting ones are the `Weather.GetFlakyForecast` traces — the server
 fails two of every three calls with the model's `@retryable`
 `ServiceUnavailable` error (HTTP 503), and the client's
@@ -232,6 +236,11 @@ successful one, with the backoff visible as gaps between attempts.
 | `smithy_client_attempts_total` | Transport attempts, including retries — divide by call count to see retry amplification. |
 | `smithy_client_errors_total` | Failed executions, dimensioned by `error_type`. |
 
+The server emits `smithy_server_operation_duration_seconds`, from reading the
+request to writing the response, dimensioned by `rpc_service` / `rpc_method`
+and `error_type` for a failed call.
+
 The wiring is minimal: the client subscribes its tracer/meter provider to the
-`NSmithy.Client` source and meter (see `client/Program.cs`); the server uses
+`NSmithy.Client` source and meter and to HttpClient's instrumentation (see
+`client/Program.cs`); the server adds the `NSmithy.Server` source and meter to
 standard ASP.NET Core instrumentation (see `server/Program.cs`).
