@@ -26,7 +26,7 @@ use smithy.ai#prompts
 })
 service Kitchen {
     version: "2024-01-01"
-    operations: [CloseTable, Order, Ping]
+    operations: [CloseTable, ListDishes, Order, Ping]
     errors: [example.staff#KitchenClosed]
 }
 
@@ -64,6 +64,28 @@ operation Ping {
     output := {
         report: StockReport
     }
+}
+
+/// Lists the dishes on the menu, a page at a time.
+@readonly
+@paginated(inputToken: "nextToken", outputToken: "page.nextToken", items: "dishes", pageSize: "pageSize")
+@http(method: "GET", uri: "/dishes")
+operation ListDishes {
+    input := {
+        @httpQuery("nextToken")
+        nextToken: String
+
+        @httpQuery("pageSize")
+        pageSize: Integer
+    }
+    output := {
+        page: DishPage
+        dishes: Strings
+    }
+}
+
+structure DishPage {
+    nextToken: String
 }
 
 /// Closes a table; only staff with an API key may.

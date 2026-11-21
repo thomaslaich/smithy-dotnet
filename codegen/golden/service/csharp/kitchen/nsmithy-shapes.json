@@ -22,9 +22,24 @@
         "example.kitchen#Kitchen": {
             "schema": "Example.Kitchen.Schemas.KitchenSchema"
         },
+        "example.kitchen#ListOrders": {
+            "handler": "Example.Kitchen.IListOrdersHandler",
+            "schema": "Example.Kitchen.Schemas.ListOrdersSchema"
+        },
+        "example.kitchen#ListOrdersInput": {
+            "schema": "Example.Kitchen.Schemas.ListOrdersInputSchema",
+            "type": "Example.Kitchen.ListOrdersInput"
+        },
+        "example.kitchen#ListOrdersOutput": {
+            "schema": "Example.Kitchen.Schemas.ListOrdersOutputSchema",
+            "type": "Example.Kitchen.ListOrdersOutput"
+        },
         "example.kitchen#NoSuchOrder": {
             "schema": "Example.Kitchen.Schemas.NoSuchOrderSchema",
             "type": "Example.Kitchen.NoSuchOrder"
+        },
+        "example.kitchen#OrderIds": {
+            "schema": "Example.Kitchen.Schemas.OrderIdsSchema"
         },
         "example.kitchen#OrderStatus": {
             "schema": "Example.Kitchen.Schemas.OrderStatusSchema",

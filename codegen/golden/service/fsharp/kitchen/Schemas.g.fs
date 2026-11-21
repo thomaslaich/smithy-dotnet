@@ -103,6 +103,73 @@ type internal NoSuchOrderSchemaImpl() =
 type NoSuchOrderSchema =
     static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Kitchen.NoSuchOrder, NoSuchOrderBuilder> = NoSuchOrderSchemaImpl()
 
+type ListOrdersInputBuilder() =
+    inherit global.NSmithy.Core.Serde.StructBuilder()
+    member val NextToken: string voption = ValueNone with get, set
+    member val PageSize: int voption = ValueNone with get, set
+
+type internal ListOrdersInputSchemaImpl() =
+    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Kitchen.ListOrdersInput, ListOrdersInputBuilder>(
+        global.NSmithy.Core.ShapeId.Parse("example.kitchen#ListOrdersInput"),
+        [|
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.ListOrdersInput, ListOrdersInputBuilder, string option>(global.NSmithy.Core.Serde.MemberSchema("nextToken", ListOrdersInputSchemaImpl.Target0, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpQuery"), global.NSmithy.Core.Document.From("nextToken")) |]), global.NSmithy.Core.Serde.Schemas.Optional<string option, string>(ListOrdersInputSchemaImpl.Target0, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Kitchen.ListOrdersInput) -> value.NextToken), (fun (builder: ListOrdersInputBuilder) value -> builder.NextToken <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.ListOrdersInput, ListOrdersInputBuilder, int option>(global.NSmithy.Core.Serde.MemberSchema("pageSize", ListOrdersInputSchemaImpl.Target1, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpQuery"), global.NSmithy.Core.Document.From("pageSize")) |]), global.NSmithy.Core.Serde.Schemas.Optional<int option, int>(ListOrdersInputSchemaImpl.Target1, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Kitchen.ListOrdersInput) -> value.PageSize), (fun (builder: ListOrdersInputBuilder) value -> builder.PageSize <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
+        |],
+        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#input"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    static member val Target1: global.NSmithy.Core.Serde.Schema<int> = global.NSmithy.Core.Serde.Schemas.Integer
+    override _.CreateTypedBuilder() = ListOrdersInputBuilder()
+    override _.Build(builder) : global.Example.Kitchen.ListOrdersInput =
+        {
+            NextToken = global.Microsoft.FSharp.Core.ValueOption.toOption builder.NextToken
+            PageSize = global.Microsoft.FSharp.Core.ValueOption.toOption builder.PageSize
+        }
+
+[<AbstractClass; Sealed>]
+type ListOrdersInputSchema =
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Kitchen.ListOrdersInput, ListOrdersInputBuilder> = ListOrdersInputSchemaImpl()
+
+type internal OrderIdsSchemaImpl() =
+    inherit global.NSmithy.Core.Serde.ElementListSchema<string list, string, global.System.Collections.Generic.List<string>>(
+        global.NSmithy.Core.ShapeId.Parse("example.kitchen#OrderIds"),
+        global.NSmithy.Core.ShapeKind.List,
+        OrderIdsSchemaImpl.Target0)
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    override _.GetElements(value) = value :> global.System.Collections.Generic.IEnumerable<string>
+    override _.CreateTypedBuilder() = global.System.Collections.Generic.List<string>()
+    override _.Add(builder, value) = builder.Add(value)
+    override _.Build(builder) = global.Microsoft.FSharp.Collections.List.ofSeq builder
+
+[<AbstractClass; Sealed>]
+type OrderIdsSchema =
+    static member val Schema: global.NSmithy.Core.Serde.ListSchema<string list, string, global.System.Collections.Generic.List<string>> = OrderIdsSchemaImpl()
+
+type ListOrdersOutputBuilder() =
+    inherit global.NSmithy.Core.Serde.StructBuilder()
+    member val NextToken: string voption = ValueNone with get, set
+    member val Orders: string list voption = ValueNone with get, set
+
+type internal ListOrdersOutputSchemaImpl() =
+    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Example.Kitchen.ListOrdersOutput, ListOrdersOutputBuilder>(
+        global.NSmithy.Core.ShapeId.Parse("example.kitchen#ListOrdersOutput"),
+        [|
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.ListOrdersOutput, ListOrdersOutputBuilder, string option>(global.NSmithy.Core.Serde.MemberSchema("nextToken", ListOrdersOutputSchemaImpl.Target0), global.NSmithy.Core.Serde.Schemas.Optional<string option, string>(ListOrdersOutputSchemaImpl.Target0, (fun value -> value.IsSome), (fun value -> value.Value), (fun value -> Some value), None), (fun (value: global.Example.Kitchen.ListOrdersOutput) -> value.NextToken), (fun (builder: ListOrdersOutputBuilder) value -> builder.NextToken <- global.Microsoft.FSharp.Core.ValueOption.ofOption value))
+            global.NSmithy.Core.Serde.StructMember.Create<global.Example.Kitchen.ListOrdersOutput, ListOrdersOutputBuilder, string list>(global.NSmithy.Core.Serde.MemberSchema("orders", ListOrdersOutputSchemaImpl.Target1, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), ListOrdersOutputSchemaImpl.Target1, (fun (value: global.Example.Kitchen.ListOrdersOutput) -> value.Orders), (fun (builder: ListOrdersOutputBuilder) value -> builder.Orders <- ValueSome value))
+        |],
+        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#output"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
+    static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
+    static member val Target1: global.NSmithy.Core.Serde.Schema<string list> = global.NSmithy.Core.Serde.Schemas.Lazy<string list>(fun () -> global.Example.Kitchen.Schemas.OrderIdsSchema.Schema :> global.NSmithy.Core.Serde.Schema<string list>)
+    override _.CreateTypedBuilder() = ListOrdersOutputBuilder()
+    override _.Build(builder) : global.Example.Kitchen.ListOrdersOutput =
+        {
+            NextToken = global.Microsoft.FSharp.Core.ValueOption.toOption builder.NextToken
+            Orders = (match builder.Orders with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("orders")))
+        }
+
+[<AbstractClass; Sealed>]
+type ListOrdersOutputSchema =
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Example.Kitchen.ListOrdersOutput, ListOrdersOutputBuilder> = ListOrdersOutputSchemaImpl()
+
 type PingInputBuilder() =
     inherit global.NSmithy.Core.Serde.StructBuilder()
 

@@ -11,6 +11,11 @@ type IKitchenClient =
 
     abstract GetOrderAsync: input: global.Example.Kitchen.GetOrderInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.GetOrderOutput, global.Example.Kitchen.GetOrderError>>
 
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    abstract ListOrdersAsync: input: global.Example.Kitchen.ListOrdersInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>>
+
     abstract PingAsync: input: global.Example.Kitchen.PingInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>>
 
     /// <summary>
@@ -18,10 +23,43 @@ type IKitchenClient =
     /// </summary>
     abstract PlaceOrderAsync: input: global.Example.Kitchen.PlaceOrderInput * ?cancellationToken: global.System.Threading.CancellationToken -> global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PlaceOrderOutput, global.Example.Kitchen.PlaceOrderError>>
 
-/// <summary>Overloads of <c>IKitchenClient</c> for the operations whose input may be left out.</summary>
+/// <summary>Members of <c>IKitchenClient</c> built on its operations.</summary>
 [<AutoOpen>]
 module IKitchenClientExtensions =
     type IKitchenClient with
+        /// <summary>
+        /// Lists the orders, a page at a time.
+        /// </summary>
+        member this.ListOrdersAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>> =
+            this.ListOrdersAsync(({ NextToken = None; PageSize = None } : global.Example.Kitchen.ListOrdersInput), ?cancellationToken = cancellationToken)
+
+        /// <summary>Every page of <c>ListOrdersAsync</c>, which is called again with each page's continuation token until a page has none. A modeled error is the last page.</summary>
+        member this.ListOrdersPagesAsync(input: global.Example.Kitchen.ListOrdersInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Collections.Generic.IAsyncEnumerable<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>> =
+            global.System.ArgumentNullException.ThrowIfNull(input)
+            global.NSmithy.Client.SmithyPaginator.PagesAsync(
+                (fun (input: global.Example.Kitchen.ListOrdersInput) (cancellationToken: global.System.Threading.CancellationToken) -> this.ListOrdersAsync(input, cancellationToken)),
+                input,
+                (fun (page: global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>) -> match page with global.Microsoft.FSharp.Core.Result.Ok output -> global.Microsoft.FSharp.Core.Option.toObj (output.NextToken) | global.Microsoft.FSharp.Core.Result.Error _ -> null),
+                (fun (input: global.Example.Kitchen.ListOrdersInput) (token: string) -> { input with NextToken = Some token }),
+                global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
+
+        /// <summary>Every page of <c>ListOrdersAsync</c>, which is called again with each page's continuation token until a page has none. A modeled error is the last page.</summary>
+        member this.ListOrdersPagesAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Collections.Generic.IAsyncEnumerable<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>> =
+            this.ListOrdersPagesAsync(({ NextToken = None; PageSize = None } : global.Example.Kitchen.ListOrdersInput), ?cancellationToken = cancellationToken)
+
+        /// <summary>The items of every page of <c>ListOrdersAsync</c>. A modeled error is the last item.</summary>
+        member this.ListOrdersItemsAsync(input: global.Example.Kitchen.ListOrdersInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Collections.Generic.IAsyncEnumerable<global.Microsoft.FSharp.Core.Result<string, global.Example.Kitchen.ListOrdersError>> =
+            global.System.Linq.AsyncEnumerable.SelectMany(
+                this.ListOrdersPagesAsync(input, ?cancellationToken = cancellationToken),
+                global.System.Func<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>, global.Microsoft.FSharp.Core.Result<string, global.Example.Kitchen.ListOrdersError> seq>(fun page ->
+                    match page with
+                    | global.Microsoft.FSharp.Core.Result.Ok output -> global.Microsoft.FSharp.Collections.Seq.map global.Microsoft.FSharp.Core.Result.Ok (global.Microsoft.FSharp.Collections.Seq.ofList (output.Orders))
+                    | global.Microsoft.FSharp.Core.Result.Error error -> global.Microsoft.FSharp.Collections.Seq.singleton (global.Microsoft.FSharp.Core.Result.Error error)))
+
+        /// <summary>The items of every page of <c>ListOrdersAsync</c>. A modeled error is the last item.</summary>
+        member this.ListOrdersItemsAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Collections.Generic.IAsyncEnumerable<global.Microsoft.FSharp.Core.Result<string, global.Example.Kitchen.ListOrdersError>> =
+            this.ListOrdersItemsAsync(({ NextToken = None; PageSize = None } : global.Example.Kitchen.ListOrdersInput), ?cancellationToken = cancellationToken)
+
         member this.PingAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>> =
             this.PingAsync(global.Example.Kitchen.PingInput(), ?cancellationToken = cancellationToken)
 
@@ -55,6 +93,13 @@ type KitchenClient private (parts: global.NSmithy.Client.SmithyHttpClientEnviron
                         serviceProtocol.ForClientOperation(global.Example.Kitchen.Schemas.GetOrderSchema.Schema),
                         authSchemeIds = global.System.Array.Empty<string>(),
                         operation = global.Example.Kitchen.Schemas.GetOrderSchema.Schema)
+                ListOrders =
+                    global.NSmithy.Client.SmithyOperationBinding<global.Example.Kitchen.ListOrdersInput, global.Example.Kitchen.ListOrdersOutput>(
+                        global.Example.Kitchen.Schemas.KitchenSchema.Schema.Id,
+                        global.Example.Kitchen.Schemas.ListOrdersSchema.Schema.Id,
+                        serviceProtocol.ForClientOperation(global.Example.Kitchen.Schemas.ListOrdersSchema.Schema),
+                        authSchemeIds = global.System.Array.Empty<string>(),
+                        operation = global.Example.Kitchen.Schemas.ListOrdersSchema.Schema)
                 Ping =
                     global.NSmithy.Client.SmithyOperationBinding<global.Example.Kitchen.PingInput, global.Example.Kitchen.PingOutput>(
                         global.Example.Kitchen.Schemas.KitchenSchema.Schema.Id,
@@ -121,6 +166,52 @@ type KitchenClient private (parts: global.NSmithy.Client.SmithyHttpClientEnviron
             | error when (global.Example.Kitchen.GetOrderError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error((global.Example.Kitchen.GetOrderError.FromException error).Value)
         }
 
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    member _.ListOrdersAsync(input: global.Example.Kitchen.ListOrdersInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>> =
+        global.System.ArgumentNullException.ThrowIfNull(input)
+        task {
+            try
+                let! output = runtime.InvokeAsync(bindings.ListOrders, input, global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
+                return global.Microsoft.FSharp.Core.Result.Ok output
+            with
+            | error when (global.Example.Kitchen.ListOrdersError.FromException error).IsSome -> return global.Microsoft.FSharp.Core.Result.Error((global.Example.Kitchen.ListOrdersError.FromException error).Value)
+        }
+
+    /// <summary>
+    /// Lists the orders, a page at a time.
+    /// </summary>
+    member this.ListOrdersAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>> =
+        this.ListOrdersAsync(({ NextToken = None; PageSize = None } : global.Example.Kitchen.ListOrdersInput), ?cancellationToken = cancellationToken)
+
+    /// <summary>Every page of <c>ListOrdersAsync</c>, which is called again with each page's continuation token until a page has none. A modeled error is the last page.</summary>
+    member this.ListOrdersPagesAsync(input: global.Example.Kitchen.ListOrdersInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Collections.Generic.IAsyncEnumerable<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>> =
+        global.System.ArgumentNullException.ThrowIfNull(input)
+        global.NSmithy.Client.SmithyPaginator.PagesAsync(
+            (fun (input: global.Example.Kitchen.ListOrdersInput) (cancellationToken: global.System.Threading.CancellationToken) -> this.ListOrdersAsync(input, cancellationToken)),
+            input,
+            (fun (page: global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>) -> match page with global.Microsoft.FSharp.Core.Result.Ok output -> global.Microsoft.FSharp.Core.Option.toObj (output.NextToken) | global.Microsoft.FSharp.Core.Result.Error _ -> null),
+            (fun (input: global.Example.Kitchen.ListOrdersInput) (token: string) -> { input with NextToken = Some token }),
+            global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)
+
+    /// <summary>Every page of <c>ListOrdersAsync</c>, which is called again with each page's continuation token until a page has none. A modeled error is the last page.</summary>
+    member this.ListOrdersPagesAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Collections.Generic.IAsyncEnumerable<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>> =
+        this.ListOrdersPagesAsync(({ NextToken = None; PageSize = None } : global.Example.Kitchen.ListOrdersInput), ?cancellationToken = cancellationToken)
+
+    /// <summary>The items of every page of <c>ListOrdersAsync</c>. A modeled error is the last item.</summary>
+    member this.ListOrdersItemsAsync(input: global.Example.Kitchen.ListOrdersInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Collections.Generic.IAsyncEnumerable<global.Microsoft.FSharp.Core.Result<string, global.Example.Kitchen.ListOrdersError>> =
+        global.System.Linq.AsyncEnumerable.SelectMany(
+            this.ListOrdersPagesAsync(input, ?cancellationToken = cancellationToken),
+            global.System.Func<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.ListOrdersOutput, global.Example.Kitchen.ListOrdersError>, global.Microsoft.FSharp.Core.Result<string, global.Example.Kitchen.ListOrdersError> seq>(fun page ->
+                match page with
+                | global.Microsoft.FSharp.Core.Result.Ok output -> global.Microsoft.FSharp.Collections.Seq.map global.Microsoft.FSharp.Core.Result.Ok (global.Microsoft.FSharp.Collections.Seq.ofList (output.Orders))
+                | global.Microsoft.FSharp.Core.Result.Error error -> global.Microsoft.FSharp.Collections.Seq.singleton (global.Microsoft.FSharp.Core.Result.Error error)))
+
+    /// <summary>The items of every page of <c>ListOrdersAsync</c>. A modeled error is the last item.</summary>
+    member this.ListOrdersItemsAsync(?cancellationToken: global.System.Threading.CancellationToken) : global.System.Collections.Generic.IAsyncEnumerable<global.Microsoft.FSharp.Core.Result<string, global.Example.Kitchen.ListOrdersError>> =
+        this.ListOrdersItemsAsync(({ NextToken = None; PageSize = None } : global.Example.Kitchen.ListOrdersInput), ?cancellationToken = cancellationToken)
+
     member _.PingAsync(input: global.Example.Kitchen.PingInput, ?cancellationToken: global.System.Threading.CancellationToken) : global.System.Threading.Tasks.Task<global.Microsoft.FSharp.Core.Result<global.Example.Kitchen.PingOutput, global.Example.Kitchen.PingError>> =
         global.System.ArgumentNullException.ThrowIfNull(input)
         task {
@@ -156,5 +247,6 @@ type KitchenClient private (parts: global.NSmithy.Client.SmithyHttpClientEnviron
     interface IKitchenClient with
         member _.Dispose() = environment.Dispose()
         member this.GetOrderAsync(input, ?cancellationToken) = this.GetOrderAsync(input, ?cancellationToken = cancellationToken)
+        member this.ListOrdersAsync(input, ?cancellationToken) = this.ListOrdersAsync(input, ?cancellationToken = cancellationToken)
         member this.PingAsync(input, ?cancellationToken) = this.PingAsync(input, ?cancellationToken = cancellationToken)
         member this.PlaceOrderAsync(input, ?cancellationToken) = this.PlaceOrderAsync(input, ?cancellationToken = cancellationToken)

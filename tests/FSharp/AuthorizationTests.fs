@@ -26,6 +26,9 @@ type private Kitchen() =
 
         member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
 
+        member _.ListDishesAsync(_, _) =
+            Task.FromResult(Ok({ Page = None; Dishes = None }))
+
 /// Authenticates any request that carries an X-Api-Key header.
 type private ApiKeyHandler
     (options: IOptionsMonitor<AuthenticationSchemeOptions>, logger: ILoggerFactory, encoder: UrlEncoder) =

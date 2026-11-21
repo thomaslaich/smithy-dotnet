@@ -57,6 +57,18 @@ type NoSuchOrder =
         OrderId: string
     }
 
+type ListOrdersInput =
+    {
+        NextToken: string option
+        PageSize: int option
+    }
+
+type ListOrdersOutput =
+    {
+        NextToken: string option
+        Orders: string list
+    }
+
 [<Sealed>]
 type PingInput() =
     override _.Equals(other) = other :? PingInput

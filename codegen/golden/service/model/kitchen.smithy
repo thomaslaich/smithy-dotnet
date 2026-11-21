@@ -10,7 +10,7 @@ use smithy.framework#ValidationException
 @restJson1
 service Kitchen {
     version: "2026-01-01"
-    operations: [PlaceOrder, GetOrder, Ping]
+    operations: [PlaceOrder, GetOrder, ListOrders, Ping]
     errors: [Closed]
 }
 
@@ -64,6 +64,31 @@ operation GetOrder {
     }
 
     errors: [NoSuchOrder, ValidationException]
+}
+
+/// Lists the orders, a page at a time.
+@readonly
+@paginated(inputToken: "nextToken", outputToken: "nextToken", items: "orders", pageSize: "pageSize")
+@http(method: "GET", uri: "/orders")
+operation ListOrders {
+    input := {
+        @httpQuery("nextToken")
+        nextToken: String
+
+        @httpQuery("pageSize")
+        pageSize: Integer
+    }
+
+    output := {
+        nextToken: String
+
+        @required
+        orders: OrderIds
+    }
+}
+
+list OrderIds {
+    member: String
 }
 
 @readonly
