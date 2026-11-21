@@ -391,6 +391,54 @@ class ClientGeneratorTest {
     assertFalse(client.contains("ListPricesItemsAsync"), client);
   }
 
+  @Test
+  void aPaginatorNamedLikeAnotherOperationIsLeftOut() {
+    String model =
+        PAGINATED.replace(
+                "operations: [ListTables, ListPrices]",
+                "operations: [ListTables, ListPrices, ListTablesItems]")
+            + """
+
+            @readonly
+            @http(method: "GET", uri: "/tables/items")
+            operation ListTablesItems {
+                input := {}
+                output := {}
+            }
+            """;
+    String client = generate(model, true).expectFileString(CLIENT);
+
+    assertTrue(client.contains("member this.ListTablesPagesAsync(?cancellationToken"), client);
+    assertFalse(
+        client.contains("ListTablesItemsAsync(input: global.Example.Cafe.ListTablesInput"), client);
+  }
+
+  @Test
+  void aMapTokenGetsNoPaginators() {
+    String model =
+        PAGINATED
+                .replace(
+                    "$version: \"2\"\n",
+                    "$version: \"2\"\n"
+                        + "metadata suppressions = [{ id: \"PaginatedTrait\", namespace: \"*\""
+                        + " }]\n")
+                .replace(
+                    "@httpQuery(\"token\")\n        token: String",
+                    "@httpQueryParams\n        token: Token")
+                .replace("next: String", "next: Token")
+            + """
+
+            map Token {
+                key: String
+                value: String
+            }
+            """;
+    String client = generate(model, true).expectFileString(CLIENT);
+
+    assertTrue(client.contains("member this.ListTablesAsync("), client);
+    assertFalse(client.contains("PagesAsync"), client);
+  }
+
   private static String referencing(String model, String name) {
     return model.replace(
             "        id: String\n", "        id: String\n        value: " + name + "\n")

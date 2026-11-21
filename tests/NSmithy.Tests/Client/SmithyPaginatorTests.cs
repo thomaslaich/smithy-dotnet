@@ -35,6 +35,27 @@ public sealed class SmithyPaginatorTests
     }
 
     [Fact]
+    public async Task AnEmptyTokenEndsThePages()
+    {
+        var calls = 0;
+        var pages = SmithyPaginator.PagesAsync<int, Page>(
+            (_, _) =>
+            {
+                calls++;
+                return Task.FromResult(new Page("", calls));
+            },
+            0,
+            static page => page.Next,
+            static (input, _) => input
+        );
+
+        var numbers = await pages.Select(static page => page.Number).ToListAsync();
+
+        Assert.Equal([1], numbers);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
     public async Task StoppingTheEnumerationSendsNoFurtherCalls()
     {
         var calls = 0;

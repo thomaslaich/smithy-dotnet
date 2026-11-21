@@ -504,9 +504,13 @@ final class ClientGenerator {
         values);
   }
 
-  /** The operation's resolved {@code @paginated} trait, when it gets paginators. */
+  /**
+   * The operation's resolved {@code @paginated} trait, when it gets paginators: its tokens must be
+   * strings, which the runtime pages with.
+   */
   private Optional<PaginationInfo> pagination(OperationShape operation) {
-    return Paginators.of(model, service, operation);
+    return Paginators.of(model, service, operation)
+        .filter(info -> Paginators.hasStringTokens(model, info));
   }
 
   /**

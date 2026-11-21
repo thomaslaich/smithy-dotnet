@@ -17,6 +17,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `IAsyncEnumerable` extensions of `I{Service}Client`. When the operation returns a `Result`, so
   does each element, and a modeled error is the last one.
 
+### Fixed
+
+- **Paginators stop on an empty continuation token.** An empty string, or an empty map token in
+  C#, ends the pages as an absent token does, as the Smithy spec requires, instead of requesting
+  again. A paginator named like another operation of the service, such as `ListOrdersPagesAsync`
+  next to a `ListOrdersPages` operation, is left out instead of breaking the client's build.
+
 ## [0.22.0]
 
 Servers describe calls in OpenTelemetry, enum members are Pascal case, and Smithy is updated to

@@ -972,6 +972,11 @@ public final class ClientGenerator implements Runnable {
       writer.putContext("operation", CSharpNaming.typeName(op.getId().getName()));
       writer.putContext("tokenProperty", CSharpNaming.memberName(info.getInputTokenMember()));
       writer.putContext("outputToken", memberPathExpr("output", info.getOutputTokenMemberPath()));
+      writer.putContext(
+          "hasToken",
+          Paginators.hasStringTokens(context.model(), info)
+              ? "!string.IsNullOrEmpty(token)"
+              : "token is { Count: > 0 }");
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext(
           "pagesSignature",
@@ -985,7 +990,7 @@ public final class ClientGenerator implements Runnable {
               var output = await ${operation:L}Async(input, cancellationToken).ConfigureAwait(false);
               yield return output;
               var token = ${outputToken:L};
-              while (token is not null)
+              while (${hasToken:L})
               {
                   input = input with { ${tokenProperty:L} = token };
                   output = await ${operation:L}Async(input, cancellationToken).ConfigureAwait(false);

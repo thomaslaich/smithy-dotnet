@@ -35,11 +35,9 @@ carries a continuation token:
   </TabItem>
   <TabItem label="F#">
     ```fsharp
-    open System.Linq
+    open FSharp.Control // FSharp.Control.TaskSeq
 
-    let! pages = client.ListCitiesPagesAsync({ NextToken = None; PageSize = Some 3 }).ToListAsync()
-
-    for page in pages do
+    for page in client.ListCitiesPagesAsync({ NextToken = None; PageSize = Some 3 }) do
         match page with
         | Ok page -> page.Items |> List.iter (fun city -> printfn "%s" city.Name)
         | Error error -> eprintfn "%A" error
@@ -59,7 +57,10 @@ that flattens the pages:
   </TabItem>
   <TabItem label="F#">
     ```fsharp
-    let! cities = client.ListCitiesItemsAsync().ToListAsync()
+    for city in client.ListCitiesItemsAsync({ NextToken = None; PageSize = Some 3 }) do
+        match city with
+        | Ok city -> printfn "%s" city.Name
+        | Error error -> eprintfn "%A" error
     ```
   </TabItem>
 </Tabs>
@@ -76,10 +77,12 @@ Notes:
 - Cancellation flows through `WithCancellation(token)` or the method's
   `CancellationToken` parameter.
 - Operations whose `items` member is a map only generate the pages paginator.
-- In F#, the paginators return `IAsyncEnumerable`. Consume them with the
-  `System.Linq.AsyncEnumerable` operators or a library such as
-  [FSharp.Control.TaskSeq](https://github.com/fsprojects/FSharp.Control.TaskSeq).
+- In F#, the paginators return `IAsyncEnumerable`. A `task` iterates them with
+  `for` once [FSharp.Control.TaskSeq](https://github.com/fsprojects/FSharp.Control.TaskSeq)
+  is opened, as above; the `System.Linq.AsyncEnumerable` operators work without it.
   They are extensions of `I{Service}Client`, so every implementation of it has
   them.
 - In F#, when the operation returns a `Result`, so does each page and item. A
   modeled error is the last element, and the paginator sends no further requests.
+- In F#, an operation whose continuation tokens are maps, which Smithy
+  discourages, gets no paginators.

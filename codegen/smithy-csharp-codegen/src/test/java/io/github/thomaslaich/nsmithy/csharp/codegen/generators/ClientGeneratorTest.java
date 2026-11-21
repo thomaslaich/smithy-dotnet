@@ -491,6 +491,53 @@ final class ClientGeneratorTest {
       """;
 
   @Test
+  void aPaginatorNamedLikeAnotherOperationIsLeftOut() throws Exception {
+    String model =
+        PAGINATED_MODEL.replace(
+                "operations: [ListThings, GetThing]",
+                "operations: [ListThings, GetThing, ListThingsItems]")
+            + """
+
+            @readonly
+            @http(method: "GET", uri: "/things/items")
+            operation ListThingsItems {
+                input := {}
+                output := {}
+            }
+            """;
+    String generated =
+        renderClient(REST_PROTOCOL_TRAITS, model, "example.pages#Catalog", "Example.Pages");
+
+    assertTrue(generated.contains("ListThingsPagesAsync("), generated);
+    assertFalse(
+        generated.contains("IAsyncEnumerable<global::Example.Example.Pages.Thing>"), generated);
+  }
+
+  @Test
+  void aMapTokenEndsThePagesWhenEmpty() throws Exception {
+    String model =
+        PAGINATED_MODEL
+                .replace(
+                    "$version: \"2\"\n",
+                    "$version: \"2\"\n"
+                        + "metadata suppressions = [{ id: \"PaginatedTrait\", namespace: \"*\""
+                        + " }]\n")
+                .replace("@httpQuery(\"nextToken\")", "@httpQueryParams")
+                .replace("nextToken: String", "nextToken: Token")
+            + """
+
+            map Token {
+                key: String
+                value: String
+            }
+            """;
+    String generated =
+        renderClient(REST_PROTOCOL_TRAITS, model, "example.pages#Catalog", "Example.Pages");
+
+    assertTrue(generated.contains("while (token is { Count: > 0 })"), generated);
+  }
+
+  @Test
   void paginatedOperationsGeneratePagesAndItemsPaginators() throws Exception {
     String generated =
         renderClient(
@@ -515,7 +562,7 @@ final class ClientGeneratorTest {
                 + " global::Example.Example.Pages.ListThingsInput(), cancellationToken);"),
         generated);
     assertTrue(generated.contains("input = input with { NextToken = token };"), generated);
-    assertTrue(generated.contains("while (token is not null)"), generated);
+    assertTrue(generated.contains("while (!string.IsNullOrEmpty(token))"), generated);
 
     // Items paginator: flattens the pages' list member.
     assertTrue(

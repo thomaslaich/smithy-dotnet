@@ -362,7 +362,7 @@ public sealed class KitchenClient : IKitchenClient
         var output = await ListOrdersAsync(input, cancellationToken).ConfigureAwait(false);
         yield return output;
         var token = output.NextToken;
-        while (token is not null)
+        while (!string.IsNullOrEmpty(token))
         {
             input = input with { NextToken = token };
             output = await ListOrdersAsync(input, cancellationToken).ConfigureAwait(false);

@@ -10,12 +10,12 @@ public static class SmithyPaginator
 {
     /// <summary>
     /// Calls <paramref name="call"/> with <paramref name="input"/>, then again with each page's
-    /// continuation token, until a page has none. Stopping the enumeration sends no further
-    /// requests.
+    /// continuation token, until a page's token is null or empty. Stopping the enumeration sends
+    /// no further requests.
     /// </summary>
     /// <param name="call">One page: the operation call.</param>
     /// <param name="input">The input of the first call.</param>
-    /// <param name="nextToken">The page's continuation token, or <see langword="null"/> after the last page.</param>
+    /// <param name="nextToken">The page's continuation token, null or empty after the last page.</param>
     /// <param name="withToken">The input with its continuation token set.</param>
     /// <param name="cancellationToken">Cancels the current call.</param>
     public static IAsyncEnumerable<TPage> PagesAsync<TInput, TPage>(
@@ -43,7 +43,7 @@ public static class SmithyPaginator
         var page = await call(input, cancellationToken).ConfigureAwait(false);
         yield return page;
         var token = nextToken(page);
-        while (token is not null)
+        while (!string.IsNullOrEmpty(token))
         {
             input = withToken(input, token);
             page = await call(input, cancellationToken).ConfigureAwait(false);
