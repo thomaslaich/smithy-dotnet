@@ -6,6 +6,6 @@ namespace Example.Types;
 
 public enum SpiceLevel
 {
-    HOT = 2,
-    MILD = 1,
+    Hot = 2,
+    Mild = 1,
 }

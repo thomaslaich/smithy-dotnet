@@ -11,6 +11,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **Enum members are Pascal case.** String and int enum members follow .NET naming in C# and F#:
+  `QUEUED` becomes `Queued` and `IN_PROGRESS` becomes `InProgress`, while wire values stay as
+  modeled. Two members of one enum that would get the same name fail generation. **Breaking:**
+  code that refers to enum members by their old names must use the new ones.
+
 ## [0.21.0]
 
 F# handlers return modeled errors as a `Result` of record errors, and servers choose handler

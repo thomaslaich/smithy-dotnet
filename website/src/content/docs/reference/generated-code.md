@@ -12,6 +12,7 @@ the generator emits:
 | --- | --- |
 | Structures, including inline operation inputs and outputs | Records such as `GetCityInput`, `GetCityOutput`, and `CityCoordinates` |
 | `@error` structures | Exceptions such as `NoSuchResource`, thrown by handlers and caught by clients |
+| Enums and int enums | A record struct and a C# enum, with members in Pascal case: `IN_PROGRESS` becomes `InProgress`, and the wire value stays as modeled |
 | Lists and maps | `IReadOnlyList<T>` and `IReadOnlyDictionary<string, T>` where they are used, with no class for the list or map shape itself |
 | The service, when `SmithyGenerateServer` is on | A handler interface `IWeatherHandler` composed of one interface per operation, plus `AddWeatherHandler` and `MapWeather` extensions for ASP.NET Core |
 | The service, when `SmithyGenerateClient` is on | A `WeatherClient` with a typed async method per operation |

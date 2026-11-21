@@ -37,7 +37,9 @@ structures.
 
 Smithy string enums are generated as a C# `readonly record struct` wrapping a
 `string`. The known values are exposed as `public static readonly` constants on
-the type.
+the type. Member names are Pascal case: a word in capitals keeps only its first
+capital, so `IN_PROGRESS` becomes `InProgress`. Two members that would get the
+same name fail generation.
 
 Using a record struct rather than a `System.Enum` subclass preserves forward
 compatibility: an API response can carry an unknown enum value and the client

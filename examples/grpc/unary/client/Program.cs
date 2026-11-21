@@ -61,8 +61,8 @@ var newBook = NewBook(
     author: "Eric Evans",
     pageCount: 560,
     checksum: unchecked((long)0xABCDEF1234567890UL),
-    format: BookFormat.HARDCOVER,
-    category: BookCategory.SCIENCE,
+    format: BookFormat.Hardcover,
+    category: BookCategory.Science,
     tags: ["ddd", "architecture", "software design"],
     metadata: new Dictionary<string, string> { ["publisher"] = "Addison-Wesley" },
     nullableAttributes: new Dictionary<string, string?>
@@ -78,7 +78,7 @@ Console.WriteLine();
 
 Console.WriteLine("=== ListBooks (@protoInlinedOneOf filter — by category) ===");
 var listResult = await client.ListBooksAsync(
-    new ListBooksInput(Filter: BookFilter.FromByCategory(BookCategory.SCIENCE), PageSize: 10)
+    new ListBooksInput(Filter: BookFilter.FromByCategory(BookCategory.Science), PageSize: 10)
 );
 foreach (var book in listResult.Books)
     Console.WriteLine($"  {book.Title} by {book.Author}");
@@ -101,8 +101,8 @@ var uploadResult = await client.UploadBooksAsync(
             "Harold Abelson & Gerald Jay Sussman",
             657,
             0x51CA0ABE10B50101L,
-            BookFormat.EBOOK,
-            BookCategory.SCIENCE,
+            BookFormat.Ebook,
+            BookCategory.Science,
             ["sicp", "lisp", "computer science"],
             new Dictionary<string, string> { ["publisher"] = "MIT Press" },
             new Dictionary<string, string?>(),
@@ -114,8 +114,8 @@ var uploadResult = await client.UploadBooksAsync(
             "David Thomas & Andrew Hunt",
             352,
             unchecked((long)0xA9A7169A71CA9A71UL),
-            BookFormat.PAPERBACK,
-            BookCategory.SCIENCE,
+            BookFormat.Paperback,
+            BookCategory.Science,
             ["programming", "software engineering"],
             new Dictionary<string, string> { ["edition"] = "20th anniversary" },
             new Dictionary<string, string?>(),

@@ -141,8 +141,14 @@ public final class CSharpNaming {
    * {@code FromValue}, so a member with one of those names takes the collision suffix too.
    */
   public static String stringEnumValueName(MemberShape member) {
-    String name = memberName(member);
+    String name = intEnumValueName(member);
     return name.equals("Value") || name.equals("FromValue") ? name + COLLISION_SUFFIX : name;
+  }
+
+  /** An int enum value, in Pascal case like a string enum value. */
+  public static String intEnumValueName(MemberShape member) {
+    String name = escapeIfNeeded(avoidInheritedMember(Naming.enumValue(member.getMemberName())));
+    return name.equals(typeName(member.getContainer().getName())) ? name + COLLISION_SUFFIX : name;
   }
 
   /**

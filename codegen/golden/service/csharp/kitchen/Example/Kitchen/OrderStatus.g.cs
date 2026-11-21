@@ -14,8 +14,8 @@ public readonly partial record struct OrderStatus(string Value)
         return new OrderStatus(value);
     }
 
-    public static OrderStatus QUEUED { get; } = new("QUEUED");
-    public static OrderStatus SERVED { get; } = new("SERVED");
+    public static OrderStatus Queued { get; } = new("QUEUED");
+    public static OrderStatus Served { get; } = new("SERVED");
 
     public override string ToString()
     {

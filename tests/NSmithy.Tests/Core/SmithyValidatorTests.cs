@@ -237,7 +237,7 @@ public sealed class SmithyValidatorTests
     {
         var validator = SmithyValidator.FromSchema(ColourSchema.Schema)!;
 
-        Assert.Empty(validator.GetErrors(Colour.RED));
+        Assert.Empty(validator.GetErrors(Colour.Red));
         var error = Assert.Single(validator.GetErrors(new Colour("MAUVE")));
         Assert.Equal(new ShapeId("smithy.api", "enum"), error.ConstraintId);
     }

@@ -113,8 +113,8 @@ public sealed class SchemaTests
 
         Assert.Equal(ShapeId.Parse("nsmithy.tests.core#Status"), statusSchema.Id);
         Assert.Equal(ShapeKind.Enum, statusSchema.Kind);
-        Assert.Equal("ACTIVE", ((IStringEnumValue)Status.ACTIVE).Value);
-        Assert.Equal(Status.INACTIVE, statusSchema.Create("INACTIVE"));
+        Assert.Equal("ACTIVE", ((IStringEnumValue)Status.Active).Value);
+        Assert.Equal(Status.Inactive, statusSchema.Create("INACTIVE"));
     }
 
     private sealed class BuilderTypeVisitor : IStructSchemaVisitor<VisitorInput, Type>

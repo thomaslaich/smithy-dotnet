@@ -14,8 +14,8 @@ public readonly partial record struct Allergen(string Value)
         return new Allergen(value);
     }
 
-    public static Allergen GLUTEN { get; } = new("gluten");
-    public static Allergen NUTS { get; } = new("nuts");
+    public static Allergen Gluten { get; } = new("gluten");
+    public static Allergen Nuts { get; } = new("nuts");
 
     public override string ToString()
     {

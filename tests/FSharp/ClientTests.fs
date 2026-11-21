@@ -44,7 +44,7 @@ let private order =
       ClientToken = None
       Dish =
         { Name = "pizza"
-          Ingredients = [ Ingredient.CHEESE ]
+          Ingredients = [ Ingredient.Cheese ]
           Sides = None
           Price = 9.5f
           Spice = None
@@ -58,7 +58,7 @@ let private order =
           Type = None
           ToStringValue = None }
       Notes = None
-      Seating = Seating.BAR
+      Seating = Seating.Bar
       Guests = 2
       Tip = None }
 
@@ -117,7 +117,7 @@ let ``A modeled error is returned as its case`` () : Task =
 
         match result with
         | Error(OrderError.OutOfStock error) ->
-            Assert.Equal(Ingredient.CHEESE, error.Item)
+            Assert.Equal(Ingredient.Cheese, error.Item)
             Assert.Equal(Some "gone", error.Message)
         | other -> failwith $"Unexpected result: {other}"
     }

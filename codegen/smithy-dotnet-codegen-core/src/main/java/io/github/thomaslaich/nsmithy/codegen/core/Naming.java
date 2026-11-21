@@ -55,4 +55,17 @@ public final class Naming {
     }
     return Character.toLowerCase(p.charAt(0)) + p.substring(1);
   }
+
+  /**
+   * An enum member name in Pascal case: like {@link #pascal}, but a word written in capitals keeps
+   * only its first capital, so {@code IN_PROGRESS} becomes {@code InProgress}.
+   */
+  public static String enumValue(String value) {
+    StringBuilder sb = new StringBuilder(value.length());
+    for (String word : value.split("[^\\p{L}\\p{N}]+")) {
+      boolean capitals = word.codePoints().noneMatch(Character::isLowerCase);
+      sb.append(capitals ? word.toLowerCase(java.util.Locale.ROOT) : word).append(' ');
+    }
+    return pascal(sb.toString());
+  }
 }

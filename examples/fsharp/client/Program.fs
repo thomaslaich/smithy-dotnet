@@ -21,7 +21,7 @@ let run (endpoint: string) =
             client.AddBookAsync
                 { Title = Some "Dune"
                   Author = Some "Frank Herbert"
-                  Genre = Some Genre.FICTION
+                  Genre = Some Genre.Fiction
                   Pages = Some 412 }
 
         let dune =
@@ -33,7 +33,7 @@ let run (endpoint: string) =
             client.AddBookAsync
                 { Title = Some "A Brief History of Time"
                   Author = Some "Stephen Hawking"
-                  Genre = Some Genre.SCIENCE
+                  Genre = Some Genre.Science
                   Pages = None }
 
         match!
@@ -49,7 +49,7 @@ let run (endpoint: string) =
         | Ok shelf -> printfn "On the shelf: %d books" shelf.Books.Length
         | Error(ListBooksError.ValidationException error) -> printfn "Rejected: %s" error.Message
 
-        match! client.ListBooksAsync { Genre = Some Genre.FICTION } with
+        match! client.ListBooksAsync { Genre = Some Genre.Fiction } with
         | Ok fiction ->
             printfn "Fiction:"
 
@@ -78,7 +78,7 @@ let run (endpoint: string) =
             client.AddBookAsync
                 { Title = Some ""
                   Author = Some "Nobody"
-                  Genre = Some Genre.HISTORY
+                  Genre = Some Genre.History
                   Pages = Some 0 }
         with
         | Ok added -> printfn "Added: %s" (describe added.Book)

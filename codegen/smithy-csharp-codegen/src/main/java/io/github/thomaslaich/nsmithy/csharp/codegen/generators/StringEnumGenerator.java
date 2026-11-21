@@ -57,6 +57,7 @@ public final class StringEnumGenerator implements Runnable {
   }
 
   private void writeVariants(String typeName) {
+    ShapeSupport.requireDistinctEnumNames(shape, CSharpNaming::stringEnumValueName);
     for (MemberShape member : ShapeSupport.sortedMembers(shape)) {
       String property = CSharpNaming.stringEnumValueName(member);
       String value =

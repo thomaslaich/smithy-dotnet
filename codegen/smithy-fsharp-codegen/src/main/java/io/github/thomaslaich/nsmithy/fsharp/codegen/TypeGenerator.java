@@ -173,13 +173,14 @@ final class TypeGenerator {
   }
 
   void stringEnum(EnumShape shape) {
+    ShapeSupport.requireDistinctEnumNames(shape, FSharpNaming::enumCaseName);
     Map<String, String> enumValues = shape.getEnumValues();
     List<String> cases = new ArrayList<>();
     Map<String, String> values = new LinkedHashMap<>();
     for (MemberShape member : shape.members()) {
-      cases.add(documented(member, "| " + FSharpNaming.caseName(member)));
+      cases.add(documented(member, "| " + FSharpNaming.enumCaseName(member)));
       values.put(
-          FSharpNaming.caseName(member),
+          FSharpNaming.enumCaseName(member),
           FSharpNaming.stringLiteral(enumValues.get(member.getMemberName())));
     }
     context
@@ -232,6 +233,7 @@ final class TypeGenerator {
   }
 
   void intEnum(IntEnumShape shape) {
+    ShapeSupport.requireDistinctEnumNames(shape, FSharpNaming::intEnumValueName);
     Map<String, Integer> values = shape.getEnumValues();
     List<String> cases = new ArrayList<>();
     for (MemberShape member : shape.members()) {

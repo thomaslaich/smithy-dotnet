@@ -17,20 +17,20 @@ public sealed class GeneratedWaiterTests
     {
         var client = new ScriptedClient(
             new ResourceNotFoundException(),
-            Table(TableStatus.CREATING),
-            Table(TableStatus.ACTIVE)
+            Table(TableStatus.Creating),
+            Table(TableStatus.Active)
         );
 
         var result = await client.WaitUntilTableExistsAsync(Input, Options());
 
-        Assert.Equal(TableStatus.ACTIVE, result.Output?.Table?.TableStatus);
+        Assert.Equal(TableStatus.Active, result.Output?.Table?.TableStatus);
         Assert.Equal(3, result.Attempts);
     }
 
     [Fact]
     public async Task TableExistsFailsWhenTheTableFails()
     {
-        var client = new ScriptedClient(Table(TableStatus.CREATING), Table(TableStatus.FAILED));
+        var client = new ScriptedClient(Table(TableStatus.Creating), Table(TableStatus.Failed));
 
         var error = await Assert.ThrowsAsync<SmithyWaiterFailureException>(() =>
             client.WaitUntilTableExistsAsync(Input, Options())
@@ -45,9 +45,9 @@ public sealed class GeneratedWaiterTests
     {
         var time = new InstantTimeProvider();
         var client = new ScriptedClient(
-            Table(TableStatus.CREATING),
-            Table(TableStatus.CREATING),
-            Table(TableStatus.ACTIVE)
+            Table(TableStatus.Creating),
+            Table(TableStatus.Creating),
+            Table(TableStatus.Active)
         );
 
         await client.WaitUntilTableExistsAsync(
@@ -63,7 +63,7 @@ public sealed class GeneratedWaiterTests
     [Fact]
     public async Task TableNotExistsSucceedsOnTheModeledError()
     {
-        var client = new ScriptedClient(Table(TableStatus.ACTIVE), new ResourceNotFoundException());
+        var client = new ScriptedClient(Table(TableStatus.Active), new ResourceNotFoundException());
 
         var result = await client.WaitUntilTableNotExistsAsync(Input, Options());
 
@@ -75,7 +75,7 @@ public sealed class GeneratedWaiterTests
     public async Task AnUnmodeledErrorMatchesByItsErrorCode()
     {
         var client = new ScriptedClient(
-            Table(TableStatus.ACTIVE),
+            Table(TableStatus.Active),
             new SmithyClientException(HttpStatusCode.BadRequest, null, "Table.Gone")
         );
 
@@ -102,8 +102,8 @@ public sealed class GeneratedWaiterTests
     {
         var client = new ScriptedClient(
             Replicas(),
-            Replicas(TableStatus.ACTIVE, TableStatus.CREATING),
-            Replicas(TableStatus.ACTIVE, TableStatus.ACTIVE)
+            Replicas(TableStatus.Active, TableStatus.Creating),
+            Replicas(TableStatus.Active, TableStatus.Active)
         );
 
         var result = await client.WaitUntilReplicasActiveAsync(Input, Options());
@@ -114,7 +114,7 @@ public sealed class GeneratedWaiterTests
     [Fact]
     public async Task AnyStringEqualsMatchesASingleItem()
     {
-        var client = new ScriptedClient(Replicas(TableStatus.ACTIVE, TableStatus.FAILED));
+        var client = new ScriptedClient(Replicas(TableStatus.Active, TableStatus.Failed));
 
         await Assert.ThrowsAsync<SmithyWaiterFailureException>(() =>
             client.WaitUntilReplicasActiveAsync(Input, Options())
@@ -126,8 +126,8 @@ public sealed class GeneratedWaiterTests
     {
         var client = new ScriptedClient(
             Replicas(),
-            Replicas(TableStatus.ACTIVE, TableStatus.CREATING),
-            Replicas(TableStatus.ACTIVE, TableStatus.ACTIVE)
+            Replicas(TableStatus.Active, TableStatus.Creating),
+            Replicas(TableStatus.Active, TableStatus.Active)
         );
 
         var result = await client.WaitUntilReplicasFilledAsync(Input, Options());
@@ -152,9 +152,9 @@ public sealed class GeneratedWaiterTests
     public async Task AndOfComparisons()
     {
         var client = new ScriptedClient(
-            Table(TableStatus.CREATING),
-            Table(TableStatus.UPDATING),
-            Table(TableStatus.ACTIVE)
+            Table(TableStatus.Creating),
+            Table(TableStatus.Updating),
+            Table(TableStatus.Active)
         );
 
         var result = await client.WaitUntilSettledAsync(Input, Options());
@@ -178,7 +178,7 @@ public sealed class GeneratedWaiterTests
     [Fact]
     public async Task ObjectProjectionsOverMapValues()
     {
-        var client = new ScriptedClient(Settings(Mode.SLOW), Settings(Mode.SLOW, Mode.FAST));
+        var client = new ScriptedClient(Settings(Mode.Slow), Settings(Mode.Slow, Mode.Fast));
 
         var result = await client.WaitUntilSettingsFastAsync(Input, Options());
 
@@ -193,7 +193,7 @@ public sealed class GeneratedWaiterTests
                 new TableDescription(
                     Settings: new Dictionary<string, Setting>
                     {
-                        ["primary"] = new(Mode.SLOW, Tier: "GOLD"),
+                        ["primary"] = new(Mode.Slow, Tier: "GOLD"),
                     }
                 )
             )
@@ -221,7 +221,7 @@ public sealed class GeneratedWaiterTests
     public async Task TheMaxWaitTimeOverloadTimesOut()
     {
         var client = new ScriptedClient(
-            Enumerable.Repeat<object>(Table(TableStatus.CREATING), 10).ToArray()
+            Enumerable.Repeat<object>(Table(TableStatus.Creating), 10).ToArray()
         );
 
         // TableExists waits at least a second between attempts, so a waiter given less than its

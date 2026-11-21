@@ -5,9 +5,9 @@ open Xunit
 
 [<Fact>]
 let ``A string enum maps a value it does not define to Unknown`` () =
-    Assert.Equal(Ingredient.CHEESE, Ingredient.FromValue "cheese")
+    Assert.Equal(Ingredient.Cheese, Ingredient.FromValue "cheese")
     Assert.Equal(Ingredient.Unknown "pineapple", Ingredient.FromValue "pineapple")
-    Assert.Equal("secret", Ingredient.SECRETSAUCE.Value)
+    Assert.Equal("secret", Ingredient.SecretSauce.Value)
 
 [<Fact>]
 let ``Members whose names clash with generated or inherited names take a suffix`` () =
@@ -16,7 +16,7 @@ let ``Members whose names clash with generated or inherited names take a suffix`
 
 let private outOfStock: OutOfStock =
     { Message = Some "gone"
-      Item = Ingredient.BACON
+      Item = Ingredient.Bacon
       RestockDays = 5
       Data = Some "d" }
 

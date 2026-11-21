@@ -155,7 +155,7 @@ public sealed class RestJson1ProtocolTests
     public void RestJson1ProtocolRoundTripsStringEnumHeaderListWithQuotedComma()
     {
         var operation = EnumHeaderListSchema.Schema;
-        var input = new EnumHeaderListInput([HeaderStatus.ACTIVEBLUE, HeaderStatus.PENDING]);
+        var input = new EnumHeaderListInput([HeaderStatus.ActiveBlue, HeaderStatus.Pending]);
 
         var request = Protocol(operation).SerializeRequest(input);
         var decoded = Protocol(operation).DeserializeRequest(request);

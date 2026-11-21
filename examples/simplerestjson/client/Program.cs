@@ -28,9 +28,9 @@ var added = await client.AddMenuItemAsync(
         new MenuItem(
             Food.FromPizza(
                 new Pizza(
-                    PizzaBase.TOMATO,
+                    PizzaBase.Tomato,
                     "Hawaii",
-                    [Ingredient.TOMATO, Ingredient.CHEESE, Ingredient.PINEAPPLE]
+                    [Ingredient.Tomato, Ingredient.Cheese, Ingredient.Pineapple]
                 )
             ),
             12.50f
