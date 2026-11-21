@@ -3,9 +3,9 @@
   "sources": ["model"],
   "maven": {
     "dependencies": [
-      "software.amazon.smithy:smithy-validation-model:1.74.1",
-      "software.amazon.smithy:smithy-aws-traits:1.74.1",
-      "software.amazon.smithy:smithy-protocol-traits:1.74.1",
+      "software.amazon.smithy:smithy-validation-model:1.75.0",
+      "software.amazon.smithy:smithy-aws-traits:1.75.0",
+      "software.amazon.smithy:smithy-protocol-traits:1.75.0",
       "com.disneystreaming.alloy:alloy-core:0.3.40",
       "software.amazon.smithy.java:smithy-ai-traits:1.8.0"
     ]

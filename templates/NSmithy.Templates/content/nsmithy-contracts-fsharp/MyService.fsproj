@@ -12,7 +12,7 @@
     <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
     <!--#if (UseSmithyCliPackage)-->
     <!-- The Smithy CLI that code generation runs. Leave it out to use your own (SmithyCliPath or PATH). -->
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.75.0" />
     <!--#endif-->
   </ItemGroup>
 

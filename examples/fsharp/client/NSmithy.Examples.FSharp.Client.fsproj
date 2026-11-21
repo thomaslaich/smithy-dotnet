@@ -18,7 +18,7 @@
     <PackageReference Include="FSharp.Core" Version="10.1.403" />
     <PackageReference Include="NSmithy.Client" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.0.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.SmithyCli" Version="1.74.1" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.75.0" />
     <ProjectReference Include="../contracts/NSmithy.Examples.FSharp.Contracts.csproj" />
   </ItemGroup>
 </Project>

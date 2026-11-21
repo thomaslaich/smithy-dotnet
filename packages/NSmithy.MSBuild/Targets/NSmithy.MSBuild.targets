@@ -33,7 +33,7 @@
   <PropertyGroup>
     <!-- The Smithy version NSmithy is built against. Code generation checks the Smithy CLI's
          version against it (see SmithyCliVersionCheck). -->
-    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.74.1</SmithyVersion>
+    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.75.0</SmithyVersion>
     <!-- The version of NSmithy's plugin artifacts in the effective smithy-build.json. -->
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''"
       >0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion>
