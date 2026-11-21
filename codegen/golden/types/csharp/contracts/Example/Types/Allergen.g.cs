@@ -6,8 +6,7 @@ using NSmithy.Core.Serde;
 
 namespace Example.Types;
 
-public readonly partial record struct Allergen(string Value)
-    : IStringEnumValue<Allergen>
+public readonly partial record struct Allergen(string Value) : IStringEnumValue<Allergen>
 {
     public static Allergen FromValue(string value)
     {

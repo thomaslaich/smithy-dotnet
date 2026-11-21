@@ -3,27 +3,14 @@
 
 namespace rec Acme.Shop
 
-type Money =
-    {
-        Amount: decimal
-        Currency: string
-    }
+type Money = { Amount: decimal; Currency: string }
 
 [<RequireQualifiedAccess>]
-type OutOfStock =
-    {
-        Item: string
-    }
+type OutOfStock = { Item: string }
 
-type PlaceOrderInput =
-    {
-        Total: global.Acme.Shop.Money
-    }
+type PlaceOrderInput = { Total: global.Acme.Shop.Money }
 
-type PlaceOrderOutput =
-    {
-        OrderId: string
-    }
+type PlaceOrderOutput = { OrderId: string }
 
 namespace rec Acme.Shop.Exceptions
 

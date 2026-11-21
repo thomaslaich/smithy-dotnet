@@ -9,5 +9,8 @@ namespace Example.Kitchen;
 
 public interface IGetOrderHandler
 {
-    Task<GetOrderOutput> GetOrderAsync(GetOrderInput input, CancellationToken cancellationToken = default);
+    Task<GetOrderOutput> GetOrderAsync(
+        GetOrderInput input,
+        CancellationToken cancellationToken = default
+    );
 }

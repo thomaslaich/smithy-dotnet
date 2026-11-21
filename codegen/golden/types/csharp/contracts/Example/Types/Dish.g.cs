@@ -13,4 +13,15 @@ namespace Example.Types;
 /// <param name="Description">
 /// Shown under the name.
 /// </param>
-public sealed record class Dish(string Name, global::Example.Types.Price Price, DateTimeOffset? AddedAt = null, IReadOnlyList<Allergen>? Allergens = null, global::Example.Types.Course? Course = null, string? Description = null, byte[]? Photo = null, int? Portions = null, SpiceLevel? Spice = null, IReadOnlyDictionary<string, string?>? Tags = null);
+public sealed record class Dish(
+    string Name,
+    global::Example.Types.Price Price,
+    DateTimeOffset? AddedAt = null,
+    IReadOnlyList<Allergen>? Allergens = null,
+    global::Example.Types.Course? Course = null,
+    string? Description = null,
+    byte[]? Photo = null,
+    int? Portions = null,
+    SpiceLevel? Spice = null,
+    IReadOnlyDictionary<string, string?>? Tags = null
+);

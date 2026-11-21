@@ -9,108 +9,283 @@ type MoneyBuilder() =
     member val Currency: string voption = ValueNone with get, set
 
 type internal MoneySchemaImpl() =
-    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.Money, MoneyBuilder>(
-        global.NSmithy.Core.ShapeId.Parse("acme.shop#Money"),
-        [|
-            global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.Money, MoneyBuilder, decimal>(global.NSmithy.Core.Serde.MemberSchema("amount", MoneySchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), MoneySchemaImpl.Target0, (fun (value: global.Acme.Shop.Money) -> value.Amount), (fun (builder: MoneyBuilder) value -> builder.Amount <- ValueSome value))
-            global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.Money, MoneyBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("currency", MoneySchemaImpl.Target1, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), MoneySchemaImpl.Target1, (fun (value: global.Acme.Shop.Money) -> value.Currency), (fun (builder: MoneyBuilder) value -> builder.Currency <- ValueSome value))
-        |])
+    inherit
+        global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.Money, MoneyBuilder>(
+            global.NSmithy.Core.ShapeId.Parse("acme.shop#Money"),
+            [| global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.Money, MoneyBuilder, decimal>(
+                   global.NSmithy.Core.Serde.MemberSchema(
+                       "amount",
+                       MoneySchemaImpl.Target0,
+                       isRequired = true,
+                       traits =
+                           [| global.NSmithy.Core.Trait(
+                                  global.NSmithy.Core.ShapeId.Parse("smithy.api#required"),
+                                  global.NSmithy.Core.Document.From(
+                                      global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                                  )
+                              ) |]
+                   ),
+                   MoneySchemaImpl.Target0,
+                   (fun (value: global.Acme.Shop.Money) -> value.Amount),
+                   (fun (builder: MoneyBuilder) value -> builder.Amount <- ValueSome value)
+               )
+               global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.Money, MoneyBuilder, string>(
+                   global.NSmithy.Core.Serde.MemberSchema(
+                       "currency",
+                       MoneySchemaImpl.Target1,
+                       isRequired = true,
+                       traits =
+                           [| global.NSmithy.Core.Trait(
+                                  global.NSmithy.Core.ShapeId.Parse("smithy.api#required"),
+                                  global.NSmithy.Core.Document.From(
+                                      global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                                  )
+                              ) |]
+                   ),
+                   MoneySchemaImpl.Target1,
+                   (fun (value: global.Acme.Shop.Money) -> value.Currency),
+                   (fun (builder: MoneyBuilder) value -> builder.Currency <- ValueSome value)
+               ) |]
+        )
+
     static member val Target0: global.NSmithy.Core.Serde.Schema<decimal> = global.NSmithy.Core.Serde.Schemas.BigDecimal
     static member val Target1: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = MoneyBuilder()
+
     override _.Build(builder) : global.Acme.Shop.Money =
-        {
-            Amount = (match builder.Amount with ValueSome value -> value | ValueNone -> global.Microsoft.FSharp.Core.Operators.Unchecked.defaultof<_>)
-            Currency = (match builder.Currency with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("currency")))
-        }
+        { Amount =
+            (match builder.Amount with
+             | ValueSome value -> value
+             | ValueNone -> global.Microsoft.FSharp.Core.Operators.Unchecked.defaultof<_>)
+          Currency =
+            (match builder.Currency with
+             | ValueSome value -> value
+             | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("currency"))) }
 
 [<AbstractClass; Sealed>]
 type MoneySchema =
-    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.Money, MoneyBuilder> = MoneySchemaImpl()
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.Money, MoneyBuilder> =
+        MoneySchemaImpl()
 
 type OutOfStockBuilder() =
     inherit global.NSmithy.Core.Serde.StructBuilder()
     member val Item: string voption = ValueNone with get, set
 
 type internal OutOfStockSchemaImpl() =
-    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.OutOfStock, OutOfStockBuilder>(
-        global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"),
-        [|
-            global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.OutOfStock, OutOfStockBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("item", OutOfStockSchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), OutOfStockSchemaImpl.Target0, (fun (value: global.Acme.Shop.OutOfStock) -> value.Item), (fun (builder: OutOfStockBuilder) value -> builder.Item <- ValueSome value))
-        |],
-        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(409M)) |])
+    inherit
+        global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.OutOfStock, OutOfStockBuilder>(
+            global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"),
+            [| global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.OutOfStock, OutOfStockBuilder, string>(
+                   global.NSmithy.Core.Serde.MemberSchema(
+                       "item",
+                       OutOfStockSchemaImpl.Target0,
+                       isRequired = true,
+                       traits =
+                           [| global.NSmithy.Core.Trait(
+                                  global.NSmithy.Core.ShapeId.Parse("smithy.api#required"),
+                                  global.NSmithy.Core.Document.From(
+                                      global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                                  )
+                              ) |]
+                   ),
+                   OutOfStockSchemaImpl.Target0,
+                   (fun (value: global.Acme.Shop.OutOfStock) -> value.Item),
+                   (fun (builder: OutOfStockBuilder) value -> builder.Item <- ValueSome value)
+               ) |],
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#error"),
+                       global.NSmithy.Core.Document.From("client")
+                   )
+                   global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"),
+                       global.NSmithy.Core.Document.From(409M)
+                   ) |]
+        )
+
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = OutOfStockBuilder()
+
     override _.Build(builder) : global.Acme.Shop.OutOfStock =
-        {
-            Item = (match builder.Item with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("item")))
-        }
+        { Item =
+            (match builder.Item with
+             | ValueSome value -> value
+             | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("item"))) }
 
 [<AbstractClass; Sealed>]
 type OutOfStockSchema =
-    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.OutOfStock, OutOfStockBuilder> = OutOfStockSchemaImpl()
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.OutOfStock, OutOfStockBuilder> =
+        OutOfStockSchemaImpl()
 
 type PlaceOrderInputBuilder() =
     inherit global.NSmithy.Core.Serde.StructBuilder()
     member val Total: global.Acme.Shop.Money voption = ValueNone with get, set
 
 type internal PlaceOrderInputSchemaImpl() =
-    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.PlaceOrderInput, PlaceOrderInputBuilder>(
-        global.NSmithy.Core.ShapeId.Parse("acme.shop#PlaceOrderInput"),
-        [|
-            global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.PlaceOrderInput, PlaceOrderInputBuilder, global.Acme.Shop.Money>(global.NSmithy.Core.Serde.MemberSchema("total", PlaceOrderInputSchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), PlaceOrderInputSchemaImpl.Target0, (fun (value: global.Acme.Shop.PlaceOrderInput) -> value.Total), (fun (builder: PlaceOrderInputBuilder) value -> builder.Total <- ValueSome value))
-        |],
-        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#input"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
-    static member val Target0: global.NSmithy.Core.Serde.Schema<global.Acme.Shop.Money> = global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.Money>(fun () -> global.Acme.Shop.Schemas.MoneySchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.Money>)
+    inherit
+        global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.PlaceOrderInput, PlaceOrderInputBuilder>(
+            global.NSmithy.Core.ShapeId.Parse("acme.shop#PlaceOrderInput"),
+            [| global.NSmithy.Core.Serde.StructMember.Create<
+                   global.Acme.Shop.PlaceOrderInput,
+                   PlaceOrderInputBuilder,
+                   global.Acme.Shop.Money
+                >(
+                   global.NSmithy.Core.Serde.MemberSchema(
+                       "total",
+                       PlaceOrderInputSchemaImpl.Target0,
+                       isRequired = true,
+                       traits =
+                           [| global.NSmithy.Core.Trait(
+                                  global.NSmithy.Core.ShapeId.Parse("smithy.api#required"),
+                                  global.NSmithy.Core.Document.From(
+                                      global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                                  )
+                              ) |]
+                   ),
+                   PlaceOrderInputSchemaImpl.Target0,
+                   (fun (value: global.Acme.Shop.PlaceOrderInput) -> value.Total),
+                   (fun (builder: PlaceOrderInputBuilder) value -> builder.Total <- ValueSome value)
+               ) |],
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#input"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                       )
+                   ) |]
+        )
+
+    static member val Target0: global.NSmithy.Core.Serde.Schema<global.Acme.Shop.Money> =
+        global.NSmithy.Core.Serde.Schemas.Lazy<global.Acme.Shop.Money>(fun () ->
+            global.Acme.Shop.Schemas.MoneySchema.Schema :> global.NSmithy.Core.Serde.Schema<global.Acme.Shop.Money>)
+
     override _.CreateTypedBuilder() = PlaceOrderInputBuilder()
+
     override _.Build(builder) : global.Acme.Shop.PlaceOrderInput =
-        {
-            Total = (match builder.Total with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("total")))
-        }
+        { Total =
+            (match builder.Total with
+             | ValueSome value -> value
+             | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("total"))) }
 
 [<AbstractClass; Sealed>]
 type PlaceOrderInputSchema =
-    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.PlaceOrderInput, PlaceOrderInputBuilder> = PlaceOrderInputSchemaImpl()
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<
+        global.Acme.Shop.PlaceOrderInput,
+        PlaceOrderInputBuilder
+     > = PlaceOrderInputSchemaImpl()
 
 type PlaceOrderOutputBuilder() =
     inherit global.NSmithy.Core.Serde.StructBuilder()
     member val OrderId: string voption = ValueNone with get, set
 
 type internal PlaceOrderOutputSchemaImpl() =
-    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.PlaceOrderOutput, PlaceOrderOutputBuilder>(
-        global.NSmithy.Core.ShapeId.Parse("acme.shop#PlaceOrderOutput"),
-        [|
-            global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.PlaceOrderOutput, PlaceOrderOutputBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("orderId", PlaceOrderOutputSchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), PlaceOrderOutputSchemaImpl.Target0, (fun (value: global.Acme.Shop.PlaceOrderOutput) -> value.OrderId), (fun (builder: PlaceOrderOutputBuilder) value -> builder.OrderId <- ValueSome value))
-        |],
-        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#output"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |])
+    inherit
+        global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.PlaceOrderOutput, PlaceOrderOutputBuilder>(
+            global.NSmithy.Core.ShapeId.Parse("acme.shop#PlaceOrderOutput"),
+            [| global.NSmithy.Core.Serde.StructMember.Create<
+                   global.Acme.Shop.PlaceOrderOutput,
+                   PlaceOrderOutputBuilder,
+                   string
+                >(
+                   global.NSmithy.Core.Serde.MemberSchema(
+                       "orderId",
+                       PlaceOrderOutputSchemaImpl.Target0,
+                       isRequired = true,
+                       traits =
+                           [| global.NSmithy.Core.Trait(
+                                  global.NSmithy.Core.ShapeId.Parse("smithy.api#required"),
+                                  global.NSmithy.Core.Document.From(
+                                      global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                                  )
+                              ) |]
+                   ),
+                   PlaceOrderOutputSchemaImpl.Target0,
+                   (fun (value: global.Acme.Shop.PlaceOrderOutput) -> value.OrderId),
+                   (fun (builder: PlaceOrderOutputBuilder) value -> builder.OrderId <- ValueSome value)
+               ) |],
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#output"),
+                       global.NSmithy.Core.Document.From(
+                           global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                       )
+                   ) |]
+        )
+
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
     override _.CreateTypedBuilder() = PlaceOrderOutputBuilder()
+
     override _.Build(builder) : global.Acme.Shop.PlaceOrderOutput =
-        {
-            OrderId = (match builder.OrderId with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("orderId")))
-        }
+        { OrderId =
+            (match builder.OrderId with
+             | ValueSome value -> value
+             | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("orderId"))) }
 
 [<AbstractClass; Sealed>]
 type PlaceOrderOutputSchema =
-    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.PlaceOrderOutput, PlaceOrderOutputBuilder> = PlaceOrderOutputSchemaImpl()
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<
+        global.Acme.Shop.PlaceOrderOutput,
+        PlaceOrderOutputBuilder
+     > = PlaceOrderOutputSchemaImpl()
 
 namespace rec Acme.Shop.Exceptions.Schemas
 
 type internal OutOfStockSchemaImpl() =
-    inherit global.NSmithy.Core.Serde.AccessorStructSchema<global.Acme.Shop.Exceptions.OutOfStock, global.Acme.Shop.Schemas.OutOfStockBuilder>(
-        global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"),
-        [|
-            global.NSmithy.Core.Serde.StructMember.Create<global.Acme.Shop.Exceptions.OutOfStock, global.Acme.Shop.Schemas.OutOfStockBuilder, string>(global.NSmithy.Core.Serde.MemberSchema("item", OutOfStockSchemaImpl.Target0, isRequired = true, traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#required"), global.NSmithy.Core.Document.From(global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>())) |]), OutOfStockSchemaImpl.Target0, (fun (value: global.Acme.Shop.Exceptions.OutOfStock) -> value.Error.Item), (fun (builder: global.Acme.Shop.Schemas.OutOfStockBuilder) value -> builder.Item <- ValueSome value))
-        |],
-        traits = [| global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#error"), global.NSmithy.Core.Document.From("client")); global.NSmithy.Core.Trait(global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"), global.NSmithy.Core.Document.From(409M)) |])
+    inherit
+        global.NSmithy.Core.Serde.AccessorStructSchema<
+            global.Acme.Shop.Exceptions.OutOfStock,
+            global.Acme.Shop.Schemas.OutOfStockBuilder
+         >(
+            global.NSmithy.Core.ShapeId.Parse("acme.shop#OutOfStock"),
+            [| global.NSmithy.Core.Serde.StructMember.Create<
+                   global.Acme.Shop.Exceptions.OutOfStock,
+                   global.Acme.Shop.Schemas.OutOfStockBuilder,
+                   string
+                >(
+                   global.NSmithy.Core.Serde.MemberSchema(
+                       "item",
+                       OutOfStockSchemaImpl.Target0,
+                       isRequired = true,
+                       traits =
+                           [| global.NSmithy.Core.Trait(
+                                  global.NSmithy.Core.ShapeId.Parse("smithy.api#required"),
+                                  global.NSmithy.Core.Document.From(
+                                      global.System.Collections.Generic.Dictionary<string, global.NSmithy.Core.Document>()
+                                  )
+                              ) |]
+                   ),
+                   OutOfStockSchemaImpl.Target0,
+                   (fun (value: global.Acme.Shop.Exceptions.OutOfStock) -> value.Error.Item),
+                   (fun (builder: global.Acme.Shop.Schemas.OutOfStockBuilder) value -> builder.Item <- ValueSome value)
+               ) |],
+            traits =
+                [| global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#error"),
+                       global.NSmithy.Core.Document.From("client")
+                   )
+                   global.NSmithy.Core.Trait(
+                       global.NSmithy.Core.ShapeId.Parse("smithy.api#httpError"),
+                       global.NSmithy.Core.Document.From(409M)
+                   ) |]
+        )
+
     static member val Target0: global.NSmithy.Core.Serde.Schema<string> = global.NSmithy.Core.Serde.Schemas.String
-    override _.CreateTypedBuilder() = global.Acme.Shop.Schemas.OutOfStockBuilder()
+
+    override _.CreateTypedBuilder() =
+        global.Acme.Shop.Schemas.OutOfStockBuilder()
+
     override _.Build(builder) : global.Acme.Shop.Exceptions.OutOfStock =
         global.Acme.Shop.Exceptions.OutOfStock(
-            ({
-                Item = (match builder.Item with ValueSome value -> value | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("item")))
-            }: global.Acme.Shop.OutOfStock))
+            ({ Item =
+                (match builder.Item with
+                 | ValueSome value -> value
+                 | ValueNone -> raise (global.NSmithy.Core.Serde.MissingRequiredMemberException("item"))) }
+            : global.Acme.Shop.OutOfStock)
+        )
 
 [<AbstractClass; Sealed>]
 type OutOfStockSchema =
-    static member val Schema: global.NSmithy.Core.Serde.StructSchema<global.Acme.Shop.Exceptions.OutOfStock, global.Acme.Shop.Schemas.OutOfStockBuilder> = OutOfStockSchemaImpl()
+    static member val Schema: global.NSmithy.Core.Serde.StructSchema<
+        global.Acme.Shop.Exceptions.OutOfStock,
+        global.Acme.Shop.Schemas.OutOfStockBuilder
+     > = OutOfStockSchemaImpl()

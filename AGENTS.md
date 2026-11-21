@@ -90,8 +90,10 @@ stale or missing staged JAR produces confusing codegen errors.
 - **Golden codegen output.** `codegen/golden/<fixture>/` holds small models and
   the C# and F# the generators write for them, checked in so a pull request shows
   how generated code changes. `gradle test` fails when the output differs; after an
-  intended generator change, run `just golden` and commit the result. These files
-  are excluded from formatting, so they stay exactly what the generators emit.
+  intended generator change, run `just golden` and commit the result. The tests
+  format the output with the csharpier and Fantomas versions pinned in
+  `dotnet-tools.json` (run `dotnet tool restore` first), so the files are what users
+  get; treefmt leaves them alone.
 - **Conformance numbers** on the docs Protocol Status page come from the
   `ConformanceRateTests.ReportConformanceRate` test output in each
   `tests/Conformance/*` project; regenerate them from there rather than editing by

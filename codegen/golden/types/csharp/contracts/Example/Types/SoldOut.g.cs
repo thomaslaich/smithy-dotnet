@@ -14,10 +14,7 @@ public sealed partial class SoldOut : Exception
     /// <summary>
     /// The dish is sold out.
     /// </summary>
-    public SoldOut(
-        string? message,
-        string dish
-    )
+    public SoldOut(string? message, string dish)
         : base(message)
     {
         Dish = dish ?? throw new ArgumentNullException(nameof(dish));

@@ -20,12 +20,14 @@ public static partial class MainCourseSchema
     private sealed class GeneratedSchema()
         : StructSchema<global::Example.Types.MainCourse, Builder>(
             ShapeId.Parse("example.types#MainCourse"),
-            [
-                new("side", Target0),
-            ],
-            null)
+            [new("side", Target0)],
+            null
+        )
     {
-        private static readonly global::NSmithy.Core.Serde.Schema<string?> Target0 = global::NSmithy.Core.Serde.Schemas.NullableReference(global::NSmithy.Core.Serde.Schemas.String);
+        private static readonly global::NSmithy.Core.Serde.Schema<string?> Target0 =
+            global::NSmithy.Core.Serde.Schemas.NullableReference(
+                global::NSmithy.Core.Serde.Schemas.String
+            );
 
         public override Builder CreateTypedBuilder() => new();
 
@@ -34,7 +36,8 @@ public static partial class MainCourseSchema
 
         public override void SerializeMembers<TSerializer>(
             global::Example.Types.MainCourse value,
-            ref TSerializer serializer)
+            ref TSerializer serializer
+        )
         {
             if (value.Side is { } value0)
             {
@@ -49,7 +52,8 @@ public static partial class MainCourseSchema
         protected override void DeserializeMember<TDeserializer>(
             Builder builder,
             int index,
-            ref TDeserializer deserializer)
+            ref TDeserializer deserializer
+        )
         {
             switch (index)
             {

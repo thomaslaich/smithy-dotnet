@@ -15,5 +15,8 @@ public interface IPlaceOrderHandler
     /// <summary>
     /// Places an order.
     /// </summary>
-    Task<PlaceOrderOutput> PlaceOrderAsync(PlaceOrderInput input, CancellationToken cancellationToken = default);
+    Task<PlaceOrderOutput> PlaceOrderAsync(
+        PlaceOrderInput input,
+        CancellationToken cancellationToken = default
+    );
 }

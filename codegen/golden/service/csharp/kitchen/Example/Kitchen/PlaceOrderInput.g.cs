@@ -4,4 +4,9 @@
 
 namespace Example.Kitchen;
 
-public sealed record class PlaceOrderInput(string Dish, string Table, int? Portions = null, string? Token = null);
+public sealed record class PlaceOrderInput(
+    string Dish,
+    string Table,
+    int? Portions = null,
+    string? Token = null
+);

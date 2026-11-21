@@ -14,16 +14,19 @@ public static partial class CourseSchema
     private sealed class GeneratedSchema()
         : UnionSchema<global::Example.Types.Course>(
             ShapeId.Parse("example.types#Course"),
-            [
-                new("dessert", Target0),
-                new("main", Target1),
-                new("starter", Target2),
-            ],
-            null)
+            [new("dessert", Target0), new("main", Target1), new("starter", Target2)],
+            null
+        )
     {
-        private static readonly global::NSmithy.Core.Serde.Schema<string> Target0 = global::NSmithy.Core.Serde.Schemas.String;
-        private static readonly global::NSmithy.Core.Serde.Schema<global::Example.Types.MainCourse> Target1 = global::NSmithy.Core.Serde.Schemas.Lazy(() => MainCourseSchema.Schema!);
-        private static readonly global::NSmithy.Core.Serde.Schema<SmithyUnit> Target2 = global::NSmithy.Core.Serde.Schemas.Unit;
+        private static readonly global::NSmithy.Core.Serde.Schema<string> Target0 = global::NSmithy
+            .Core
+            .Serde
+            .Schemas
+            .String;
+        private static readonly global::NSmithy.Core.Serde.Schema<global::Example.Types.MainCourse> Target1 =
+            global::NSmithy.Core.Serde.Schemas.Lazy(() => MainCourseSchema.Schema!);
+        private static readonly global::NSmithy.Core.Serde.Schema<SmithyUnit> Target2 =
+            global::NSmithy.Core.Serde.Schemas.Unit;
 
         public override int CaseOf(global::Example.Types.Course value) =>
             value switch
@@ -36,7 +39,8 @@ public static partial class CourseSchema
 
         public override void SerializeCase<TSerializer>(
             global::Example.Types.Course value,
-            ref TSerializer serializer)
+            ref TSerializer serializer
+        )
         {
             switch (value)
             {
@@ -70,11 +74,14 @@ public static partial class CourseSchema
 
         public override global::Example.Types.Course DeserializeCase<TDeserializer>(
             int index,
-            ref TDeserializer deserializer) =>
+            ref TDeserializer deserializer
+        ) =>
             index switch
             {
                 0 => new global::Example.Types.Course.Dessert((deserializer.ReadString())!),
-                1 => new global::Example.Types.Course.Main((deserializer.ReadStruct(MainCourseSchema.Schema))!),
+                1 => new global::Example.Types.Course.Main(
+                    (deserializer.ReadStruct(MainCourseSchema.Schema))!
+                ),
                 2 => new global::Example.Types.Course.Starter((Target2.Read(ref deserializer))!),
                 _ => throw NoCaseMatched(),
             };

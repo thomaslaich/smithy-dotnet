@@ -9,8 +9,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 
 /**
- * The F# generator's output for each fixture. It calls the generator without the formatter the
- * plugin runs afterwards, which depends on what the machine has installed.
+ * The F# generator's output for each fixture, formatted with Fantomas like the plugin does.
  */
 class FSharpGoldenTest {
 
@@ -22,6 +21,7 @@ class FSharpGoldenTest {
         "fsharp",
         (model, settings, manifest) ->
             FSharpCodegenPlugin.generate(
-                model, FSharpSettings.fromNode(settings), manifest, integrations));
+                model, FSharpSettings.fromNode(settings), manifest, integrations),
+        dir -> List.of("fantomas", dir.toString()));
   }
 }

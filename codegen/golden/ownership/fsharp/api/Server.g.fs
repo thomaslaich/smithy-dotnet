@@ -25,28 +25,82 @@ type ShopServiceDefinition() =
         : global.System.Threading.Tasks.Task<'Output> =
         let complete result =
             match result with
-            | global.Microsoft.FSharp.Core.Result.Ok value -> global.System.Threading.Tasks.Task.FromResult(output value)
-            | global.Microsoft.FSharp.Core.Result.Error failure -> global.System.Threading.Tasks.Task.FromException<'Output>(error failure)
+            | global.Microsoft.FSharp.Core.Result.Ok value ->
+                global.System.Threading.Tasks.Task.FromResult(output value)
+            | global.Microsoft.FSharp.Core.Result.Error failure ->
+                global.System.Threading.Tasks.Task.FromException<'Output>(error failure)
 
         if pending.IsCompletedSuccessfully then
             complete pending.Result
         else
-            global.System.Threading.Tasks.TaskExtensions.Unwrap(task { let! result = pending in return complete result })
+            global.System.Threading.Tasks.TaskExtensions.Unwrap(
+                task {
+                    let! result = pending
+                    return complete result
+                }
+            )
 
     static let catalog =
         global.NSmithy.Server.ServiceOperationCatalog(
             global.Acme.Shop.Schemas.ShopSchema.Schema,
-            global.NSmithy.Server.ServerOperation.Create<global.Acme.Shop.PlaceOrderInput, global.Acme.Shop.PlaceOrderOutput>(
+            global.NSmithy.Server.ServerOperation.Create<
+                global.Acme.Shop.PlaceOrderInput,
+                global.Acme.Shop.PlaceOrderOutput
+             >(
                 global.Acme.Shop.Schemas.PlaceOrderSchema.Schema,
-                global.System.Func<global.System.IServiceProvider, global.System.Func<global.Acme.Shop.PlaceOrderInput, global.System.Threading.CancellationToken, global.System.Threading.Tasks.Task<global.Acme.Shop.PlaceOrderOutput>>>(fun services ->
-                    let handler =
-                        match global.Microsoft.FSharp.Core.Operators.box (global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global.Acme.Shop.IPlaceOrderHandler>(services)) with
-                        | :? global.Acme.Shop.IPlaceOrderHandler as handler -> handler
-                        | _ -> global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IShopServiceHandler>(services) :> global.Acme.Shop.IPlaceOrderHandler
-                    global.System.Func<global.Acme.Shop.PlaceOrderInput, global.System.Threading.CancellationToken, global.System.Threading.Tasks.Task<global.Acme.Shop.PlaceOrderOutput>>(fun input cancellationToken -> settle (handler.PlaceOrderAsync(input, cancellationToken)) global.Microsoft.FSharp.Core.Operators.id (fun (error: global.Acme.Shop.PlaceOrderError) -> error.ToException()))),
-                jsonSchemas = global.NSmithy.Server.OperationJsonSchemas("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"required\":[\"total\"],\"properties\":{\"total\":{\"$ref\":\"#/$defs/N61636d652e73686f70_Money\"}},\"additionalProperties\":false,\"$defs\":{\"N61636d652e73686f70_Money\":{\"type\":\"object\",\"required\":[\"amount\",\"currency\"],\"properties\":{\"amount\":{\"type\":\"number\"},\"currency\":{\"type\":\"string\"}},\"additionalProperties\":false}}}", "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"required\":[\"orderId\"],\"properties\":{\"orderId\":{\"type\":\"string\"}},\"additionalProperties\":false}", "Places an order."),
-                handlerTypes = [| global.Microsoft.FSharp.Core.Operators.typeof<global.Acme.Shop.IPlaceOrderHandler>; global.Microsoft.FSharp.Core.Operators.typeof<IShopServiceHandler> |]) :> global.NSmithy.Server.IServerOperation)
-    static let prompts: global.System.Collections.Generic.IReadOnlyList<global.NSmithy.Server.ServicePromptDefinition> = global.System.Array.Empty<global.NSmithy.Server.ServicePromptDefinition>()
+                global.System.Func<
+                    global.System.IServiceProvider,
+                    global.System.Func<
+                        global.Acme.Shop.PlaceOrderInput,
+                        global.System.Threading.CancellationToken,
+                        global.System.Threading.Tasks.Task<global.Acme.Shop.PlaceOrderOutput>
+                     >
+                 >
+                    (fun services ->
+                        let handler =
+                            match
+                                global.Microsoft.FSharp.Core.Operators.box (
+                                    global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<
+                                        global.Acme.Shop.IPlaceOrderHandler
+                                     >(
+                                        services
+                                    )
+                                )
+                            with
+                            | :? global.Acme.Shop.IPlaceOrderHandler as handler -> handler
+                            | _ ->
+                                global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<
+                                    IShopServiceHandler
+                                 >(
+                                    services
+                                )
+                                :> global.Acme.Shop.IPlaceOrderHandler
+
+                        global.System.Func<
+                            global.Acme.Shop.PlaceOrderInput,
+                            global.System.Threading.CancellationToken,
+                            global.System.Threading.Tasks.Task<global.Acme.Shop.PlaceOrderOutput>
+                         >
+                            (fun input cancellationToken ->
+                                settle
+                                    (handler.PlaceOrderAsync(input, cancellationToken))
+                                    global.Microsoft.FSharp.Core.Operators.id
+                                    (fun (error: global.Acme.Shop.PlaceOrderError) -> error.ToException()))),
+                jsonSchemas =
+                    global.NSmithy.Server.OperationJsonSchemas(
+                        "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"required\":[\"total\"],\"properties\":{\"total\":{\"$ref\":\"#/$defs/N61636d652e73686f70_Money\"}},\"additionalProperties\":false,\"$defs\":{\"N61636d652e73686f70_Money\":{\"type\":\"object\",\"required\":[\"amount\",\"currency\"],\"properties\":{\"amount\":{\"type\":\"number\"},\"currency\":{\"type\":\"string\"}},\"additionalProperties\":false}}}",
+                        "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"required\":[\"orderId\"],\"properties\":{\"orderId\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+                        "Places an order."
+                    ),
+                handlerTypes =
+                    [| global.Microsoft.FSharp.Core.Operators.typeof<global.Acme.Shop.IPlaceOrderHandler>
+                       global.Microsoft.FSharp.Core.Operators.typeof<IShopServiceHandler> |]
+            )
+            :> global.NSmithy.Server.IServerOperation
+        )
+
+    static let prompts: global.System.Collections.Generic.IReadOnlyList<global.NSmithy.Server.ServicePromptDefinition> =
+        global.System.Array.Empty<global.NSmithy.Server.ServicePromptDefinition>()
 
     static member internal Catalog = catalog
 
@@ -61,53 +115,148 @@ type ShopServiceDefinition() =
 type ShopServiceServerExtensions =
     /// <summary>Registers the service's definition.</summary>
     [<global.System.Runtime.CompilerServices.Extension>]
-    static member AddShopService(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+    static member AddShopService
+        (services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection)
+        : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
         global.System.ArgumentNullException.ThrowIfNull(services)
-        global.Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<global.NSmithy.Server.IServiceDefinition, ShopServiceDefinition>())
+
+        global
+            .Microsoft
+            .Extensions
+            .DependencyInjection
+            .Extensions
+            .ServiceCollectionDescriptorExtensions
+            .TryAddEnumerable(
+                services,
+                global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<
+                    global.NSmithy.Server.IServiceDefinition,
+                    ShopServiceDefinition
+                 >()
+            )
+
         services
 
     /// <summary>Registers <c>'THandler</c>, as a singleton, as the handler of every operation, and the service.</summary>
     [<global.System.Runtime.CompilerServices.Extension>]
-    static member AddShopServiceHandler<'THandler when 'THandler : not struct and 'THandler : not null and 'THandler :> IShopServiceHandler>(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
-        ShopServiceServerExtensions.AddShopServiceHandler<'THandler>(services, global.Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton)
+    static member AddShopServiceHandler<'THandler
+        when 'THandler: not struct and 'THandler: not null and 'THandler :> IShopServiceHandler>
+        (services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection)
+        : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+        ShopServiceServerExtensions.AddShopServiceHandler<'THandler>(
+            services,
+            global.Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton
+        )
 
     /// <summary>Registers <c>'THandler</c>, once per <c>lifetime</c>, as the handler of every operation without a handler of its own, and the service.</summary>
     [<global.System.Runtime.CompilerServices.Extension>]
-    static member AddShopServiceHandler<'THandler when 'THandler : not struct and 'THandler : not null and 'THandler :> IShopServiceHandler>(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+    static member AddShopServiceHandler<'THandler
+        when 'THandler: not struct and 'THandler: not null and 'THandler :> IShopServiceHandler>
+        (
+            services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection,
+            lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime
+        ) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
         global.System.ArgumentNullException.ThrowIfNull(services)
-        global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
+
+        global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services)
+        |> ignore
+
         ShopServiceServerExtensions.AddShopService(services) |> ignore
-        services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<IShopServiceHandler>, global.Microsoft.FSharp.Core.Operators.typeof<'THandler>, lifetime))
+
+        services.Add(
+            global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(
+                global.Microsoft.FSharp.Core.Operators.typeof<IShopServiceHandler>,
+                global.Microsoft.FSharp.Core.Operators.typeof<'THandler>,
+                lifetime
+            )
+        )
+
         services
 
     /// <summary>Registers <c>handler</c>, such as an object expression, as the handler of every operation without a handler of its own, and the service.</summary>
     [<global.System.Runtime.CompilerServices.Extension>]
-    static member AddShopServiceHandler(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, handler: IShopServiceHandler) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+    static member AddShopServiceHandler
+        (services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, handler: IShopServiceHandler)
+        : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
         global.System.ArgumentNullException.ThrowIfNull(services)
         global.System.ArgumentNullException.ThrowIfNull(handler)
-        global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
+
+        global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services)
+        |> ignore
+
         ShopServiceServerExtensions.AddShopService(services) |> ignore
-        global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<IShopServiceHandler>(services, handler) |> ignore
+
+        global.Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<
+            IShopServiceHandler
+         >(
+            services,
+            handler
+        )
+        |> ignore
+
         services
 
     /// <summary>Registers the handler <c>factory</c> creates from the container, once per <c>lifetime</c> (by default a singleton), as the handler of every operation without a handler of its own, and the service.</summary>
     [<global.System.Runtime.CompilerServices.Extension>]
-    static member AddShopServiceHandler(services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection, factory: global.System.IServiceProvider -> IShopServiceHandler, ?lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
+    static member AddShopServiceHandler
+        (
+            services: global.Microsoft.Extensions.DependencyInjection.IServiceCollection,
+            factory: global.System.IServiceProvider -> IShopServiceHandler,
+            ?lifetime: global.Microsoft.Extensions.DependencyInjection.ServiceLifetime
+        ) : global.Microsoft.Extensions.DependencyInjection.IServiceCollection =
         global.System.ArgumentNullException.ThrowIfNull(services)
-        let lifetime = global.Microsoft.FSharp.Core.Operators.defaultArg lifetime global.Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton
-        global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services) |> ignore
+
+        let lifetime =
+            global.Microsoft.FSharp.Core.Operators.defaultArg
+                lifetime
+                global.Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton
+
+        global.NSmithy.Server.AspNetCore.SmithyServerServiceCollectionExtensions.AddSmithyServer(services)
+        |> ignore
+
         ShopServiceServerExtensions.AddShopService(services) |> ignore
-        services.Add(global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(global.Microsoft.FSharp.Core.Operators.typeof<IShopServiceHandler>, global.System.Func<global.System.IServiceProvider, obj>(fun provider -> factory provider :> obj), lifetime))
+
+        services.Add(
+            global.Microsoft.Extensions.DependencyInjection.ServiceDescriptor(
+                global.Microsoft.FSharp.Core.Operators.typeof<IShopServiceHandler>,
+                global.System.Func<global.System.IServiceProvider, obj>(fun provider -> factory provider :> obj),
+                lifetime
+            )
+        )
+
         services
 
     /// <summary>Maps the service's operations over <c>protocols</c>, by default its first protocol, into a route group, and returns the group.</summary>
     [<global.System.Runtime.CompilerServices.Extension>]
-    static member MapShopService(endpoints: global.Microsoft.AspNetCore.Routing.IEndpointRouteBuilder, ?protocols: ShopServiceProtocols) : global.Microsoft.AspNetCore.Routing.RouteGroupBuilder =
+    static member MapShopService
+        (endpoints: global.Microsoft.AspNetCore.Routing.IEndpointRouteBuilder, ?protocols: ShopServiceProtocols)
+        : global.Microsoft.AspNetCore.Routing.RouteGroupBuilder =
         global.System.ArgumentNullException.ThrowIfNull(endpoints)
-        let protocols = global.Microsoft.FSharp.Core.Operators.defaultArg protocols ShopServiceProtocols.RestJson1
+
+        let protocols =
+            global.Microsoft.FSharp.Core.Operators.defaultArg protocols ShopServiceProtocols.RestJson1
+
         if (protocols &&& ~~~ShopServiceProtocols.All) <> ShopServiceProtocols.None then
-            raise (global.System.ArgumentOutOfRangeException("protocols", box protocols, "Unknown ShopServiceProtocols value."))
-        let selected = global.System.Collections.Generic.List<global.NSmithy.Server.AspNetCore.SmithyServerProtocol>()
+            raise (
+                global.System.ArgumentOutOfRangeException(
+                    "protocols",
+                    box protocols,
+                    "Unknown ShopServiceProtocols value."
+                )
+            )
+
+        let selected =
+            global.System.Collections.Generic.List<global.NSmithy.Server.AspNetCore.SmithyServerProtocol>()
+
         if (protocols &&& ShopServiceProtocols.RestJson1) <> ShopServiceProtocols.None then
-            selected.Add(global.NSmithy.Server.AspNetCore.SmithyServerProtocol("RestJson1", global.NSmithy.Protocols.RestJson.RestJson1Protocol()))
-        global.NSmithy.Server.AspNetCore.SmithyAspNetCoreServer.MapSmithyService(endpoints, ShopServiceDefinition.Catalog, selected)
+            selected.Add(
+                global.NSmithy.Server.AspNetCore.SmithyServerProtocol(
+                    "RestJson1",
+                    global.NSmithy.Protocols.RestJson.RestJson1Protocol()
+                )
+            )
+
+        global.NSmithy.Server.AspNetCore.SmithyAspNetCoreServer.MapSmithyService(
+            endpoints,
+            ShopServiceDefinition.Catalog,
+            selected
+        )

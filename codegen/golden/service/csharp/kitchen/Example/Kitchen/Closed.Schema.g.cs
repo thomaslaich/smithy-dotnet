@@ -20,12 +20,17 @@ public static partial class ClosedSchema
     private sealed class GeneratedSchema()
         : StructSchema<global::Example.Kitchen.Closed, Builder>(
             ShapeId.Parse("example.kitchen#Closed"),
+            [new("message", Target0)],
             [
-                new("message", Target0),
-            ],
-            [new Trait(ShapeId.Parse("smithy.api#error"), Document.From("server")), new Trait(ShapeId.Parse("smithy.api#httpError"), Document.From(503m))])
+                new Trait(ShapeId.Parse("smithy.api#error"), Document.From("server")),
+                new Trait(ShapeId.Parse("smithy.api#httpError"), Document.From(503m)),
+            ]
+        )
     {
-        private static readonly global::NSmithy.Core.Serde.Schema<string?> Target0 = global::NSmithy.Core.Serde.Schemas.NullableReference(global::NSmithy.Core.Serde.Schemas.String);
+        private static readonly global::NSmithy.Core.Serde.Schema<string?> Target0 =
+            global::NSmithy.Core.Serde.Schemas.NullableReference(
+                global::NSmithy.Core.Serde.Schemas.String
+            );
 
         public override Builder CreateTypedBuilder() => new();
 
@@ -34,7 +39,8 @@ public static partial class ClosedSchema
 
         public override void SerializeMembers<TSerializer>(
             global::Example.Kitchen.Closed value,
-            ref TSerializer serializer)
+            ref TSerializer serializer
+        )
         {
             if (value.Message is { } value0)
             {
@@ -49,7 +55,8 @@ public static partial class ClosedSchema
         protected override void DeserializeMember<TDeserializer>(
             Builder builder,
             int index,
-            ref TDeserializer deserializer)
+            ref TDeserializer deserializer
+        )
         {
             switch (index)
             {
