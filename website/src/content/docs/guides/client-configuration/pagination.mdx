@@ -39,7 +39,9 @@ carries a continuation token:
 
     for page in client.ListCitiesPagesAsync({ NextToken = None; PageSize = Some 3 }) do
         match page with
-        | Ok page -> page.Items |> List.iter (fun city -> printfn "%s" city.Name)
+        | Ok page ->
+            for city in page.Items do
+                printfn "%s" city.Name
         | Error error -> eprintfn "%A" error
     ```
   </TabItem>
