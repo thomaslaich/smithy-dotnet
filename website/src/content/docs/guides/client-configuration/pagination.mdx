@@ -1,0 +1,90 @@
+---
+title: Pagination
+description: Generated IAsyncEnumerable paginators for @paginated operations.
+---
+
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
+Operations modeled with [`@paginated`](https://smithy.io/2.0/spec/behavior-traits.html#paginated-trait)
+generate paginator helpers alongside the normal operation method.
+
+Given a paginated operation:
+
+```smithy
+@paginated(inputToken: "nextToken", outputToken: "nextToken", pageSize: "pageSize")
+service Weather { ... }
+
+@readonly
+@paginated(items: "items")
+@http(method: "GET", uri: "/cities")
+operation ListCities { ... }
+```
+
+the client gains a **pages** paginator that repeats the call while the response
+carries a continuation token:
+
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    await foreach (var page in client.ListCitiesPagesAsync(new ListCitiesInput(PageSize: 3)))
+    {
+        foreach (var city in page.Items)
+            Console.WriteLine(city.Name);
+    }
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    open FSharp.Control // FSharp.Control.TaskSeq
+
+    for page in client.ListCitiesPagesAsync({ NextToken = None; PageSize = Some 3 }) do
+        match page with
+        | Ok page ->
+            for city in page.Items do
+                printfn "%s" city.Name
+        | Error error -> eprintfn "%A" error
+    ```
+  </TabItem>
+</Tabs>
+
+and, because the trait names an `items` list member, an **items** paginator
+that flattens the pages:
+
+<Tabs syncKey="lang">
+  <TabItem label="C#">
+    ```csharp
+    await foreach (var city in client.ListCitiesItemsAsync(new ListCitiesInput(PageSize: 3)))
+        Console.WriteLine(city.Name);
+    ```
+  </TabItem>
+  <TabItem label="F#">
+    ```fsharp
+    for city in client.ListCitiesItemsAsync({ NextToken = None; PageSize = Some 3 }) do
+        match city with
+        | Ok city -> printfn "%s" city.Name
+        | Error error -> eprintfn "%A" error
+    ```
+  </TabItem>
+</Tabs>
+
+Every page goes through the normal client lifecycle, so auth, retries, endpoint
+resolution, and telemetry behave exactly as they do for a single call. A
+paginated listing that hits a transient error retries that page and continues.
+
+Notes:
+
+- The token, page-size, and items members come from the resolved `@paginated`
+  trait (service-level defaults merged with the operation's trait).
+- Enumeration is lazy: stop iterating and no further requests are sent.
+- Cancellation flows through `WithCancellation(token)` or the method's
+  `CancellationToken` parameter.
+- Operations whose `items` member is a map only generate the pages paginator.
+- In F#, the paginators return `IAsyncEnumerable`. A `task` iterates them with
+  `for` once [FSharp.Control.TaskSeq](https://github.com/fsprojects/FSharp.Control.TaskSeq)
+  is opened, as above; the `System.Linq.AsyncEnumerable` operators work without it.
+  They are extensions of `I{Service}Client`, so every implementation of it has
+  them.
+- In F#, when the operation returns a `Result`, so does each page and item. A
+  modeled error is the last element, and the paginator sends no further requests.
+- In F#, an operation whose continuation tokens are maps, which Smithy
+  discourages, gets no paginators.

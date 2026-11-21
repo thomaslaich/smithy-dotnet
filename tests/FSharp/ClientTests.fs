@@ -2,6 +2,7 @@ module NSmithy.FSharp.Tests.ClientTests
 
 open System
 open System.Net
+open System.Linq
 open System.Net.Http
 open System.Text
 open System.Threading
@@ -211,4 +212,57 @@ let ``The client works through its interface and honors cancellation`` () : Task
         let request, _ = handler.Requests[0]
         Assert.Equal(HttpMethod.Get, request.Method)
         Assert.Equal("/ping", (nonNull request.RequestUri).AbsolutePath)
+    }
+
+/// Answers the first page with a continuation token, and the second with the kitchen closed.
+let private closesAfterOnePage () =
+    new StubHandler(fun request _ ->
+        match (nonNull request.RequestUri).Query with
+        | "" -> json HttpStatusCode.OK """{"page":{"nextToken":"2"},"dishes":["soup","pizza"]}"""
+        | _ ->
+            let response = json HttpStatusCode.ServiceUnavailable """{"message":"closed"}"""
+            response.Headers.Add("x-amzn-errortype", "KitchenClosed")
+            response)
+
+[<Fact>]
+let ``A paginator sends each page's token and ends with a modeled error`` () : Task =
+    task {
+        let handler = closesAfterOnePage ()
+        use client = client handler
+
+        let! pages = client.ListDishesPagesAsync().ToListAsync()
+
+        match List.ofSeq pages with
+        | [ Ok page; Error(ListDishesError.KitchenClosed _) ] -> Assert.Equal(Some [ "soup"; "pizza" ], page.Dishes)
+        | other -> failwith $"Unexpected pages: {other}"
+
+        let request, _ = handler.Requests[1]
+        Assert.Equal("?nextToken=2", (nonNull request.RequestUri).Query)
+    }
+
+[<Fact>]
+let ``An items paginator flattens the pages through the client's interface`` () : Task =
+    task {
+        use client = client (closesAfterOnePage ()) :> IKitchenClient
+
+        let! items = client.ListDishesItemsAsync().ToListAsync()
+
+        match List.ofSeq items with
+        | [ Ok "soup"; Ok "pizza"; Error(ListDishesError.KitchenClosed _) ] -> ()
+        | other -> failwith $"Unexpected items: {other}"
+    }
+
+[<Fact>]
+let ``A paginator sends no request until enumerated and none after it stops`` () : Task =
+    task {
+        let handler = closesAfterOnePage ()
+        use client = client handler
+
+        let items = client.ListDishesItemsAsync()
+        Assert.Empty(handler.Requests)
+
+        let! first = items.FirstAsync()
+
+        Assert.Equal(Ok "soup", first)
+        Assert.Single(handler.Requests) |> ignore
     }

@@ -302,6 +302,143 @@ class ClientGeneratorTest {
   }
 
   /** The model with structure {@code name}, which the Order operation's output targets. */
+  private static final String PAGINATED =
+      """
+      $version: "2"
+      namespace example.cafe
+
+      use aws.protocols#restJson1
+
+      @restJson1
+      @paginated(inputToken: "token", outputToken: "next")
+      service Cafe {
+          version: "2024-01-01"
+          operations: [ListTables, ListPrices]
+      }
+
+      @readonly
+      @paginated(items: "tables")
+      @http(method: "GET", uri: "/tables")
+      operation ListTables {
+          input := {
+              @httpQuery("room")
+              room: String
+
+              @httpQuery("token")
+              token: String
+          }
+          output := {
+              next: String
+
+              @required
+              tables: Tables
+          }
+      }
+
+      @readonly
+      @paginated(items: "prices")
+      @http(method: "GET", uri: "/prices")
+      operation ListPrices {
+          input := {
+              @httpQuery("token")
+              token: String
+          }
+          output := {
+              next: String
+              prices: Prices
+          }
+      }
+
+      list Tables {
+          member: String
+      }
+
+      map Prices {
+          key: String
+          value: Integer
+      }
+      """;
+
+  @Test
+  void aPaginatedOperationWithoutErrorsPagesThroughItsOutput() {
+    String client = generate(PAGINATED, true).expectFileString(CLIENT);
+
+    assertTrue(
+        client.contains(
+            "member this.ListTablesPagesAsync(input: global.Example.Cafe.ListTablesInput,"
+                + " ?cancellationToken: global.System.Threading.CancellationToken) :"
+                + " global.System.Collections.Generic.IAsyncEnumerable<global.Example.Cafe.ListTablesOutput>"),
+        client);
+    assertTrue(
+        client.contains(
+            "(fun (page: global.Example.Cafe.ListTablesOutput) -> let output = page in"
+                + " global.Microsoft.FSharp.Core.Option.toObj (output.Next))"),
+        client);
+    assertTrue(client.contains("{ input with Token = Some token }"), client);
+    assertTrue(
+        client.contains(
+            "global.System.Collections.Generic.IAsyncEnumerable<string> =\n"
+                + "            global.System.Linq.AsyncEnumerable.SelectMany("),
+        client);
+    assertTrue(client.contains("member this.ListTablesItemsAsync(?cancellationToken"), client);
+  }
+
+  @Test
+  void aPaginatorOverAMapHasNoItemsPaginator() {
+    String client = generate(PAGINATED, true).expectFileString(CLIENT);
+
+    assertTrue(client.contains("member this.ListPricesPagesAsync(?cancellationToken"), client);
+    assertFalse(client.contains("ListPricesItemsAsync"), client);
+  }
+
+  @Test
+  void aPaginatorNamedLikeAnotherOperationIsLeftOut() {
+    String model =
+        PAGINATED.replace(
+                "operations: [ListTables, ListPrices]",
+                "operations: [ListTables, ListPrices, ListTablesItems]")
+            + """
+
+            @readonly
+            @http(method: "GET", uri: "/tables/items")
+            operation ListTablesItems {
+                input := {}
+                output := {}
+            }
+            """;
+    String client = generate(model, true).expectFileString(CLIENT);
+
+    assertTrue(client.contains("member this.ListTablesPagesAsync(?cancellationToken"), client);
+    assertFalse(
+        client.contains("ListTablesItemsAsync(input: global.Example.Cafe.ListTablesInput"), client);
+  }
+
+  @Test
+  void aMapTokenGetsNoPaginators() {
+    String model =
+        PAGINATED
+                .replace(
+                    "$version: \"2\"\n",
+                    "$version: \"2\"\n"
+                        + "metadata suppressions = [{ id: \"PaginatedTrait\", namespace: \"*\""
+                        + " }]\n")
+                .replace(
+                    "@httpQuery(\"token\")\n        token: String",
+                    "@httpQueryParams\n        token: Token")
+                .replace("next: String", "next: Token")
+            + """
+
+            map Token {
+                key: String
+                value: String
+            }
+            """;
+    String client = generate(model, true).expectFileString(CLIENT);
+
+    assertTrue(client.contains("member this.ListTablesAsync("), client);
+    assertFalse(client.contains("PagesAsync"), client);
+  }
+
   private static String referencing(String model, String name) {
     return model.replace(
             "        id: String\n", "        id: String\n        value: " + name + "\n")

@@ -5,6 +5,7 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.Paginators;
 import io.github.thomaslaich.nsmithy.codegen.core.Protocols;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
@@ -24,7 +25,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
-import software.amazon.smithy.model.knowledge.PaginatedIndex;
 import software.amazon.smithy.model.knowledge.PaginationInfo;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
@@ -115,10 +115,7 @@ public final class ClientGenerator implements Runnable {
    */
   static Optional<PaginationInfo> paginationInfo(
       GenerationContext context, ServiceShape service, OperationShape op) {
-    if (ShapeSupport.isEventStreamOperation(context.model(), op)) {
-      return Optional.empty();
-    }
-    return PaginatedIndex.of(context.model()).getPaginationInfo(service, op);
+    return Paginators.of(context.model(), service, op);
   }
 
   static String paginatorPagesSignature(
@@ -959,16 +956,9 @@ public final class ClientGenerator implements Runnable {
 
   private static Optional<String> paginatorItemElementType(
       CSharpWriter writer, GenerationContext context, PaginationInfo info) {
-    List<MemberShape> path = info.getItemsMemberPath();
-    if (path.isEmpty()) {
-      return Optional.empty();
-    }
-    var target = context.model().expectShape(path.get(path.size() - 1).getTarget());
-    if (!target.isListShape()) {
-      return Optional.empty();
-    }
-    var element = context.model().expectShape(target.asListShape().get().getMember().getTarget());
-    return Optional.of(writer.typeName(context.symbolProvider().toSymbol(element)));
+    return Paginators.items(context.model(), info)
+        .map(list -> context.model().expectShape(list.getMember().getTarget()))
+        .map(element -> writer.typeName(context.symbolProvider().toSymbol(element)));
   }
 
   /**
@@ -982,6 +972,11 @@ public final class ClientGenerator implements Runnable {
       writer.putContext("operation", CSharpNaming.typeName(op.getId().getName()));
       writer.putContext("tokenProperty", CSharpNaming.memberName(info.getInputTokenMember()));
       writer.putContext("outputToken", memberPathExpr("output", info.getOutputTokenMemberPath()));
+      writer.putContext(
+          "hasToken",
+          Paginators.hasStringTokens(context.model(), info)
+              ? "!string.IsNullOrEmpty(token)"
+              : "token is { Count: > 0 }");
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext(
           "pagesSignature",
@@ -995,7 +990,7 @@ public final class ClientGenerator implements Runnable {
               var output = await ${operation:L}Async(input, cancellationToken).ConfigureAwait(false);
               yield return output;
               var token = ${outputToken:L};
-              while (token is not null)
+              while (${hasToken:L})
               {
                   input = input with { ${tokenProperty:L} = token };
                   output = await ${operation:L}Async(input, cancellationToken).ConfigureAwait(false);

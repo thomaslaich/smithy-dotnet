@@ -8,6 +8,7 @@ namespace Example.Kitchen
 /// </summary>
 type IKitchenServiceHandler =
     inherit global.Example.Kitchen.IGetOrderHandler
+    inherit global.Example.Kitchen.IListOrdersHandler
     inherit global.Example.Kitchen.IPingHandler
     inherit global.Example.Kitchen.IPlaceOrderHandler
 
@@ -98,6 +99,60 @@ type KitchenServiceDefinition() =
                     ),
                 handlerTypes =
                     [| global.Microsoft.FSharp.Core.Operators.typeof<global.Example.Kitchen.IGetOrderHandler>
+                       global.Microsoft.FSharp.Core.Operators.typeof<IKitchenServiceHandler> |]
+            )
+            :> global.NSmithy.Server.IServerOperation,
+            global.NSmithy.Server.ServerOperation.Create<
+                global.Example.Kitchen.ListOrdersInput,
+                global.Example.Kitchen.ListOrdersOutput
+             >(
+                global.Example.Kitchen.Schemas.ListOrdersSchema.Schema,
+                global.System.Func<
+                    global.System.IServiceProvider,
+                    global.System.Func<
+                        global.Example.Kitchen.ListOrdersInput,
+                        global.System.Threading.CancellationToken,
+                        global.System.Threading.Tasks.Task<global.Example.Kitchen.ListOrdersOutput>
+                     >
+                 >
+                    (fun services ->
+                        let handler =
+                            match
+                                global.Microsoft.FSharp.Core.Operators.box (
+                                    global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<
+                                        global.Example.Kitchen.IListOrdersHandler
+                                     >(
+                                        services
+                                    )
+                                )
+                            with
+                            | :? global.Example.Kitchen.IListOrdersHandler as handler -> handler
+                            | _ ->
+                                global.Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<
+                                    IKitchenServiceHandler
+                                 >(
+                                    services
+                                )
+                                :> global.Example.Kitchen.IListOrdersHandler
+
+                        global.System.Func<
+                            global.Example.Kitchen.ListOrdersInput,
+                            global.System.Threading.CancellationToken,
+                            global.System.Threading.Tasks.Task<global.Example.Kitchen.ListOrdersOutput>
+                         >
+                            (fun input cancellationToken ->
+                                settle
+                                    (handler.ListOrdersAsync(input, cancellationToken))
+                                    global.Microsoft.FSharp.Core.Operators.id
+                                    (fun (error: global.Example.Kitchen.ListOrdersError) -> error.ToException()))),
+                jsonSchemas =
+                    global.NSmithy.Server.OperationJsonSchemas(
+                        "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"properties\":{\"nextToken\":{\"type\":\"string\"},\"pageSize\":{\"type\":\"integer\",\"maximum\":2147483647,\"minimum\":-2147483648}},\"additionalProperties\":false}",
+                        "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"type\":\"object\",\"required\":[\"orders\"],\"properties\":{\"nextToken\":{\"type\":\"string\"},\"orders\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"additionalProperties\":false}",
+                        "Lists the orders, a page at a time."
+                    ),
+                handlerTypes =
+                    [| global.Microsoft.FSharp.Core.Operators.typeof<global.Example.Kitchen.IListOrdersHandler>
                        global.Microsoft.FSharp.Core.Operators.typeof<IKitchenServiceHandler> |]
             )
             :> global.NSmithy.Server.IServerOperation,

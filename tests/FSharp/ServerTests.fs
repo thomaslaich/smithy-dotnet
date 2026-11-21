@@ -1,6 +1,7 @@
 module NSmithy.FSharp.Tests.ServerTests
 
 open System
+open System.Linq
 open System.Threading.Tasks
 open Example.Kitchen
 open Microsoft.AspNetCore.Builder
@@ -13,8 +14,11 @@ open NSmithy.Protocols.RpcV2Cbor
 open NSmithy.Protocols.RpcV2Json
 open Xunit
 
-/// Serves orders, is out of stock of any dish named "sold out", and closed for one named "closed".
-/// The kitchen being closed is an error the service declares for every operation.
+let private menu = [ "soup"; "pizza"; "salad"; "cake"; "tea" ]
+
+/// Serves orders and the menu, two dishes a page unless asked for more. It is out of stock of any
+/// dish named "sold out", and closed for one named "closed". The kitchen being closed is an error
+/// the service declares for every operation.
 type private Kitchen() =
     interface IKitchenServiceHandler with
         member _.OrderAsync(input, _) =
@@ -42,6 +46,20 @@ type private Kitchen() =
         member _.PingAsync(_, _) = Task.FromResult(Ok({ Report = None }))
 
         member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
+
+        member _.ListDishesAsync(input, _) =
+            let start = input.NextToken |> Option.map int |> Option.defaultValue 0
+            let next = start + Option.defaultValue 2 input.PageSize
+
+            Task.FromResult(
+                Ok
+                    { Dishes = Some(menu |> List.skip start |> List.truncate (next - start))
+                      Page =
+                        if next < menu.Length then
+                            Some { NextToken = Some(string next) }
+                        else
+                            None }
+            )
 
 /// Serves the kitchen over one protocol. RPC v2 CBOR and RPC v2 JSON share their routes, so one
 /// endpoint builder cannot serve both.
@@ -136,6 +154,34 @@ let ``A service error a handler returns reaches the client``
         | other -> failwith $"Unexpected result: {other}"
     }
 
+[<Theory>]
+[<MemberData(nameof protocols)>]
+let ``An F# client pages through an F# server`` (served: KitchenServiceProtocols, protocol: IProtocol) : Task =
+    task {
+        use app = startServer served
+        use client = client app protocol
+
+        let! pages = client.ListDishesPagesAsync({ NextToken = None; PageSize = Some 3 }).ToListAsync()
+
+        let sizes =
+            pages
+            |> Seq.map (function
+                | Ok page -> page.Dishes |> Option.map List.length
+                | Error error -> failwith $"Unexpected error: {error}")
+
+        Assert.Equal<int option list>([ Some 3; Some 2 ], List.ofSeq sizes)
+
+        let! dishes = client.ListDishesItemsAsync().ToListAsync()
+
+        let names =
+            dishes
+            |> Seq.map (function
+                | Ok dish -> dish
+                | Error error -> failwith $"Unexpected error: {error}")
+
+        Assert.Equal<string list>(menu, List.ofSeq names)
+    }
+
 [<Fact>]
 let ``The server validates input before the handler runs`` () : Task =
     task {
@@ -162,7 +208,10 @@ let private paidHandler () =
             Task.FromResult(Ok { Receipt = Receipt.Paid { Amount = 1M; Currency = "CHF" } })
 
         member _.PingAsync(_, _) = Task.FromResult(Ok({ Report = None }))
-        member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput())) }
+        member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
+
+        member _.ListDishesAsync(_, _) =
+            Task.FromResult(Ok({ Page = None; Dishes = None })) }
 
 /// Serves the kitchen over RestJson1 with the handler `register` adds, and orders twice.
 let private orderTwice (register: IServiceCollection -> unit) : Task =
@@ -235,6 +284,7 @@ let ``A scoped handler factory's handler is disposed once per request`` () : Tas
                             member _.OrderAsync(input, ct) = handler.OrderAsync(input, ct)
                             member _.PingAsync(input, ct) = handler.PingAsync(input, ct)
                             member _.CloseTableAsync(input, ct) = handler.CloseTableAsync(input, ct)
+                            member _.ListDishesAsync(input, ct) = handler.ListDishesAsync(input, ct)
                           interface IDisposable with
                               member _.Dispose() = disposed.Value <- disposed.Value + 1 }),
                     ServiceLifetime.Scoped
@@ -267,4 +317,4 @@ let ``Mapping fails when an operation has no handler`` () =
         Assert.Throws<InvalidOperationException>(fun () ->
             app.MapKitchenService(KitchenServiceProtocols.RestJson1) |> ignore)
 
-    Assert.Contains("CloseTable, Ping", error.Message)
+    Assert.Contains("CloseTable, ListDishes, Ping", error.Message)

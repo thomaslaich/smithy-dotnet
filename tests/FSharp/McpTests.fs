@@ -28,6 +28,9 @@ type private Kitchen() =
 
         member _.CloseTableAsync(_, _) = Task.FromResult(Ok(CloseTableOutput()))
 
+        member _.ListDishesAsync(_, _) =
+            Task.FromResult(Ok({ Page = None; Dishes = None }))
+
 /// The MCP tools and prompts an F# service definition registers.
 let private mcp () =
     let services = ServiceCollection()
@@ -51,7 +54,10 @@ let ``An F# service definition registers its operations as MCP tools and its pro
     let provider, tools, prompts = mcp ()
     use _ = provider
 
-    Assert.Equal<string list>([ "CloseTable"; "Order"; "Ping" ], tools |> List.map _.ProtocolTool.Name |> List.sort)
+    Assert.Equal<string list>(
+        [ "CloseTable"; "ListDishes"; "Order"; "Ping" ],
+        tools |> List.map _.ProtocolTool.Name |> List.sort
+    )
 
     let prompt = Assert.Single(prompts).ProtocolPrompt
     Assert.Equal("order_for_table", prompt.Name)

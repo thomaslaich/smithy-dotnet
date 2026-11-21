@@ -2,6 +2,9 @@
  * Declares a service's client in Client.g.fs:
  *
  *   I{Service}Client       one Task-returning method per operation, and IDisposable
+ *   I{Service}ClientExtensions
+ *                          overloads that leave out the input, and paginators for the
+ *                          operations modeled with @paginated
  *   {Service}ClientConfig  the runtime's SmithyClientConfig
  *   {Service}Client        binds each operation to the service's default protocol once, when it
  *                          is constructed, and calls the runtime's SmithyClientRuntime
@@ -13,6 +16,7 @@
  */
 package io.github.thomaslaich.nsmithy.fsharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.Paginators;
 import io.github.thomaslaich.nsmithy.codegen.core.ProtocolInfo;
 import io.github.thomaslaich.nsmithy.codegen.core.Protocols;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
@@ -27,8 +31,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.PaginationInfo;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
+import software.amazon.smithy.model.shapes.ListShape;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
@@ -87,7 +93,7 @@ final class ClientGenerator {
             .sorted(Comparator.comparing(operation -> operation.getId().toString()))
             .toList();
     List<String> generatedNames = new ArrayList<>(List.of(client, config, clientInterface));
-    if (operations.stream().anyMatch(this::inputIsOmittable)) {
+    if (operations.stream().anyMatch(this::hasExtensions)) {
       generatedNames.add(clientInterface + "Extensions");
     }
     reserve(context, service, generatedNames);
@@ -191,10 +197,11 @@ final class ClientGenerator {
             operations.forEach(operation -> {
               w.write("");
               writeOperation(w, operation);
-              if (inputIsOmittable(operation)) {
-                w.write("");
-                writeInputlessOverload(w, operation);
-              }
+              extensions(operation)
+                  .forEach(member -> {
+                    w.write("");
+                    w.writeTemplate("${member:L|}", Map.of("member", member));
+                  });
             })));
     context.put("forwards", forwards);
     writer.writeTemplate(
@@ -453,15 +460,40 @@ final class ClientGenerator {
     return "({ " + fields + " } : " + type + ")";
   }
 
-  /** The overload of an omittable operation that takes only the cancellation token. */
-  private void writeInputlessOverload(FSharpWriter writer, OperationShape operation) {
+  /** Whether the operation has members built on it: an overload, or paginators. */
+  private boolean hasExtensions(OperationShape operation) {
+    return inputIsOmittable(operation) || pagination(operation).isPresent();
+  }
+
+  /**
+   * The members built on an operation: an overload without the input when it may be left out, and
+   * paginators when it is modeled with {@code @paginated}. The client declares them, and so does an
+   * extension of its interface, which every implementation of it gets.
+   */
+  private List<String> extensions(OperationShape operation) {
+    List<String> members = new ArrayList<>();
+    if (inputIsOmittable(operation)) {
+      members.add(
+          inputlessOverload(
+              FSharpWriter.docs(operation),
+              methodName(operation),
+              returnType(operation),
+              operation));
+    }
+    pagination(operation).ifPresent(info -> members.addAll(paginators(info)));
+    return members;
+  }
+
+  /** The overload of an omittable operation's method that takes only the cancellation token. */
+  private String inputlessOverload(
+      String docs, String method, String returns, OperationShape operation) {
     Map<String, Object> values = new HashMap<>();
-    values.put("docs", FSharpWriter.docs(operation));
-    values.put("method", methodName(operation));
+    values.put("docs", docs);
+    values.put("method", method);
     values.put("cancellationToken", CANCELLATION_TOKEN);
-    values.put("returns", returnType(operation));
+    values.put("returns", returns);
     values.put("input", emptyInput(operation));
-    writer.writeTemplate(
+    return FSharpWriter.render(
         """
         ${?docs}
         ${docs:L|}
@@ -472,32 +504,226 @@ final class ClientGenerator {
         values);
   }
 
-  /** The same overloads on the interface, as extension members, so a caller holding it has them. */
+  /**
+   * The operation's resolved {@code @paginated} trait, when it gets paginators: its tokens must be
+   * strings, which the runtime pages with.
+   */
+  private Optional<PaginationInfo> pagination(OperationShape operation) {
+    return Paginators.of(model, service, operation)
+        .filter(info -> Paginators.hasStringTokens(model, info));
+  }
+
+  /**
+   * The pages paginator, which calls the operation again with each page's continuation token, and,
+   * when the trait names a list of items, the items paginator, which flattens the pages. When the
+   * operation returns a Result, so does every element, and an Error is the last one.
+   */
+  private List<String> paginators(PaginationInfo info) {
+    List<String> members = new ArrayList<>();
+    OperationShape operation = info.getOperation();
+    String name = FSharpNaming.typeName(operation.getId().getName());
+    String page = pageType(operation);
+    String inputType = schemas.operationType(operation.getInputShape());
+    MemberShape inputToken = info.getInputTokenMember();
+    String pagesMethod = name + "PagesAsync";
+    String pages = asyncEnumerable(page);
+    String pagesDocs =
+        summary(
+            "Every page of <c>"
+                + methodName(operation)
+                + "</c>, which is called again with each page's continuation token until a page"
+                + " has none."
+                + (returnsResult(operation) ? " A modeled error is the last page." : ""));
+
+    Map<String, Object> values = new HashMap<>();
+    values.put("docs", pagesDocs);
+    values.put("method", pagesMethod);
+    values.put("operation", methodName(operation));
+    values.put("input", inputType);
+    values.put("cancellationToken", CANCELLATION_TOKEN);
+    values.put("returns", pages);
+    values.put("page", page);
+    values.put("nextToken", onOutput(operation, "null", tokenExpression(info)));
+    values.put("tokenField", FSharpNaming.fieldName(inputToken));
+    values.put("token", FSharpMembers.isOptional(inputToken) ? "Some token" : "token");
+    members.add(
+        FSharpWriter.render(
+            """
+            ${docs:L|}
+            member this.${method:L}(input: ${input:L}, ?cancellationToken: ${cancellationToken:L}) : ${returns:L} =
+                global.System.ArgumentNullException.ThrowIfNull(input)
+                global.NSmithy.Client.SmithyPaginator.PagesAsync(
+                    (fun (input: ${input:L}) (cancellationToken: ${cancellationToken:L}) -> this.${operation:L}(input, cancellationToken)),
+                    input,
+                    (fun (page: ${page:L}) -> ${nextToken:L}),
+                    (fun (input: ${input:L}) (token: string) -> { input with ${tokenField:L} = ${token:L} }),
+                    global.Microsoft.FSharp.Core.Operators.defaultArg cancellationToken global.System.Threading.CancellationToken.None)\
+            """,
+            values));
+    if (inputIsOmittable(operation)) {
+      members.add(inputlessOverload(pagesDocs, pagesMethod, pages, operation));
+    }
+
+    Optional<ListShape> list = Paginators.items(model, info);
+    if (list.isEmpty()) {
+      return members;
+    }
+    String element = symbols.elementOf(list.get());
+    String item = returnsResult(operation) ? result(element, operation) : element;
+    String itemsMethod = name + "ItemsAsync";
+    String items = asyncEnumerable(item);
+    String itemList = memberPath("output", info.getItemsMemberPath());
+    String itemSeq =
+        "global.Microsoft.FSharp.Collections.Seq.ofList ("
+            + (isOptionPath(info.getItemsMemberPath())
+                ? "global.Microsoft.FSharp.Core.Option.defaultValue [] (" + itemList + ")"
+                : itemList)
+            + ")";
+
+    String itemsDocs =
+        summary(
+            "The items of every page of <c>"
+                + methodName(operation)
+                + "</c>."
+                + (returnsResult(operation) ? " A modeled error is the last item." : ""));
+
+    Map<String, Object> itemValues = new HashMap<>(values);
+    itemValues.put("docs", itemsDocs);
+    itemValues.put("method", itemsMethod);
+    itemValues.put("pages", pagesMethod);
+    itemValues.put("returns", items);
+    itemValues.put("item", item);
+    itemValues.put(
+        "items",
+        returnsResult(operation)
+            ? "match page with\n| "
+                + RESULT
+                + ".Ok output -> global.Microsoft.FSharp.Collections.Seq.map "
+                + RESULT
+                + ".Ok ("
+                + itemSeq
+                + ")\n| "
+                + RESULT
+                + ".Error error -> global.Microsoft.FSharp.Collections.Seq.singleton ("
+                + RESULT
+                + ".Error error)"
+            : "let output = page\n" + itemSeq);
+    members.add(
+        FSharpWriter.render(
+            """
+            ${docs:L|}
+            member this.${method:L}(input: ${input:L}, ?cancellationToken: ${cancellationToken:L}) : ${returns:L} =
+                global.System.Linq.AsyncEnumerable.SelectMany(
+                    this.${pages:L}(input, ?cancellationToken = cancellationToken),
+                    global.System.Func<${page:L}, ${item:L} seq>(fun page ->
+                        ${items:L|}))\
+            """,
+            itemValues));
+    if (inputIsOmittable(operation)) {
+      members.add(inputlessOverload(itemsDocs, itemsMethod, items, operation));
+    }
+    return members;
+  }
+
+  /** A page: the operation's output, or the Result it returns. */
+  private String pageType(OperationShape operation) {
+    String output = schemas.operationType(operation.getOutputShape());
+    return returnsResult(operation) ? result(output, operation) : output;
+  }
+
+  private String result(String value, OperationShape operation) {
+    return RESULT
+        + "<"
+        + value
+        + ", "
+        + FSharpSymbolProvider.render(symbols.errorsSymbol(operation).orElseThrow())
+        + ">";
+  }
+
+  private static String asyncEnumerable(String element) {
+    return "global.System.Collections.Generic.IAsyncEnumerable<" + element + ">";
+  }
+
+  private static String summary(String text) {
+    return "/// <summary>" + text + "</summary>";
+  }
+
+  /**
+   * Evaluates {@code expression} on a page's output, bound to {@code output}; on an Error, which
+   * has none, it is {@code otherwise}.
+   */
+  private String onOutput(OperationShape operation, String otherwise, String expression) {
+    if (!returnsResult(operation)) {
+      return "let output = page in " + expression;
+    }
+    return "match page with "
+        + RESULT
+        + ".Ok output -> "
+        + expression
+        + " | "
+        + RESULT
+        + ".Error _ -> "
+        + otherwise;
+  }
+
+  /** The page's continuation token, a string that is null after the last page. */
+  private String tokenExpression(PaginationInfo info) {
+    String token = memberPath("output", info.getOutputTokenMemberPath());
+    return isOptionPath(info.getOutputTokenMemberPath())
+        ? "global.Microsoft.FSharp.Core.Option.toObj (" + token + ")"
+        : token;
+  }
+
+  /**
+   * Reads a member path from {@code root}. Once a member is an option, the rest of the path reads
+   * through it, and the result is an option.
+   */
+  private static String memberPath(String root, List<MemberShape> path) {
+    String expression = root;
+    boolean option = false;
+    for (MemberShape member : path) {
+      String field = FSharpNaming.fieldName(member);
+      if (!option) {
+        expression = expression + "." + field;
+        option = FSharpMembers.isOptional(member);
+      } else {
+        expression =
+            expression
+                + " |> global.Microsoft.FSharp.Core.Option."
+                + (FSharpMembers.isOptional(member) ? "bind" : "map")
+                + " (fun value -> value."
+                + field
+                + ")";
+      }
+    }
+    return expression;
+  }
+
+  private static boolean isOptionPath(List<MemberShape> path) {
+    return path.stream().anyMatch(FSharpMembers::isOptional);
+  }
+
+  /** The members built on the operations on the interface, as extension members. */
   private void writeInterfaceOverloads(
       FSharpWriter writer, String clientInterface, List<OperationShape> operations) {
-    List<OperationShape> omittable = operations.stream().filter(this::inputIsOmittable).toList();
-    if (omittable.isEmpty()) {
+    List<OperationShape> extended = operations.stream().filter(this::hasExtensions).toList();
+    if (extended.isEmpty()) {
       return;
     }
     Map<String, Object> values = new HashMap<>();
     values.put("interface", clientInterface);
     values.put(
-        "overloads",
-        writer.consumer(w -> {
-          for (int i = 0; i < omittable.size(); i++) {
-            if (i > 0) {
-              w.write("");
-            }
-            writeInputlessOverload(w, omittable.get(i));
-          }
-        }));
+        "members",
+        String.join(
+            "\n\n",
+            extended.stream().flatMap(operation -> extensions(operation).stream()).toList()));
     writer.writeTemplate(
         """
-        /// <summary>Overloads of <c>${interface:L}</c> for the operations whose input may be left out.</summary>
+        /// <summary>Members of <c>${interface:L}</c> built on its operations.</summary>
         [<AutoOpen>]
         module ${interface:L}Extensions =
             type ${interface:L} with
-                ${overloads:C|}
+                ${members:L|}
 
         """,
         values);
