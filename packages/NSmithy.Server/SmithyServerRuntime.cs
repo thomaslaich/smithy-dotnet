@@ -10,8 +10,9 @@ namespace NSmithy.Server;
 /// response or a modeled error — for every protocol and operation shape, so generated code and host
 /// adapters carry none of it. It takes a neutral <see cref="SmithyHttpRequest"/> and returns a
 /// neutral <see cref="SmithyHttpServerResponse"/>; a host adapter owns conversion to and from the host
-/// framework's types. Instance-based so server interceptors and telemetry can attach here later, as
-/// they do on <c>SmithyClientRuntime</c>.
+/// framework's types. Instance-based so server interceptors can attach here later, as they do on
+/// <c>SmithyClientRuntime</c>. Telemetry is the host's and the binding's, described on
+/// <see cref="SmithyServerTelemetry"/>.
 /// </summary>
 public sealed class SmithyServerRuntime
 {
@@ -76,6 +77,7 @@ public sealed class SmithyServerRuntime
                 && protocol.TrySerializeError(raised, out var modeledResponse)
             )
             {
+                modeledResponse.Error = raised;
                 return modeledResponse;
             }
 
@@ -86,6 +88,7 @@ public sealed class SmithyServerRuntime
         {
             if (protocol.TrySerializeError(exception, out var errorResponse))
             {
+                errorResponse.Error = exception;
                 return errorResponse;
             }
 
@@ -129,7 +132,7 @@ public sealed class SmithyServerRuntime
     }
 
     // Every handler call, from every adapter, passes through here: the step server interceptors
-    // and telemetry attach to.
+    // attach to.
     private static Task<TOutput> InvokeHandlerAsync<TInput, TOutput>(
         Func<TInput, CancellationToken, Task<TOutput>> handler,
         TInput input,
@@ -144,5 +147,14 @@ public sealed class SmithyServerRuntime
     private static SmithyHttpServerResponse SerializeRequestFailure<TInput, TOutput>(
         IServerOperationProtocol<TInput, TOutput> protocol,
         Exception exception
-    ) => protocol.TrySerializeError(exception, out var response) ? response : throw exception;
+    )
+    {
+        if (!protocol.TrySerializeError(exception, out var response))
+        {
+            throw exception;
+        }
+
+        response.Error = exception;
+        return response;
+    }
 }

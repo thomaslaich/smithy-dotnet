@@ -109,13 +109,15 @@ public static RouteGroupBuilder MapWeatherService(
 ```
 
 `ServerOperation<TInput, TOutput>` keeps the operation's input and output
-types, so no adapter needs reflection. It offers two ways in:
+types, so no adapter needs reflection. An operation can belong to more than one
+service, so adapters reach it through the service's `ServiceOperationCatalog`,
+which knows the service a call is for. It offers two ways in:
 
-- `Bind(protocol)` pairs the operation with one protocol, producing an
-  `IServerOperationBinding` that dispatches wire requests. HTTP adapters use
-  this.
-- `InvokeAsync(runtime, input, services, ct)` takes input that is already
-  decoded. Adapters without a wire request use this, such as MCP after
+- `Bind(protocol)` pairs every operation with one protocol for the service,
+  producing an `IServerOperationBinding` per operation that dispatches wire
+  requests. HTTP adapters use this.
+- `InvokeAsync(operation, runtime, input, services, ct)` takes input that is
+  already decoded. Adapters without a wire request use this, such as MCP after
   decoding tool arguments.
 
 Both resolve the handler from the services of the request being served, so
@@ -343,9 +345,20 @@ return protocol.SerializeResponse(output, ct);
 ```
 
 Both entry points call the handler through the same step, which is where
-server interceptors and telemetry attach, as they do on `SmithyClientRuntime`.
-That is why the runtime is an instance resolved from the container rather than
+server interceptors attach, as they do on `SmithyClientRuntime`. That is why the runtime is an instance resolved from the container rather than
 a static class.
+
+### Telemetry
+
+Telemetry is split by who sees what. The host owns the request: it reads it,
+dispatches it, and writes the last byte of the response, so it describes the
+call on the request's span (ASP.NET Core's, through `IHttpActivityFeature`, or
+the MCP SDK's), names its `error.type`, and records
+`smithy.server.operation.duration`. The runtime tells it which error a response
+answers through `SmithyHttpServerResponse.Error`, which the host also sets when
+a streamed body fails. The binding owns the optional handler span, internal
+under whatever span is current, and decides whether an error is a fault from
+the model rather than the response, since gRPC answers a fault with HTTP 200.
 
 ### Input validation
 

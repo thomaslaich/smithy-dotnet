@@ -29,6 +29,7 @@ operation CreateUser {
 
     errors: [
         UserExists
+        UserStoreUnavailable
     ]
 }
 
@@ -60,5 +61,11 @@ structure Contact {
 @error("client")
 @httpError(409)
 structure UserExists {
+    message: String
+}
+
+@error("server")
+@httpError(503)
+structure UserStoreUnavailable {
     message: String
 }

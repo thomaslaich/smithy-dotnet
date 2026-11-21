@@ -126,20 +126,18 @@ public class FakeHandlerTests
         {
             await using (var scope = provider.CreateAsyncScope())
             {
-                await operations
-                    .GetOperation(new ShapeId("example.weather", "GetCity"))
-                    .InvokeAsync(
-                        SmithyServerRuntime.Default,
-                        new GetCityInput("SEA"),
-                        scope.ServiceProvider
-                    );
-                await operations
-                    .GetOperation(new ShapeId("example.weather", "ListCities"))
-                    .InvokeAsync(
-                        SmithyServerRuntime.Default,
-                        new ListCitiesInput(),
-                        scope.ServiceProvider
-                    );
+                await operations.InvokeAsync(
+                    new ShapeId("example.weather", "GetCity"),
+                    SmithyServerRuntime.Default,
+                    new GetCityInput("SEA"),
+                    scope.ServiceProvider
+                );
+                await operations.InvokeAsync(
+                    new ShapeId("example.weather", "ListCities"),
+                    SmithyServerRuntime.Default,
+                    new ListCitiesInput(),
+                    scope.ServiceProvider
+                );
             }
 
             Assert.Equal(1, counter.Created);
@@ -157,9 +155,12 @@ public class FakeHandlerTests
         services.AddSingleton<IGetCityHandler, AnywhereIsSeattle>();
         await using var provider = services.BuildServiceProvider();
 
-        var output = await new WeatherServiceDefinition()
-            .Operations.GetOperation(new ShapeId("example.weather", "GetCity"))
-            .InvokeAsync(SmithyServerRuntime.Default, new GetCityInput("HOU"), provider);
+        var output = await new WeatherServiceDefinition().Operations.InvokeAsync(
+            new ShapeId("example.weather", "GetCity"),
+            SmithyServerRuntime.Default,
+            new GetCityInput("HOU"),
+            provider
+        );
 
         Assert.Equal("Seattle", Assert.IsType<GetCityOutput>(output).Name);
     }

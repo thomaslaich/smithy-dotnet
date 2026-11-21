@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -84,6 +85,77 @@ public sealed class SmithyMcpToolsTests
         Assert.Equal(
             "{\"summary\":\"Sunny in Zurich\"}",
             Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text
+        );
+    }
+
+    [Fact]
+    public async Task DescribesTheCallOnTheRequestsServerSpan()
+    {
+        // Stands in for the MCP SDK's request span, with a filter's span inside it.
+        using var host = new ActivitySource("NSmithy.Tests.Server.Mcp.Host");
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source == host,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+        var tool = Assert.Single(
+            SmithyMcpTools.Create(
+                Catalog(static (_, _) => Task.FromResult(new LookupWeatherOutput("sunny")))
+            )
+        );
+
+        // An HTTP request's span outside the MCP SDK's: the nearest server span is the call's.
+        using var http = host.StartActivity("POST /mcp", ActivityKind.Server);
+        using var call = host.StartActivity("tools/call LookupWeather", ActivityKind.Server);
+        using (host.StartActivity("filter"))
+        {
+            await InvokeAsync(
+                tool,
+                new Dictionary<string, JsonElement>
+                {
+                    ["place_name"] = JsonSerializer.SerializeToElement("Zurich"),
+                }
+            );
+        }
+
+        Assert.Equal(FixturesSchema.Schema.Id.ToString(), call!.GetTagItem("rpc.service"));
+        Assert.Equal("LookupWeather", call.GetTagItem("rpc.method"));
+        Assert.Null(call.GetTagItem("error.type"));
+        Assert.Null(http!.GetTagItem("rpc.service"));
+    }
+
+    [Fact]
+    public async Task NamesARejectedCallsErrorOnTheRequestsServerSpan()
+    {
+        using var host = new ActivitySource("NSmithy.Tests.Server.Mcp.Host");
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source == host,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+        var tool = Assert.Single(
+            SmithyMcpTools.Create(
+                Catalog(static (_, _) => Task.FromResult(new LookupWeatherOutput("sunny")))
+            )
+        );
+
+        using var call = host.StartActivity("tools/call LookupWeather", ActivityKind.Server);
+        var result = await InvokeAsync(
+            tool,
+            new Dictionary<string, JsonElement>
+            {
+                ["place_name"] = JsonSerializer.SerializeToElement("Z"),
+            }
+        );
+
+        Assert.True(result.IsError);
+        Assert.Equal(
+            typeof(NSmithy.Core.Validation.ValidationException).FullName,
+            call!.GetTagItem("error.type")
         );
     }
 

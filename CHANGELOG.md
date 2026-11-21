@@ -11,6 +11,15 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Server telemetry.** A request's server span, ASP.NET Core's or the MCP SDK's, carries
+  `rpc.system`, `rpc.service` (the service shape id), `rpc.method`, and `error.type`, as the
+  client's spans do. Subscribing to `NSmithy.Server` (`SmithyServerTelemetry`) adds an internal span
+  around each handler call and records `smithy.server.operation.duration`, measured to the last
+  byte of the response.
+- **`SmithyHttpServerResponse.Error`**, the failure a response answers.
+
 ### Changed
 
 - **Enum members are Pascal case.** String and int enum members follow .NET naming in C# and F#:
@@ -20,6 +29,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **Smithy 1.75.0.** Updated the bundled CLI, `SmithyVersion`, and Smithy dependencies. With the
   default exact version check, projects that reference `NSmithy.SmithyCli` must update it to
   1.75.0, and `software.amazon.smithy` Maven dependencies should use 1.75.0.
+- **Operations bind through their catalog.** Hosts bind and invoke operations with
+  `ServiceOperationCatalog.Bind(protocol)` and `ServiceOperationCatalog.InvokeAsync(operation, …)`,
+  which know the service a call is for. Generated code is unchanged. **Breaking:**
+  `IServerOperation.Bind` and `IServerOperation.InvokeAsync` are no longer public, so
+  `IServerOperation` cannot be implemented outside NSmithy.
 
 ## [0.21.0]
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -45,10 +46,7 @@ public static partial class SmithyAspNetCoreServer
         foreach (var protocol in protocols)
         {
             var serviceProtocol = protocol.Protocol.ForService(service);
-            var bound = operations.ToDictionary(
-                operation => operation.Schema.Id,
-                operation => operation.Bind(serviceProtocol)
-            );
+            var bound = catalog.Bind(protocol.Protocol);
             switch (serviceProtocol.GetServerRouting(schemas))
             {
                 case ServerRouting.ByRoute byRoute:
@@ -180,10 +178,11 @@ public static partial class SmithyAspNetCoreServer
         HttpContext httpContext,
         ServiceOperationCatalog catalog,
         ServerRouting.ByDispatch routing,
-        Dictionary<ShapeId, IServerOperationBinding> operations
+        IReadOnlyDictionary<ShapeId, IServerOperationBinding> operations
     )
     {
         var cancellationToken = httpContext.RequestAborted;
+        var startTimestamp = Stopwatch.GetTimestamp();
         var request = await SmithyAspNetCoreHost
             .ToSmithyRequestAsync(httpContext, streamBody: false, cancellationToken)
             .ConfigureAwait(false);
@@ -206,6 +205,7 @@ public static partial class SmithyAspNetCoreServer
                                 context,
                                 operation,
                                 request,
+                                startTimestamp,
                                 cancellationToken
                             )
                     )
@@ -214,7 +214,13 @@ public static partial class SmithyAspNetCoreServer
             }
 
             await SmithyAspNetCoreHost
-                .DispatchBuiltRequestAsync(httpContext, operation, request, cancellationToken)
+                .DispatchBuiltRequestAsync(
+                    httpContext,
+                    operation,
+                    request,
+                    startTimestamp,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
             return;
         }

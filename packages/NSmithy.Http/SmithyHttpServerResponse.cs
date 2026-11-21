@@ -31,6 +31,12 @@ public sealed class SmithyHttpServerResponse : IDisposable
     public long? ContentLength { get; init; }
 
     /// <summary>
+    /// The failure this response answers: the error the server runtime serialized into it, or one
+    /// the host met writing its body. Null for a successful call. Hosts report it as telemetry.
+    /// </summary>
+    public Exception? Error { get; set; }
+
+    /// <summary>
     /// Trailer content, evaluated after the body completes. The argument is the streaming error
     /// (null on clean completion) so a protocol can reflect a mid-stream failure into its trailers
     /// (e.g. gRPC's <c>grpc-status</c>). Null when the protocol emits no trailers. Whether the
