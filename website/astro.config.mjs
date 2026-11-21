@@ -94,8 +94,6 @@ export default defineConfig({
 						{ label: 'Quick start', slug: 'getting-started/quick-start' },
 						{ label: 'Modeling contracts', slug: 'concepts/modeling' },
 						{ label: 'How NSmithy works', slug: 'concepts/how-it-works' },
-						{ label: 'Smithy and TypeSpec', slug: 'concepts/smithy-and-typespec' },
-						{ label: 'OpenAPI and controllers', slug: 'concepts/openapi-and-controllers' },
 						{ label: 'F#', slug: 'guides/fsharp', badge: { text: 'Experimental', variant: 'danger' } },
 					],
 				},
@@ -162,6 +160,13 @@ export default defineConfig({
 						{ label: 'Known limitations', slug: 'reference/known-limitations' },
 						{ label: 'Changelog', slug: 'reference/changelog' },
 						{ label: 'Design docs', slug: 'reference/design' },
+					],
+				},
+				{
+					label: 'Comparisons',
+					items: [
+						{ label: 'Smithy and TypeSpec', slug: 'concepts/smithy-and-typespec' },
+						{ label: 'OpenAPI and controllers', slug: 'concepts/openapi-and-controllers' },
 					],
 				},
 				{

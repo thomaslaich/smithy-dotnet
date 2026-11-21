@@ -27,6 +27,5 @@ at the repository root describes the repository for coding agents.
 
 ## Contributions
 
-AI-assisted contributions are welcome. Understand what your change does: you do
-not need to know every line, but you should be able to explain the approach and
-answer questions about it in review. You do not need to say whether you used AI.
+AI-assisted contributions are welcome. We expect you to understand the code you
+change. You do not need to say whether you used AI.
