@@ -8,8 +8,9 @@ the endpoints, [Microsoft.AspNetCore.OpenApi](https://learn.microsoft.com/aspnet
 describes them as an OpenAPI document, and tools such as
 [Kiota](https://learn.microsoft.com/openapi/kiota/overview) or
 [NSwag](https://github.com/RicoSuter/NSwag) generate clients from it. The
-contract-first alternative writes an OpenAPI document by hand and generates
-code from that.
+contract-first alternative writes an OpenAPI document, by hand or in
+[TypeSpec](/smithy-dotnet/concepts/smithy-and-typespec/), and generates code
+from that.
 
 Our position is that contract first is the better way to build APIs in an
 organization of many teams, and that Smithy with NSmithy is the better way to
@@ -162,6 +163,8 @@ tooling that needs it.
 - **The OpenAPI document is the deliverable.** If partners consume the
   document directly and its exact shape matters, authoring OpenAPI keeps full
   control over it. Smithy's OpenAPI output is a translation of the model.
+  [TypeSpec](/smithy-dotnet/concepts/smithy-and-typespec/) is designed for
+  that case.
 - **An existing API.** Moving a large controller-based API to a model means
   modeling every endpoint as it behaves today.
 - **Build requirements.** Generation runs the Smithy CLI, a Java application,
