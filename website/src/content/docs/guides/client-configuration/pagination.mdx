@@ -37,12 +37,14 @@ carries a continuation token:
     ```fsharp
     open FSharp.Control // FSharp.Control.TaskSeq
 
-    for page in client.ListCitiesPagesAsync({ NextToken = None; PageSize = Some 3 }) do
-        match page with
-        | Ok page ->
-            for city in page.Items do
-                printfn "%s" city.Name
-        | Error error -> eprintfn "%A" error
+    do!
+        client.ListCitiesPagesAsync({ NextToken = None; PageSize = Some 3 })
+        |> TaskSeq.iter (fun page ->
+            match page with
+            | Ok page ->
+                for city in page.Items do
+                    printfn "%s" city.Name
+            | Error error -> eprintfn "%A" error)
     ```
   </TabItem>
 </Tabs>
@@ -59,10 +61,12 @@ that flattens the pages:
   </TabItem>
   <TabItem label="F#">
     ```fsharp
-    for city in client.ListCitiesItemsAsync({ NextToken = None; PageSize = Some 3 }) do
-        match city with
-        | Ok city -> printfn "%s" city.Name
-        | Error error -> eprintfn "%A" error
+    do!
+        client.ListCitiesItemsAsync({ NextToken = None; PageSize = Some 3 })
+        |> TaskSeq.iter (fun city ->
+            match city with
+            | Ok city -> printfn "%s" city.Name
+            | Error error -> eprintfn "%A" error)
     ```
   </TabItem>
 </Tabs>
@@ -79,11 +83,14 @@ Notes:
 - Cancellation flows through `WithCancellation(token)` or the method's
   `CancellationToken` parameter.
 - Operations whose `items` member is a map only generate the pages paginator.
-- In F#, the paginators return `IAsyncEnumerable`. A `task` iterates them with
-  `for` once [FSharp.Control.TaskSeq](https://github.com/fsprojects/FSharp.Control.TaskSeq)
-  is opened, as above; the `System.Linq.AsyncEnumerable` operators work without it.
-  They are extensions of `I{Service}Client`, so every implementation of it has
-  them.
+- In F#, the paginators return `IAsyncEnumerable`. Iterate them with the
+  functions of [FSharp.Control.TaskSeq](https://github.com/fsprojects/FSharp.Control.TaskSeq),
+  such as `TaskSeq.iter`, as above, or with the `System.Linq.AsyncEnumerable`
+  operators. Avoid TaskSeq's `for` inside `task { }`: on sequences that complete
+  asynchronously, as a paginator's do, it can skip elements or throw
+  ([dotnet/fsharp#18848](https://github.com/dotnet/fsharp/issues/18848)).
+  The paginators are extensions of `I{Service}Client`, so every implementation
+  of it has them.
 - In F#, when the operation returns a `Result`, so does each page and item. A
   modeled error is the last element, and the paginator sends no further requests.
 - In F#, an operation whose continuation tokens are maps, which Smithy
