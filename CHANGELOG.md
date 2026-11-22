@@ -11,6 +11,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.23.0]
+
+F# clients get paginators, and members named `Clone` no longer break the build.
+
 ### Added
 
 - **F# paginators.** F# clients get pages and items paginators for `@paginated` operations, as
@@ -1144,7 +1148,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.20.0...v0.20.1
