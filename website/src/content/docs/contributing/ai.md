@@ -10,6 +10,10 @@ maintainer's direction. The early code was written mostly with OpenAI Codex,
 later code with both Codex and Claude Code. The maintainer decides the design,
 reviews every change in a pull request, and merges it.
 
+Commits carry no `Co-authored-by` trailers for AI agents. Claude Code adds one
+by default and Codex does not, so the history would credit one agent and not
+the other. This page describes AI use instead.
+
 The tests check the output, whoever wrote it:
 
 - Smithy's protocol conformance suites run against the clients and servers, and
