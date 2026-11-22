@@ -1,5 +1,5 @@
 ---
-title: Smithy and TypeSpec
+title: TypeSpec
 description: How the two IDLs differ, and when each is the better fit for a .NET service.
 ---
 
@@ -11,9 +11,11 @@ document. Smithy came from the other direction. AWS created it to generate its
 SDKs, so the model is designed to be consumed by code generators rather than
 translated into another description format.
 
-Both can describe the same HTTP API. The differences that matter for a .NET team
-are where the model lives, how a protocol attaches to it, and what the toolchain
-needs on the build machine.
+This page assumes a contract-first approach;
+[OpenAPI and controllers](/smithy-dotnet/concepts/openapi-and-controllers/)
+compares it with writing the API in code. Both IDLs can describe the same HTTP
+API. The differences that matter for a .NET team are where the model lives, how
+a protocol attaches to it, and what the toolchain needs on the build machine.
 
 ## The model is data
 
