@@ -1,0 +1,80 @@
+# The checks behind `just ci`, split into jobs: `build` packs the packages once, and the consumer
+# checks run against them in parallel. CI and PR validation both call this workflow.
+name: Validate
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up devenv
+        uses: ./.github/actions/setup-devenv
+      - name: Check format, build, test, and pack
+        run: devenv shell -- just check-format build test aot-smoke pack
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: artifacts/packages
+          retention-days: 1
+  examples:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up devenv
+        uses: ./.github/actions/setup-devenv
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          name: packages
+          path: artifacts/packages
+      - name: Build the examples
+        run: devenv shell -- just refresh-examples
+  templates:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        recipe: [smoke-templates, smoke-templates-sdk11]
+        language: [csharp, fsharp]
+    name: templates (${{ matrix.recipe }}, ${{ matrix.language }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up devenv
+        uses: ./.github/actions/setup-devenv
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          name: packages
+          path: artifacts/packages
+      - name: Scaffold and build the templates
+        env:
+          SMOKE_LANGUAGE: ${{ matrix.language }}
+        run: devenv shell -- just ${{ matrix.recipe }}
+  smithy-cli:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up devenv
+        uses: ./.github/actions/setup-devenv
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          name: packages
+          path: artifacts/packages
+      - name: Build with each way of providing the Smithy CLI
+        run: devenv shell -- just smoke-smithy-cli
