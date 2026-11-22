@@ -23,6 +23,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   C#, ends the pages as an absent token does, as the Smithy spec requires, instead of requesting
   again. A paginator named like another operation of the service, such as `ListOrdersPagesAsync`
   next to a `ListOrdersPages` operation, is left out instead of breaking the client's build.
+- **Members named `Clone`.** A C# member, enum value, or type named `Clone`, such as the enum value
+  `CLONE` since 0.22.0, takes the `Value` suffix (`CloneValue`), because C# records reserve the
+  name.
 
 ## [0.22.0]
 

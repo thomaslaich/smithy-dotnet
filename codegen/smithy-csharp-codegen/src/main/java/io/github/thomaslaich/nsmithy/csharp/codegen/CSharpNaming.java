@@ -104,6 +104,7 @@ public final class CSharpNaming {
           "MemberwiseClone",
           "Finalize",
           "ReferenceEquals",
+          "Clone",
           "EqualityContract",
           "PrintMembers",
           "Deconstruct");
