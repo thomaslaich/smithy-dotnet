@@ -165,8 +165,8 @@ export default defineConfig({
 				{
 					label: 'Comparisons',
 					items: [
-						{ label: 'Smithy and TypeSpec', slug: 'concepts/smithy-and-typespec' },
 						{ label: 'OpenAPI and controllers', slug: 'concepts/openapi-and-controllers' },
+						{ label: 'TypeSpec', slug: 'concepts/smithy-and-typespec' },
 						{ label: 'Performance', slug: 'concepts/performance' },
 					],
 				},

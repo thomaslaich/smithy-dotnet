@@ -1,5 +1,5 @@
 ---
-title: Smithy and TypeSpec
+title: TypeSpec
 description: How the two IDLs differ, and when each is the better fit for a .NET service.
 ---
 
