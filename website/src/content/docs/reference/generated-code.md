@@ -1,6 +1,6 @@
 ---
 title: Generated code
-description: What each kind of Smithy shape becomes in C#, how colliding names are renamed, and how to generate shapes that no service operation reaches.
+description: What each kind of Smithy shape becomes in C#, how colliding names are renamed, how to generate shapes that no service operation reaches, and how the output is formatted.
 ---
 
 ## Shapes
@@ -118,3 +118,17 @@ metadata shapeClosures = [
 
 Closures are part of the model, so a contracts package ships them with its
 model files.
+
+## Formatting
+
+After generating, NSmithy formats the files with
+[CSharpier](https://csharpier.com/) for C# and
+[Fantomas](https://fsprojects.github.io/fantomas/) for F# when the formatter is
+installed, either on `PATH` or as a `dotnet` tool. Without one, the generated
+files build the same but are left unformatted, with long lines. A local tool
+pins the formatter's version for everyone building the repository:
+
+```sh
+dotnet new tool-manifest   # once per repository
+dotnet tool install csharpier   # or fantomas
+```
