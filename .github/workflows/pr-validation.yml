@@ -12,7 +12,7 @@ jobs:
       - name: Cache build dependencies
         uses: ./.github/actions/cache-dependencies
       - name: Install Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v32
       - name: Configure devenv cache
         uses: cachix/cachix-action@v17
         with:
