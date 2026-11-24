@@ -50,7 +50,8 @@ test:
     # The golden tests format their output with the formatters pinned in dotnet-tools.json.
     dotnet tool restore
     cd codegen && gradle test
-    dotnet test NSmithy.slnx --configuration Release --no-build --disable-build-servers
+    # A test that hangs fails the run after 5 minutes and names itself, instead of stalling CI.
+    dotnet test NSmithy.slnx --configuration Release --no-build --disable-build-servers --blame-hang-timeout 5m
 
 # Publish and execute a representative typed REST operation as a native binary. This guards the
 
@@ -95,6 +96,7 @@ smoke-templates-sdk11:
 smoke-smithy-cli:
     bash packages/NSmithy.SmithyCli/smoke-test.sh
 
+# Everything CI checks, in one go. CI runs the same recipes as parallel jobs (.github/workflows/validate.yml).
 ci: check-format build test aot-smoke pack refresh-examples smoke-templates smoke-templates-sdk11 smoke-smithy-cli
 
 # The examples pin the fixed `0.0.0-SNAPSHOT` dev version permanently, while a release build packs

@@ -1,23 +1,13 @@
 name: PR Validation
 on:
   pull_request:
+    # Docs-only changes skip validation; the docs workflow builds the website.
+    paths-ignore:
+      - "website/**"
+      - "designs/**"
+      - "**/*.md"
 permissions:
   contents: read
 jobs:
   validate:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Cache build dependencies
-        uses: ./.github/actions/cache-dependencies
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-      - name: Configure devenv cache
-        uses: cachix/cachix-action@v17
-        with:
-          name: devenv
-      - name: Install devenv
-        run: nix profile add nixpkgs#devenv
-      - name: Run CI validation
-        run: devenv shell -- just ci
+    uses: ./.github/workflows/validate.yml

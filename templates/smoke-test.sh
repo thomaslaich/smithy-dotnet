@@ -25,6 +25,14 @@ fi
 # so codegen silently contributes nothing.
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
 # Set SMOKE_KEEP=1 to keep the scaffolded projects and build logs around for inspection.
+# Set SMOKE_LANGUAGE to csharp or fsharp to build only that language's templates; CI runs them as
+# separate jobs.
+LANGUAGE="${SMOKE_LANGUAGE:-all}"
+case "$LANGUAGE" in
+  all|csharp|fsharp) ;;
+  *) echo "smoke-test: SMOKE_LANGUAGE must be csharp or fsharp, not $LANGUAGE." >&2; exit 1 ;;
+esac
+wants() { [[ "$LANGUAGE" == all || "$LANGUAGE" == "$1" ]]; }
 if [[ -z "${SMOKE_KEEP:-}" ]]; then
   trap 'rm -rf "$WORK"' EXIT
 else
@@ -126,6 +134,7 @@ check_server_dependencies() { # check_server_dependencies <label> <project-dir> 
 for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   echo "== $protocol =="
 
+  if wants csharp; then
   # Quick start: contracts owns the model, server and client consume it by project reference.
   qs="$SRC/qs-$protocol"
   mkdir -p "$qs"
@@ -149,7 +158,9 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   localize "$solo"
   build "$protocol-server-standalone" "$solo/Hello.Server"
   check_server_dependencies "$protocol-server-standalone" "$solo/Hello.Server" "$protocol"
+  fi
 
+  if wants fsharp; then
   # The same two layouts in F# (`-lang F#`): the server and client share the F# contracts' types.
   fqs="$SRC/qs-fsharp-$protocol"
   mkdir -p "$fqs"
@@ -171,10 +182,12 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   localize "$fsolo"
   build "$protocol-fsharp-server-standalone" "$fsolo/Hello.Server"
   check_server_dependencies "$protocol-fsharp-server-standalone" "$fsolo/Hello.Server" "$protocol"
+  fi
 done
 
 # The default scaffolds above run smithy from PATH. --smithy-cli-package references
 # NSmithy.SmithyCli instead, so it builds with smithy taken off PATH.
+if wants csharp; then
 echo "== --smithy-cli-package =="
 pkg="$SRC/smithy-cli-package"
 mkdir -p "$pkg"
@@ -191,6 +204,7 @@ if ! grep -q 'NSmithy.SmithyCli' "$pkg/Hello.Server/Hello.Server.csproj"; then
   failed+=("server-smithy-cli-package")
 else
   PATH="$NO_SMITHY_PATH" build "server-smithy-cli-package" "$pkg/Hello.Server"
+fi
 fi
 
 if (( ${#failed[@]} > 0 )); then

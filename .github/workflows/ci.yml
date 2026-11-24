@@ -3,21 +3,8 @@ on:
   push:
     branches:
       - main
+permissions:
+  contents: read
 jobs:
-  build:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Cache build dependencies
-        uses: ./.github/actions/cache-dependencies
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-      - name: Configure devenv cache
-        uses: cachix/cachix-action@v17
-        with:
-          name: devenv
-      - name: Install devenv
-        run: nix profile add nixpkgs#devenv
-      - name: Build and test
-        run: devenv shell -- just ci
+  validate:
+    uses: ./.github/workflows/validate.yml
