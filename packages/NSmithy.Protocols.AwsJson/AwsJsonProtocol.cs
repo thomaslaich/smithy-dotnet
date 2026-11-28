@@ -30,6 +30,13 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         ReadMode = WireReadMode.Lenient,
     };
 
+    // A request leaves out the defaults of top-level input members the caller did not set, as
+    // Smithy requires of @input structures; nested structures still write theirs.
+    private static readonly CodecFactoryOptions ClientWrite = new()
+    {
+        MaterializeTopLevelDefaults = false,
+    };
+
     public IServiceProtocol ForService(ServiceSchema service)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -77,7 +84,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             outputIsSmithyUnit = typeof(TOutput) == typeof(SmithyUnit);
             outputIsUnit = outputIsSmithyUnit || Schemas.IsSyntheticUnit(operation.Output);
             outputSchema = operation.Output;
-            requestCodec = CodecFactory.FromSchema(operation.Input);
+            requestCodec = CodecFactory.FromSchema(operation.Input, ClientWrite);
             responseCodec = CodecFactory.FromSchema(operation.Output, ClientRead);
             requestTransform = SmithyRequestModifiers.Compile(operation);
             HttpErrors = HttpOperationError.Compile(
