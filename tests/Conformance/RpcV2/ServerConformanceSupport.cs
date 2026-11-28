@@ -34,7 +34,7 @@ internal sealed class RpcV2ServerHost : IAsyncDisposable
     public HttpClient Client { get; }
 
     public static async Task<RpcV2ServerHost> StartAsync(
-        string operationName,
+        string operationShapeId,
         Func<MethodInfo, object?[]?, object?> invoker,
         CancellationToken cancellationToken = default
     )
@@ -42,7 +42,7 @@ internal sealed class RpcV2ServerHost : IAsyncDisposable
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
 
-        var operationHandler = ResolveOperationHandlerInterface(operationName);
+        var operationHandler = ResolveOperationHandlerInterface(operationShapeId);
         var aggregateHandler = ResolveAggregateHandlerInterface(operationHandler);
         var map = ResolveMapMethod(aggregateHandler);
         var handler = CreateProxy(aggregateHandler, invoker);
@@ -76,15 +76,16 @@ internal sealed class RpcV2ServerHost : IAsyncDisposable
         await app.DisposeAsync().ConfigureAwait(false);
     }
 
-    private static Type ResolveOperationHandlerInterface(string operationName)
+    private static Type ResolveOperationHandlerInterface(string operationShapeId)
     {
-        var assembly = typeof(RpcV2ServerHost).Assembly;
-        var handlerName = "I" + operationName + "Handler";
-        return assembly
-            .GetTypes()
-            .Single(t =>
+        var handlerName = "I" + operationShapeId.Split('#')[^1] + "Handler";
+        var candidates = typeof(RpcV2ServerHost)
+            .Assembly.GetTypes()
+            .Where(t =>
                 t.IsInterface && string.Equals(t.Name, handlerName, StringComparison.Ordinal)
-            );
+            )
+            .ToList();
+        return GeneratedTypes.Pick(candidates, t => t, operationShapeId, "handler");
     }
 
     private static Type ResolveAggregateHandlerInterface(Type operationHandler)

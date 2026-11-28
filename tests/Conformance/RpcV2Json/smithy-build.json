@@ -32,6 +32,28 @@
           "baseNamespace": ""
         }
       }
+    },
+    "rpcv2json-corpus": {
+      "transforms": [
+        {
+          "name": "flattenAndRemoveMixins"
+        },
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.protocoltests.corpus#RpcV2JsonCorpusTests"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "attachValidationException": true,
+          "service": "smithy.protocoltests.corpus#RpcV2JsonCorpusTests",
+          "baseNamespace": "Corpus"
+        }
+      }
     }
   }
 }

@@ -15,47 +15,9 @@ internal static class HttpRequestRunner
 {
     private static readonly Uri Endpoint = new("http://localhost");
 
-    /// <summary>
-    /// Generated client types in the test assembly. We discover these once via reflection so the
-    /// runner can dispatch to whichever service owns each protocol-test case.
-    /// </summary>
-    private static readonly IReadOnlyList<Type> ClientTypes =
-    [
-        .. typeof(HttpRequestRunner)
-            .Assembly.GetTypes()
-            .Where(t =>
-                t is { IsClass: true, IsAbstract: false }
-                && t.Name.EndsWith("Client", StringComparison.Ordinal)
-                && t.GetConstructors()
-                    .Any(c =>
-                        c.GetParameters() is [{ ParameterType: var pt }, ..]
-                        && pt == typeof(HttpClient)
-                    )
-            ),
-    ];
-
     public static async Task RunAsync(HttpRequestTestCase testCase)
     {
-        var operationName = testCase.OperationName + "Async";
-        MethodInfo? method = null;
-        Type? clientType = null;
-        foreach (var t in ClientTypes)
-        {
-            method = t.GetMethod(operationName, BindingFlags.Public | BindingFlags.Instance);
-            if (method is not null)
-            {
-                clientType = t;
-                break;
-            }
-        }
-        if (method is null || clientType is null)
-        {
-            throw new InvalidOperationException(
-                $"Operation method {operationName} not found on any generated client ("
-                    + string.Join(", ", ClientTypes.Select(t => t.FullName))
-                    + ")."
-            );
-        }
+        var (clientType, method) = ConformanceClients.ResolveOperation(testCase.ShapeId);
         var inputType = method.GetParameters()[0].ParameterType;
         var input = ParamBinder.Bind(inputType, testCase.Params ?? new JsonObject())!;
 
