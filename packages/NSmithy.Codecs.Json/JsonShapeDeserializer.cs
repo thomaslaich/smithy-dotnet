@@ -497,21 +497,25 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
     private T ReadSingleCase<T>(UnionSchema<T> schema, JsonShapePlan plan)
     {
         // A copy of the reader looks ahead without moving this one: the object must hold exactly
-        // one case before any of it is read.
+        // one case before any of it is read. A member whose value is null is unset, as Smithy's
+        // JSON protocols require ("AwsJson10DeserializeAllowNulls").
         var scan = reader;
         var count = 0;
         var index = -1;
         string? name = null;
         while (scan.Read() && scan.TokenType == JsonTokenType.PropertyName)
         {
-            if (!scan.ValueTextEquals("__type"u8))
+            var isCase = !scan.ValueTextEquals("__type"u8);
+            var caseIndex = isCase ? plan.IndexOf(ref scan) : -1;
+            var caseName = isCase ? scan.GetString() : null;
+            scan.Read();
+            if (isCase && scan.TokenType != JsonTokenType.Null)
             {
-                index = plan.IndexOf(ref scan);
-                name = scan.GetString();
+                index = caseIndex;
+                name = caseName;
                 count++;
             }
 
-            scan.Read();
             scan.Skip();
         }
 
@@ -534,7 +538,7 @@ internal ref struct JsonShapeDeserializer : IShapeDeserializer
         {
             var isCase = !reader.ValueTextEquals("__type"u8);
             reader.Read();
-            if (isCase)
+            if (isCase && reader.TokenType != JsonTokenType.Null)
             {
                 value = ReadCase(schema, index, plan.Members[index]);
             }

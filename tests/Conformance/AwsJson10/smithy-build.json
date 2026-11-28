@@ -1,0 +1,58 @@
+{
+  "version": "1.0",
+  "maven": {
+    "repositories": [
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "software.amazon.smithy:smithy-validation-model:1.75.0",
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
+      "software.amazon.smithy:smithy-aws-traits:1.75.0",
+      "software.amazon.smithy:smithy-aws-protocol-tests:1.75.0"
+    ]
+  },
+  "projections": {
+    "awsjson10": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.json10#JsonRpc10"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "generateServer": false,
+          "attachValidationException": true,
+          "service": "aws.protocoltests.json10#JsonRpc10",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "awsjson10-querycompatible": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.json10#QueryCompatibleJsonRpc10"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "generateServer": false,
+          "attachValidationException": true,
+          "service": "aws.protocoltests.json10#QueryCompatibleJsonRpc10",
+          "baseNamespace": "Auxiliary"
+        }
+      }
+    }
+  }
+}

@@ -11,6 +11,19 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **JSON unions ignore members set to `null`.** A response union such as
+  `{"stringValue": null, "structureValue": {...}}` failed with "Expected a union with exactly one
+  member set", because a member whose value is `null` counted as set. It now counts as unset, as
+  Smithy's JSON protocols require.
+
+### Added
+
+- **AWS JSON 1.0 conformance.** The official `awsJson1_0` client cases now run, including the
+  `@awsQueryCompatible` fixture service: 24/29 requests and 41/41 responses pass. See
+  [Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/) for the gaps.
+
 ## [0.23.0]
 
 F# clients get paginators, and members named `Clone` no longer break the build.

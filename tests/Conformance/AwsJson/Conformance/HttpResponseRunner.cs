@@ -457,24 +457,12 @@ internal static class ResponseAssertions
 
         if (actual is byte[] bytes)
         {
-            var base64 = (string?)expected;
-            byte[] expectedBytes;
-            if (string.IsNullOrEmpty(base64))
-            {
-                expectedBytes = [];
-            }
-            else
-            {
-                try
-                {
-                    expectedBytes = Convert.FromBase64String(base64);
-                }
-                catch (FormatException)
-                {
-                    // Raw payload/blob protocol tests often express the expected body as plain text.
-                    expectedBytes = System.Text.Encoding.UTF8.GetBytes(base64);
-                }
-            }
+            // Smithy protocol tests give blob params as literal text, never base64: a value
+            // that happens to be valid base64 ("blob") must not be decoded.
+            var text = (string?)expected;
+            var expectedBytes = string.IsNullOrEmpty(text)
+                ? []
+                : System.Text.Encoding.UTF8.GetBytes(text);
             Assert.Equal(expectedBytes, bytes);
             return;
         }

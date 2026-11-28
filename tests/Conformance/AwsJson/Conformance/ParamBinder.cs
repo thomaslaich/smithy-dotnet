@@ -46,18 +46,9 @@ internal static class ParamBinder
         if (targetType == typeof(sbyte))
             return (sbyte)value!;
         if (targetType == typeof(byte[]))
-        {
-            var text = (string)value!;
-            try
-            {
-                return Convert.FromBase64String(text);
-            }
-            catch (FormatException)
-            {
-                // Raw HTTP payload/blob test inputs use literal text rather than base64.
-                return System.Text.Encoding.UTF8.GetBytes(text);
-            }
-        }
+            // Smithy protocol tests give blob params as literal text, never base64: a value
+            // that happens to be valid base64 ("blob") must not be decoded.
+            return System.Text.Encoding.UTF8.GetBytes((string)value!);
         if (targetType == typeof(float))
         {
             var raw = value!.AsValue();

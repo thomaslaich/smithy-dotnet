@@ -19,7 +19,7 @@ test totals.
 | [`rpcv2Json`](../rpc-v2-json/) | <Badge text="Preview" variant="note" /> | Requests 34/34 (100%)<br />Responses 39/39 (100%) | Requests 35/35 (100%)<br />Responses 33/33 (100%) |
 | [`grpc`](../grpc/) | <Badge text="Experimental" variant="danger" /> | End-to-end examples | End-to-end examples |
 | [`awsJson1_1`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Requests 57/57 (100%)<br />Responses 62/62 (100%) | Client only |
-| [`awsJson1_0`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Runtime support, no conformance project | Client only |
+| [`awsJson1_0`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Requests 24/29 (82.8%)<br />Responses 41/41 (100%) | Client only |
 | [`awsQuery`](../aws-query/) | <Badge text="Preview" variant="note" /> | Requests 38/38 (100%)<br />Responses 39/39 (100%) | Client only |
 | [`ec2Query`](../aws-ec2-query/) | <Badge text="Preview" variant="note" /> | Requests 30/30 (100%)<br />Responses 29/29 (100%) | Client only |
 | [`restXml`](../rest-xml/) | <Badge text="Preview" variant="note" /> | Requests 109/109 (100%)<br />Responses 84/84 (100%) | Client only |
@@ -77,7 +77,10 @@ count as official conformance.
 - AWS Query, EC2 Query, and restXml pass every applicable official client
   request and response case.
 - AWS JSON 1.1 passes every applicable official client request and response case.
-  `AwsJson10Protocol` has runtime support but no separate conformance project.
+- AWS JSON 1.0 passes every applicable official client response case. Five request cases are
+  known gaps: four expect the client to leave out top-level input members whose defaults the
+  caller never set, and one expects `@awsQueryCompatible` services to send
+  `x-amzn-query-mode: true`.
 - The endpoint rules fixtures are the `smithy-rules-engine-tests` models, the
   `aws.*` function test models of `smithy-aws-endpoints`, and the published
   models of five AWS services chosen for their built-ins and auth scheme
