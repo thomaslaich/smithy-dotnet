@@ -12,7 +12,7 @@ internal static class ServerHttpRequestRunner
 
         await using var host = await RpcV2ServerHost
             .StartAsync(
-                testCase.OperationName,
+                testCase.ShapeId,
                 (method, args) =>
                 {
                     capturedMethod = method;

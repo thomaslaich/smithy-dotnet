@@ -14,7 +14,7 @@ internal static class ServerHttpResponseRunner
             out var isError
         );
         var localOpName = owningOperation.Split('#')[^1];
-        var (clientType, clientMethod) = ConformanceClients.ResolveOperation(localOpName + "Async");
+        var (clientType, clientMethod) = ConformanceClients.ResolveOperation(owningOperation);
         var inputType = clientMethod.GetParameters()[0].ParameterType;
         var outputType = clientMethod.ReturnType.GetGenericArguments()[0];
 
@@ -42,7 +42,7 @@ internal static class ServerHttpResponseRunner
 
         await using var host = await RpcV2ServerHost
             .StartAsync(
-                localOpName,
+                owningOperation,
                 (method, args) =>
                 {
                     Assert.Equal(localOpName + "Async", method.Name);
@@ -61,12 +61,15 @@ internal static class ServerHttpResponseRunner
     private static Type ResolveErrorType(string shapeId)
     {
         var localName = shapeId.Split('#')[^1];
-        return typeof(ServerHttpResponseRunner)
-                .Assembly.GetTypes()
-                .FirstOrDefault(t => t.Name == localName && typeof(Exception).IsAssignableFrom(t))
-            ?? throw new InvalidOperationException(
+        var candidates = typeof(ServerHttpResponseRunner)
+            .Assembly.GetTypes()
+            .Where(t => t.Name == localName && typeof(Exception).IsAssignableFrom(t))
+            .ToList();
+        return candidates.Count == 0
+            ? throw new InvalidOperationException(
                 $"Could not resolve generated error type for {shapeId}."
-            );
+            )
+            : GeneratedTypes.Pick(candidates, t => t, shapeId, "error type");
     }
 
     private static async Task<RecordedRequest> CaptureGeneratedRequestAsync(

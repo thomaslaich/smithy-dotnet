@@ -23,9 +23,7 @@ internal static class HttpResponseRunner
     public static async Task RunAsync(HttpResponseTestCase testCase, JsonObject modelShapes)
     {
         var owningOp = ResolveOwningOperation(testCase.ShapeId, modelShapes, out var isError);
-        var localOpName = owningOp.Split('#')[^1];
-
-        var (clientType, method) = ConformanceClients.ResolveOperation(localOpName + "Async");
+        var (clientType, method) = ConformanceClients.ResolveOperation(owningOp);
         var inputType = method.GetParameters()[0].ParameterType;
         var input = BuildEmptyInput(inputType);
 
@@ -249,19 +247,33 @@ internal static class ConformanceClients
         ]
     );
 
-    public static (Type ClientType, MethodInfo Method) ResolveOperation(string methodName)
+    /// <summary>
+    /// The generated client method for an operation, from its service's client when several
+    /// clients have a method of that name.
+    /// </summary>
+    public static (Type ClientType, MethodInfo Method) ResolveOperation(string operationShapeId)
     {
-        foreach (var t in Types.Value)
+        var methodName = operationShapeId.Split('#')[^1] + "Async";
+        var candidates = Types
+            .Value.Select(t =>
+                (
+                    ClientType: t,
+                    Method: t.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)
+                )
+            )
+            .Where(c => c.Method is not null)
+            .Select(c => (c.ClientType, Method: c.Method!))
+            .ToList();
+        if (candidates.Count == 0)
         {
-            var m = t.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance);
-            if (m is not null)
-                return (t, m);
+            throw new InvalidOperationException(
+                $"Operation method {methodName} not found on any generated client ("
+                    + string.Join(", ", Types.Value.Select(t => t.FullName))
+                    + ")."
+            );
         }
-        throw new InvalidOperationException(
-            $"Operation method {methodName} not found on any generated client ("
-                + string.Join(", ", Types.Value.Select(t => t.FullName))
-                + ")."
-        );
+
+        return GeneratedTypes.Pick(candidates, c => c.ClientType, operationShapeId, "client");
     }
 
     /// <summary>
