@@ -15,8 +15,8 @@ test totals.
 | --- | --- | --- | --- |
 | [`restJson1`](../rest-json/) | <Badge text="Preview" variant="note" /> | Requests 142/142 (100%)<br />Responses 108/108 (100%) | Requests 132/132 (100%)<br />Responses 92/92 (100%)<br />Malformed 655/655 (100%) |
 | [`simpleRestJson`](../rest-json/) | <Badge text="Preview" variant="note" /> | Requests 23/23 (100%)<br />Responses 20/20 (100%) | Requests 23/23 (100%)<br />Responses 20/20 (100%) |
-| [`rpcv2Cbor`](../rpc-v2-cbor/) | <Badge text="Preview" variant="note" /> | Requests 29/29 (100%)<br />Responses 43/43 (100%) | Requests 37/37 (100%)<br />Responses 27/27 (100%) |
-| [`rpcv2Json`](../rpc-v2-json/) | <Badge text="Preview" variant="note" /> | Requests 139/161 (86.3%)<br />Responses 150/170 (88.2%) | Requests 140/163 (85.9%)<br />Responses 130/149 (87.2%) |
+| [`rpcv2Cbor`](../rpc-v2-cbor/) | <Badge text="Preview" variant="note" /> | Requests 30/31 (96.8%)<br />Responses 43/45 (95.6%) | Requests 39/39 (100%)<br />Responses 28/29 (96.6%) |
+| [`rpcv2Json`](../rpc-v2-json/) | <Badge text="Preview" variant="note" /> | Requests 140/163 (85.9%)<br />Responses 150/172 (87.2%) | Requests 142/165 (86.1%)<br />Responses 131/151 (86.8%) |
 | [`grpc`](../grpc/) | <Badge text="Experimental" variant="danger" /> | End-to-end examples | End-to-end examples |
 | [`awsJson1_1`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Requests 57/57 (100%)<br />Responses 62/62 (100%) | Client only |
 | [`awsJson1_0`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Requests 29/29 (100%)<br />Responses 39/41 (95.1%) | Client only |
@@ -69,10 +69,13 @@ count as official conformance.
   excluded from the official totals.
 - simpleRestJson passes every case in Alloy's protocol suite on both generated
   surfaces.
-- rpcv2Cbor passes every applicable official request and response case on both
-  generated surfaces.
-- rpcv2Json runs the protocol service and the `RpcV2JsonCorpusTests` corpus. Its known
-  gaps are document values, discriminated unions, blobs nested in lists and maps, `bigDecimal`
+- rpcv2Cbor runs the protocol service and the AWS `@awsQueryCompatible` fixture services.
+  Its known gaps are query-compatible: the client does not send `x-amzn-query-mode`, the server
+  does not send `x-amzn-query-error`, and modeled errors do not expose the error code the client
+  cases expect.
+- rpcv2Json runs the protocol service, the `RpcV2JsonCorpusTests` corpus, and the AWS
+  query-compatible corpus services. Its known gaps are the same query-compatible ones as
+  rpcv2Cbor's, document values, discriminated unions, blobs nested in lists and maps, `bigDecimal`
   beyond C# `decimal` precision, and a few runner limitations (idempotency tokens, request
   compression, empty bodies). The official suite has no event-stream cases; JSON event streams
   are covered by unit tests.

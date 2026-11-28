@@ -15,6 +15,8 @@ internal static class RpcV2JsonAllowlist
         StringComparer.Ordinal
     )
     {
+        // @awsQueryCompatible clients must send `x-amzn-query-mode: true`.
+        "RpcV2JsonQueryCompatSendsQueryModeHeader",
         // Document values. Untriaged: the runner cannot yet bind or compare `Document` params, so some may be runner gaps.
         "RpcV2JsonDocumentMembersArray",
         "RpcV2JsonDocumentMembersBoolean",
@@ -50,6 +52,9 @@ internal static class RpcV2JsonAllowlist
         StringComparer.Ordinal
     )
     {
+        // Their vendorParams give the error code, which modeled errors do not expose.
+        "RpcV2JsonQueryCompatCustomCodeError",
+        "RpcV2JsonQueryCompatNoCustomCodeError",
         // Document values. Untriaged: the runner cannot yet bind or compare `Document` params, so some may be runner gaps.
         "RpcV2JsonDocumentMembersDeserializeArray",
         "RpcV2JsonDocumentMembersDeserializeBoolean",
@@ -115,6 +120,8 @@ internal static class RpcV2JsonAllowlist
         StringComparer.Ordinal
     )
     {
+        // @awsQueryCompatible servers must send the error's awsQuery code in `x-amzn-query-error`.
+        "RpcV2JsonQueryCompatCustomCodeError",
         // Document values. Untriaged: the runner cannot yet bind or compare `Document` params, so some may be runner gaps.
         "RpcV2JsonDocumentMembersDeserializeArray",
         "RpcV2JsonDocumentMembersDeserializeBoolean",
