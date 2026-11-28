@@ -37,6 +37,11 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         MaterializeTopLevelDefaults = false,
     };
 
+    private static readonly ShapeId AwsQueryCompatibleTrait = new(
+        "aws.protocols",
+        "awsQueryCompatible"
+    );
+
     public IServiceProtocol ForService(ServiceSchema service)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -72,6 +77,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         private readonly ICodec<TInput> requestCodec;
         private readonly ICodec<TOutput> responseCodec;
         private readonly Action<SmithyHttpRequest>? requestTransform;
+        private readonly bool queryCompatible;
 
         public OperationProtocol(
             ServiceSchema service,
@@ -91,6 +97,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
                 service.ErrorsOf(operation),
                 ErrorReader.Instance
             );
+            queryCompatible = service.HasTrait(AwsQueryCompatibleTrait);
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
@@ -111,6 +118,12 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             };
             request.Headers["Accept"] = [contentType];
             request.Headers["X-Amz-Target"] = [target];
+            if (queryCompatible)
+            {
+                // Tells the service that this client understands its awsQuery error codes.
+                request.Headers["x-amzn-query-mode"] = ["true"];
+            }
+
             requestTransform?.Invoke(request);
             return request;
         }

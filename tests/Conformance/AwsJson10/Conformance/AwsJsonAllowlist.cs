@@ -11,9 +11,19 @@ internal static class AwsJsonAllowlist
     public static readonly IReadOnlySet<string> KnownRequestGaps = new HashSet<string>(
         StringComparer.Ordinal
     )
+    { };
+
+    /// <summary>
+    /// Official response cases whose expectation the runner cannot check yet. Their
+    /// <c>vendorParams</c> give the awsQuery error code that <c>x-amzn-query-error</c> carries,
+    /// and modeled errors do not expose one.
+    /// </summary>
+    public static readonly IReadOnlySet<string> KnownResponseGaps = new HashSet<string>(
+        StringComparer.Ordinal
+    )
     {
-        // @awsQueryCompatible services must send `x-amzn-query-mode: true`.
-        "QueryCompatibleAwsJson10CborSendsQueryModeHeader",
+        "QueryCompatibleAwsJson10CustomCodeError",
+        "QueryCompatibleAwsJson10NoCustomCodeError",
     };
 
     public static readonly IReadOnlySet<string> ExecutableRequestCases = LoadRequestCases();
@@ -32,7 +42,7 @@ internal static class AwsJsonAllowlist
         SmithyTestModel
             .Load()
             .EnumerateHttpResponseTests(Protocol)
-            .Where(test => test.AppliesToClient)
+            .Where(test => test.AppliesToClient && !KnownResponseGaps.Contains(test.Id))
             .Select(test => test.Id)
             .ToHashSet(StringComparer.Ordinal);
 }
