@@ -13,7 +13,23 @@ namespace RpcV2.Conformance;
 /// </summary>
 internal static class HttpRequestRunner
 {
-    private static readonly Uri Endpoint = new("http://localhost");
+    /// <summary>
+    /// The fixture's <c>host</c>, so a host prefix (<c>@endpoint</c>) lands where
+    /// <c>resolvedHost</c> expects it.
+    /// </summary>
+    private static Uri ResolveEndpoint(HttpRequestTestCase testCase)
+    {
+        if (string.IsNullOrWhiteSpace(testCase.Host))
+        {
+            return new Uri("http://localhost");
+        }
+
+        return
+            testCase.Host.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || testCase.Host.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            ? new Uri(testCase.Host)
+            : new Uri("http://" + testCase.Host);
+    }
 
     public static async Task RunAsync(HttpRequestTestCase testCase)
     {
@@ -23,7 +39,7 @@ internal static class HttpRequestRunner
 
         var handler = new RecordingHttpMessageHandler(_ => RecordingHttpMessageHandler.EmptyOk());
         using var httpClient = new HttpClient(handler);
-        var client = ConformanceClients.Build(clientType, httpClient, Endpoint);
+        var client = ConformanceClients.Build(clientType, httpClient, ResolveEndpoint(testCase));
 
         try
         {
@@ -60,6 +76,9 @@ internal static class RequestAssertions
         var expectedPath = NormalizePath(PathOf(expected.Uri));
         var actualPath = NormalizePath(actual.RequestUri.AbsolutePath);
         Xunit.Assert.Equal(expectedPath, actualPath);
+
+        if (expected.ResolvedHost is not null)
+            Xunit.Assert.Equal(expected.ResolvedHost, actual.RequestUri.Host);
 
         // Query parameters: expected.QueryParams is a list of "k=v" strings (URL-encoded).
         // Compare as multisets (order doesn't matter per the smithy.test spec).

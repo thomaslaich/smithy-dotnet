@@ -109,6 +109,9 @@ internal static class RequestAssertions
         var actualPath = NormalizePath(actual.RequestUri.AbsolutePath);
         Xunit.Assert.Equal(expectedPath, actualPath);
 
+        if (expected.ResolvedHost is not null)
+            Xunit.Assert.Equal(expected.ResolvedHost, actual.RequestUri.Host);
+
         // Query parameters: expected.QueryParams is a list of "k=v" strings (URL-encoded).
         // Compare as multisets (order doesn't matter per the smithy.test spec).
         var expectedQuery = NormalizeQueryParams(expected.QueryParams)
