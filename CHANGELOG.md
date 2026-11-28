@@ -13,6 +13,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **AWS JSON requests leave out unset top-level defaults.** An `awsJson1_0` or `awsJson1_1`
+  request no longer sends the modeled default of a top-level input member the caller did not set,
+  as Smithy requires of `@input` structures and as the other protocols already did. Nested
+  structures still send theirs. The C# input types do not change.
+
 - **JSON unions ignore members set to `null`.** A response union such as
   `{"stringValue": null, "structureValue": {...}}` failed with "Expected a union with exactly one
   member set", because a member whose value is `null` counted as set. It now counts as unset, as
@@ -21,7 +26,7 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ### Added
 
 - **AWS JSON 1.0 conformance.** The official `awsJson1_0` client cases now run, including the
-  `@awsQueryCompatible` fixture service: 24/29 requests and 41/41 responses pass. See
+  `@awsQueryCompatible` fixture service: 28/29 requests and 41/41 responses pass. See
   [Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/) for the gaps.
 
 ## [0.23.0]

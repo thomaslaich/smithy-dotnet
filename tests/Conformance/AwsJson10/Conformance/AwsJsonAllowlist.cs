@@ -12,11 +12,6 @@ internal static class AwsJsonAllowlist
         StringComparer.Ordinal
     )
     {
-        // The client sends top-level input members' defaults that the caller never set.
-        "AwsJson10ClientPopulatesDefaultValuesInInput",
-        "AwsJson10ClientSkipsTopLevelDefaultValuesInInput",
-        "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults",
-        "AwsJson10ClientIgnoresNonTopLevelDefaultsOnMembersWithClientOptional",
         // @awsQueryCompatible services must send `x-amzn-query-mode: true`.
         "QueryCompatibleAwsJson10CborSendsQueryModeHeader",
     };
