@@ -20,9 +20,9 @@ test totals.
 | [`grpc`](../grpc/) | <Badge text="Experimental" variant="danger" /> | End-to-end examples | End-to-end examples |
 | [`awsJson1_1`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Requests 57/57 (100%)<br />Responses 62/62 (100%) | Client only |
 | [`awsJson1_0`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Requests 29/29 (100%)<br />Responses 39/41 (95.1%) | Client only |
-| [`awsQuery`](../aws-query/) | <Badge text="Preview" variant="note" /> | Requests 38/38 (100%)<br />Responses 39/39 (100%) | Client only |
-| [`ec2Query`](../aws-ec2-query/) | <Badge text="Preview" variant="note" /> | Requests 30/30 (100%)<br />Responses 29/29 (100%) | Client only |
-| [`restXml`](../rest-xml/) | <Badge text="Preview" variant="note" /> | Requests 109/109 (100%)<br />Responses 84/84 (100%) | Client only |
+| [`awsQuery`](../aws-query/) | <Badge text="Preview" variant="note" /> | Requests 38/38 (100%)<br />Responses 36/39 (92.3%) | Client only |
+| [`ec2Query`](../aws-ec2-query/) | <Badge text="Preview" variant="note" /> | Requests 30/30 (100%)<br />Responses 27/29 (93.1%) | Client only |
+| [`restXml`](../rest-xml/) | <Badge text="Preview" variant="note" /> | Requests 99/109 (90.8%)<br />Responses 84/84 (100%) | Client only |
 
 ## Endpoint rules
 
@@ -76,8 +76,12 @@ count as official conformance.
   beyond C# `decimal` precision, and a few runner limitations (idempotency tokens, request
   compression, empty bodies). The official suite has no event-stream cases; JSON event streams
   are covered by unit tests.
-- AWS Query, EC2 Query, and restXml pass every applicable official client
-  request and response case.
+- AWS Query and EC2 Query pass every applicable official client request case. Their known
+  response gaps are modeled errors whose fixtures expect an error code, which modeled errors do
+  not expose.
+- restXml passes every applicable official client response case. Its known request gaps are S3
+  cases that configure the client (region, addressing style, dual-stack, accelerate), which the
+  runner does not apply yet.
 - AWS JSON 1.1 passes every applicable official client request and response case.
 - AWS JSON 1.0 passes every applicable official client request case. Two response cases are
   known gaps: modeled errors of `@awsQueryCompatible` services do not expose the awsQuery error

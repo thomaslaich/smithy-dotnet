@@ -70,8 +70,7 @@ internal static class HttpRequestRunner
             clientType,
             httpClient,
             ResolveEndpoint(testCase),
-            static () => DefaultIdempotencyToken,
-            BuildVendorInterceptor(testCase)
+            static () => DefaultIdempotencyToken
         );
 
         try
@@ -125,28 +124,6 @@ internal static class HttpRequestRunner
         }
 
         return new Uri("http://localhost");
-    }
-
-    private static S3AddressingInterceptor? BuildVendorInterceptor(HttpRequestTestCase testCase) =>
-        testCase.ShapeId.StartsWith("com.amazonaws.s3#", StringComparison.Ordinal)
-        && testCase.ResolvedHost is not null
-            ? new S3AddressingInterceptor(testCase.Uri, testCase.ResolvedHost)
-            : null;
-}
-
-internal sealed class S3AddressingInterceptor(string expectedUri, string resolvedHost)
-    : IClientInterceptor
-{
-    public ValueTask<SmithyHttpRequest> OnBeforeSigningAsync(
-        SmithyContext context,
-        SmithyHttpRequest request,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var current = new Uri(request.RequestUri, UriKind.Absolute);
-        var expectedPath = expectedUri.Split('?', 2)[0];
-        request.RequestUri = $"{current.Scheme}://{resolvedHost}{expectedPath}{current.Query}";
-        return ValueTask.FromResult(request);
     }
 }
 
