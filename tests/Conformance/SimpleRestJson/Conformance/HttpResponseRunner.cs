@@ -218,15 +218,36 @@ internal static class HttpResponseRunner
         return ctx.Create(p).WriteState == NullabilityState.Nullable;
     }
 
-    private static ShapeKind? GetSchemaKind(Type type)
+    private static ShapeKind? GetSchemaKind(Type type) => FindSchema(type)?.Kind;
+
+    /// <summary>
+    /// The functional schema on a type's generated companion <c>{Type}Schema</c> class. A union
+    /// case is a nested record deriving from its union, so its base types are searched too:
+    /// without that a union case read as a structure and none of its value was compared.
+    /// </summary>
+    private static Schema? FindSchema(Type type)
     {
-        // The functional schema lives on the generated companion `{Type}Schema` class.
-        var schemaType = type.Assembly.GetType($"{type.Namespace}.Schemas.{type.Name}Schema");
-        var schemaProp = schemaType?.GetProperty(
-            "Schema",
-            BindingFlags.Public | BindingFlags.Static
-        );
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        for (var t = type; t is not null && t != typeof(object); t = t.BaseType)
+        {
+            // A nested type, such as a union case, has no companion of its own, and its simple
+            // name may be another shape's (a `pizza` case beside a `Pizza` structure).
+            if (t.IsNested)
+            {
+                continue;
+            }
+
+            var schemaType = t.Assembly.GetType($"{t.Namespace}.Schemas.{t.Name}Schema");
+            var schemaProp = schemaType?.GetProperty(
+                "Schema",
+                BindingFlags.Public | BindingFlags.Static
+            );
+            if (schemaProp?.GetValue(null) is Schema schema)
+            {
+                return schema;
+            }
+        }
+
+        return null;
     }
 }
 
@@ -309,15 +330,36 @@ internal static class ConformanceClients
 /// </summary>
 internal static class ResponseAssertions
 {
-    private static ShapeKind? GetSchemaKind(Type type)
+    private static ShapeKind? GetSchemaKind(Type type) => FindSchema(type)?.Kind;
+
+    /// <summary>
+    /// The functional schema on a type's generated companion <c>{Type}Schema</c> class. A union
+    /// case is a nested record deriving from its union, so its base types are searched too:
+    /// without that a union case read as a structure and none of its value was compared.
+    /// </summary>
+    private static Schema? FindSchema(Type type)
     {
-        // The functional schema lives on the generated companion `{Type}Schema` class.
-        var schemaType = type.Assembly.GetType($"{type.Namespace}.Schemas.{type.Name}Schema");
-        var schemaProp = schemaType?.GetProperty(
-            "Schema",
-            BindingFlags.Public | BindingFlags.Static
-        );
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        for (var t = type; t is not null && t != typeof(object); t = t.BaseType)
+        {
+            // A nested type, such as a union case, has no companion of its own, and its simple
+            // name may be another shape's (a `pizza` case beside a `Pizza` structure).
+            if (t.IsNested)
+            {
+                continue;
+            }
+
+            var schemaType = t.Assembly.GetType($"{t.Namespace}.Schemas.{t.Name}Schema");
+            var schemaProp = schemaType?.GetProperty(
+                "Schema",
+                BindingFlags.Public | BindingFlags.Static
+            );
+            if (schemaProp?.GetValue(null) is Schema schema)
+            {
+                return schema;
+            }
+        }
+
+        return null;
     }
 
     public static void AssertEquivalent(JsonNode? expected, object actual, string ownerLabel)
@@ -513,7 +555,18 @@ internal static class ResponseAssertions
         var type = actual.GetType();
         var ctor = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
             .OrderByDescending(c => c.GetParameters().Length)
-            .First();
+            .FirstOrDefault();
+        if (ctor is null)
+        {
+            // A unit union case: its only value is the empty object.
+            Assert.True(
+                expected.Count == 0,
+                $"[{path}] cannot compare {expected.ToJsonString()} with {type.FullName}, which has no public constructor."
+            );
+            return;
+        }
+
+        var used = new HashSet<string>(StringComparer.Ordinal);
         foreach (var p in ctor.GetParameters())
         {
             // Generated records carry PascalCase constructor parameters, while a test
@@ -543,8 +596,19 @@ internal static class ResponseAssertions
                 continue;
             }
 
+            used.Add(memberName);
+
             AssertEqual(expected[memberName], actualValue, $"{path}.{memberName}");
         }
+
+        // A member the fixture expects but no generated property matched is a mismatch, not
+        // "omitted": skipping it let a union case, whose fixture key names the variant, pass
+        // without any comparison.
+        var unused = expected.Select(kv => kv.Key).Where(key => !used.Contains(key)).ToList();
+        Assert.True(
+            unused.Count == 0,
+            $"[{path}] expected members {string.Join(", ", unused)} match no property of {type.FullName}."
+        );
     }
 
     /// <summary>
@@ -699,6 +763,20 @@ internal static class ResponseAssertions
         )
         {
             var expectedNum = (double)expected!;
+            // Integers compare exactly: through a double, 1234567890123456789 and
+            // 1234567890123456790 are the same value.
+            if (
+                actual is int or long or short or byte or sbyte
+                && expected.TryGetValue<long>(out var expectedInteger)
+            )
+            {
+                Assert.Equal(
+                    expectedInteger,
+                    Convert.ToInt64(actual, System.Globalization.CultureInfo.InvariantCulture)
+                );
+                return;
+            }
+
             var actualNum = Convert.ToDouble(
                 actual,
                 System.Globalization.CultureInfo.InvariantCulture

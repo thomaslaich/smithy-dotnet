@@ -62,6 +62,7 @@ internal static class RpcV2JsonAllowlist
         "RpcV2JsonDocumentMembersDeserializeNestedStruct",
         "RpcV2JsonDocumentMembersDeserializeNumber",
         "RpcV2JsonDocumentMembersDeserializeString",
+        "RpcV2JsonDocumentUnionDeserializeDocumentValue",
         "RpcV2JsonListOfDocumentsDeserialize",
         "RpcV2JsonMapOfDocumentsDeserialize",
         // Discriminated unions: the discriminator is not written or read.
@@ -92,6 +93,7 @@ internal static class RpcV2JsonAllowlist
         "RpcV2JsonDocumentMembersNestedStruct",
         "RpcV2JsonDocumentMembersNumber",
         "RpcV2JsonDocumentMembersString",
+        "RpcV2JsonDocumentUnionDocumentValue",
         "RpcV2JsonListOfDocumentsMixedTypes",
         "RpcV2JsonMapOfDocumentsMixedTypes",
         // Discriminated unions: the discriminator is not written or read.
