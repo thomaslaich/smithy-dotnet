@@ -10,7 +10,9 @@
       "software.amazon.smithy:smithy-validation-model:1.75.0",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "software.amazon.smithy:smithy-protocol-traits:1.75.0",
-      "software.amazon.smithy:smithy-protocol-tests:1.75.0"
+      "software.amazon.smithy:smithy-protocol-tests:1.75.0",
+      "software.amazon.smithy:smithy-aws-traits:1.75.0",
+      "software.amazon.smithy:smithy-aws-protocol-tests:1.75.0"
     ]
   },
   "projections": {
@@ -52,6 +54,50 @@
           "attachValidationException": true,
           "service": "smithy.protocoltests.corpus#RpcV2JsonCorpusTests",
           "baseNamespace": "Corpus"
+        }
+      }
+    },
+    "rpcv2json-querycompatible": {
+      "transforms": [
+        {
+          "name": "flattenAndRemoveMixins"
+        },
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.corpus#RpcV2JsonQueryCompatCorpusTests"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "attachValidationException": true,
+          "service": "aws.protocoltests.corpus#RpcV2JsonQueryCompatCorpusTests",
+          "baseNamespace": "QueryCompatible"
+        }
+      }
+    },
+    "rpcv2json-nonquerycompatible": {
+      "transforms": [
+        {
+          "name": "flattenAndRemoveMixins"
+        },
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.corpus#RpcV2JsonNonQueryCompatCorpusTests"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "attachValidationException": true,
+          "service": "aws.protocoltests.corpus#RpcV2JsonNonQueryCompatCorpusTests",
+          "baseNamespace": "NonQueryCompatible"
         }
       }
     }

@@ -1,170 +1,86 @@
+using RpcV2.Conformance;
+
 namespace RpcV2Cbor.Conformance;
 
 /// <summary>
-/// Allowlist of <c>httpRequestTests</c> / <c>httpResponseTests</c> case ids that the generated
-/// rpcv2Cbor client and server are currently expected to satisfy.
+/// Every official rpcv2Cbor case applicable to a side runs, except the known gaps listed here.
+/// A gap stays in the conformance denominator but not the numerator.
 /// </summary>
 internal static class RpcV2CborAllowlist
 {
     public const string Protocol = "smithy.protocols#rpcv2Cbor";
 
-    public static readonly IReadOnlySet<string> ExecutableRequestCases = new HashSet<string>(
+    /// <summary>Client-request cases the generated client fails today.</summary>
+    public static readonly IReadOnlySet<string> KnownRequestGaps = new HashSet<string>(
         StringComparer.Ordinal
     )
     {
-        "RpcV2CborClientDoesntSerializeNullStructureValues",
-        "RpcV2CborClientIgnoresNonTopLevelDefaultsOnMembersWithClientOptional",
-        "RpcV2CborClientPopulatesDefaultValuesInInput",
-        "RpcV2CborClientSkipsTopLevelDefaultValuesInInput",
-        "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults",
-        "RpcV2CborClientUsesExplicitlyProvidedValuesInTopLevel",
-        "RpcV2CborLists",
-        "RpcV2CborListsEmpty",
-        "RpcV2CborListsEmptyUsingDefiniteLength",
-        "RpcV2CborMaps",
-        "RpcV2CborRecursiveShapes",
-        "RpcV2CborSerializesNestedUnionValue",
-        "RpcV2CborSerializesUnionValue",
-        "RpcV2CborSerializesDenseSetMap",
-        "RpcV2CborSerializesNullMapValues",
-        "RpcV2CborSerializesSparseSetMap",
-        "RpcV2CborSerializesSparseSetMapAndRetainsNull",
-        "RpcV2CborSerializesZeroValuesInMaps",
-        "RpcV2CborSerializesZeroValuesInSparseMaps",
-        "RpcV2CborSimpleScalarProperties",
-        "RpcV2CborSparseListsSerializeNull",
-        "RpcV2CborSparseMaps",
-        "RpcV2CborSparseMapsSerializeNullValues",
-        "RpcV2CborSupportsInfinityFloatInputs",
-        "RpcV2CborSupportsNaNFloatInputs",
-        "RpcV2CborSupportsNegativeInfinityFloatInputs",
-        "empty_input",
-        "no_input",
-        "optional_input",
+        // @awsQueryCompatible clients must send `x-amzn-query-mode: true`.
+        "QueryCompatibleRpcV2CborSendsQueryModeHeader",
     };
 
-    public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
+    /// <summary>Client-response cases the generated client fails today.</summary>
+    public static readonly IReadOnlySet<string> KnownResponseGaps = new HashSet<string>(
         StringComparer.Ordinal
     )
     {
-        "NoOutputClientAllowsEmptyBody",
-        "NoOutputClientAllowsEmptyCbor",
-        "RpcV2CborClientDoesntDeserializeNullStructureValues",
-        "RpcV2CborClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse",
-        "RpcV2CborClientPopulatesDefaultsValuesWhenMissingInResponse",
-        "RpcV2CborComplexError",
-        "RpcV2CborDateTimeWithFractionalSeconds",
-        "RpcV2CborDeserializesNestedUnionValue",
-        "RpcV2CborDeserializesUnionValue",
-        "RpcV2CborDeserializesDenseSetMap",
-        "RpcV2CborDeserializesNullMapValues",
-        "RpcV2CborDeserializesSparseSetMap",
-        "RpcV2CborDeserializesSparseSetMapAndRetainsNull",
-        "RpcV2CborDeserializesZeroValuesInMaps",
-        "RpcV2CborDeserializesZeroValuesInSparseMaps",
-        "RpcV2CborEmptyComplexError",
-        "RpcV2CborExtraFieldsInTheBodyShouldBeSkippedByClients",
-        "RpcV2CborFloat16Inf",
-        "RpcV2CborFloat16LSBNaN",
-        "RpcV2CborFloat16MSBNaN",
-        "RpcV2CborFloat16NegInf",
-        "RpcV2CborFloat16Subnormal",
-        "RpcV2CborIndefiniteStringInsideDefiniteListCanDeserialize",
-        "RpcV2CborIndefiniteStringInsideIndefiniteListCanDeserialize",
-        "RpcV2CborInvalidGreetingError",
-        "RpcV2CborLists",
-        "RpcV2CborListsEmpty",
-        "RpcV2CborMaps",
-        "RpcV2CborRecursiveShapes",
-        "RpcV2CborRecursiveShapesUsingDefiniteLength",
-        "RpcV2CborSimpleScalarProperties",
-        "RpcV2CborSimpleScalarPropertiesUsingDefiniteLength",
-        "RpcV2CborSparseJsonMaps",
-        "RpcV2CborSparseListsDeserializeNull",
-        "RpcV2CborSparseMapsDeserializeNullValues",
-        "RpcV2CborSupportsInfinityFloatOutputs",
-        "RpcV2CborSupportsNaNFloatOutputs",
-        "RpcV2CborSupportsNegativeInfinityFloatOutputs",
-        "RpcV2CborSupportsUpcastingDataOnDeserialize",
-        "empty_output",
-        "empty_output_no_body",
-        "no_output",
-        "optional_output",
+        // Their vendorParams give the error code, which modeled errors do not expose.
+        "QueryCompatibleRpcV2CborCustomCodeError",
+        "QueryCompatibleRpcV2CborNoCustomCodeError",
     };
 
-    public static readonly IReadOnlySet<string> ExecutableServerRequestCases = new HashSet<string>(
+    /// <summary>Server-request cases the generated server fails today.</summary>
+    public static readonly IReadOnlySet<string> KnownServerRequestGaps = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    { };
+
+    /// <summary>Server-response cases the generated server fails today.</summary>
+    public static readonly IReadOnlySet<string> KnownServerResponseGaps = new HashSet<string>(
         StringComparer.Ordinal
     )
     {
-        "NoInputServerAllowsEmptyBody",
-        "NoInputServerAllowsEmptyCbor",
-        "RpcV2CborExtraFieldsInTheBodyShouldBeSkippedByServers",
-        "RpcV2CborIndefiniteLengthByteStringsCanBeDeserialized",
-        "RpcV2CborIndefiniteLengthStringsCanBeDeserialized",
-        "RpcV2CborIndefiniteStringInsideDefiniteList",
-        "RpcV2CborIndefiniteStringInsideIndefiniteList",
-        "RpcV2CborLists",
-        "RpcV2CborListsEmpty",
-        "RpcV2CborListsEmptyUsingDefiniteLength",
-        "RpcV2CborMaps",
-        "RpcV2CborRecursiveShapes",
-        "RpcV2CborSerializesNestedUnionValue",
-        "RpcV2CborSerializesUnionValue",
-        "RpcV2CborSerializesDenseSetMap",
-        "RpcV2CborSerializesNullMapValues",
-        "RpcV2CborSerializesSparseSetMap",
-        "RpcV2CborSerializesSparseSetMapAndRetainsNull",
-        "RpcV2CborSerializesZeroValuesInMaps",
-        "RpcV2CborSerializesZeroValuesInSparseMaps",
-        "RpcV2CborServerDoesntDeSerializeNullStructureValues",
-        "RpcV2CborServerPopulatesDefaultsWhenMissingInRequestBody",
-        "RpcV2CborServersShouldHandleNoAcceptHeader",
-        "RpcV2CborSimpleScalarProperties",
-        "RpcV2CborSimpleScalarPropertiesUsingIndefiniteLength",
-        "RpcV2CborSparseListsSerializeNull",
-        "RpcV2CborSparseMaps",
-        "RpcV2CborSparseMapsSerializeNullValues",
-        "RpcV2CborSupportsInfinityFloatInputs",
-        "RpcV2CborSupportsNaNFloatInputs",
-        "RpcV2CborSupportsNegativeInfinityFloatInputs",
-        "RpcV2CborSupportsUpcastingData",
-        "empty_input",
-        "empty_input_no_body",
-        "empty_input_no_body_has_accept",
-        "no_input",
-        "optional_input",
+        // @awsQueryCompatible servers must send the error's awsQuery code in `x-amzn-query-error`.
+        "QueryCompatibleRpcV2CborCustomCodeError",
     };
 
-    public static readonly IReadOnlySet<string> ExecutableServerResponseCases = new HashSet<string>(
-        StringComparer.Ordinal
-    )
+    public static readonly IReadOnlySet<string> ExecutableRequestCases = Load(
+        requests: true,
+        client: true,
+        KnownRequestGaps
+    );
+
+    public static readonly IReadOnlySet<string> ExecutableResponseCases = Load(
+        requests: false,
+        client: true,
+        KnownResponseGaps
+    );
+
+    public static readonly IReadOnlySet<string> ExecutableServerRequestCases = Load(
+        requests: true,
+        client: false,
+        KnownServerRequestGaps
+    );
+
+    public static readonly IReadOnlySet<string> ExecutableServerResponseCases = Load(
+        requests: false,
+        client: false,
+        KnownServerResponseGaps
+    );
+
+    private static HashSet<string> Load(bool requests, bool client, IReadOnlySet<string> gaps)
     {
-        "RpcV2CborComplexError",
-        "RpcV2CborDeserializesNestedUnionValue",
-        "RpcV2CborDeserializesUnionValue",
-        "RpcV2CborDeserializesDenseSetMap",
-        "RpcV2CborDeserializesNullMapValues",
-        "RpcV2CborDeserializesSparseSetMap",
-        "RpcV2CborDeserializesSparseSetMapAndRetainsNull",
-        "RpcV2CborDeserializesZeroValuesInMaps",
-        "RpcV2CborDeserializesZeroValuesInSparseMaps",
-        "RpcV2CborEmptyComplexError",
-        "RpcV2CborInvalidGreetingError",
-        "RpcV2CborLists",
-        "RpcV2CborListsEmpty",
-        "RpcV2CborMaps",
-        "RpcV2CborRecursiveShapes",
-        "RpcV2CborServerDoesntSerializeNullStructureValues",
-        "RpcV2CborServerPopulatesDefaultsInResponseWhenMissingInParams",
-        "RpcV2CborSimpleScalarProperties",
-        "RpcV2CborSparseJsonMaps",
-        "RpcV2CborSparseListsDeserializeNull",
-        "RpcV2CborSparseMapsDeserializeNullValues",
-        "RpcV2CborSupportsInfinityFloatOutputs",
-        "RpcV2CborSupportsNaNFloatOutputs",
-        "RpcV2CborSupportsNegativeInfinityFloatOutputs",
-        "empty_output",
-        "no_output",
-        "optional_output",
-    };
+        var model = SmithyTestModel.Load();
+        var cases = requests
+            ? model
+                .EnumerateHttpRequestTests(Protocol)
+                .Select(c => (c.Id, c.AppliesToClient, c.AppliesToServer))
+            : model
+                .EnumerateHttpResponseTests(Protocol)
+                .Select(c => (c.Id, c.AppliesToClient, c.AppliesToServer));
+        return cases
+            .Where(c => (client ? c.AppliesToClient : c.AppliesToServer) && !gaps.Contains(c.Id))
+            .Select(c => c.Id)
+            .ToHashSet(StringComparer.Ordinal);
+    }
 }

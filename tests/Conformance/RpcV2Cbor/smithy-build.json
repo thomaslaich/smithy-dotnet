@@ -10,7 +10,9 @@
       "software.amazon.smithy:smithy-validation-model:1.75.0",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "software.amazon.smithy:smithy-protocol-traits:1.75.0",
-      "software.amazon.smithy:smithy-protocol-tests:1.75.0"
+      "software.amazon.smithy:smithy-protocol-tests:1.75.0",
+      "software.amazon.smithy:smithy-aws-traits:1.75.0",
+      "software.amazon.smithy:smithy-aws-protocol-tests:1.75.0"
     ]
   },
   "projections": {
@@ -30,6 +32,44 @@
           "attachValidationException": true,
           "service": "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
           "baseNamespace": ""
+        }
+      }
+    },
+    "rpcv2cbor-querycompatible": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.rpcv2cbor#QueryCompatibleRpcV2Protocol"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "attachValidationException": true,
+          "service": "aws.protocoltests.rpcv2cbor#QueryCompatibleRpcV2Protocol",
+          "baseNamespace": "QueryCompatible"
+        }
+      }
+    },
+    "rpcv2cbor-nonquerycompatible": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.rpcv2cbor#NonQueryCompatibleRpcV2Protocol"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "attachValidationException": true,
+          "service": "aws.protocoltests.rpcv2cbor#NonQueryCompatibleRpcV2Protocol",
+          "baseNamespace": "NonQueryCompatible"
         }
       }
     }
