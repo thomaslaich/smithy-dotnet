@@ -47,6 +47,7 @@
   <Folder Name="/tests/Conformance/">
     <Project Path="tests/Conformance/AwsQuery/AwsQuery.Conformance.csproj" />
     <Project Path="tests/Conformance/AwsJson/AwsJson.Conformance.csproj" />
+    <Project Path="tests/Conformance/AwsJson10/AwsJson10.Conformance.csproj" />
     <Project Path="tests/Conformance/Ec2Query/Ec2Query.Conformance.csproj" />
     <Project Path="tests/Conformance/Endpoints/Endpoints.Conformance.csproj" />
     <Project Path="tests/Conformance/RestJson1/RestJson1.Conformance.csproj" />
